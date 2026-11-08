@@ -318,3 +318,22 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .pillfield .select { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; border: 1px solid var(--line); border-radius: var(--r); background-color: var(--ctl); padding: 15px 24px 0 10px; margin: 0; font-size: max(16px, var(--fs-in)); line-height: 1.2; font-weight: 500; text-transform: none; letter-spacing: 0; background-position: right 8px center; cursor: pointer; }
 .pillfield .select:hover { background-color: var(--ctl-hover); }
 .pillfield .select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Stacked slider rows, tidied: the name on the left and the number and reset on the same line, the track full width below. Used in Roomy mode and, in Automatic mode, on a wide panel (an iPad in portrait), where the rows also sit in two columns. */
+:root[data-rows="roomy"] .row.row-number, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number { grid-template-columns: minmax(0, 1fr) auto var(--h); column-gap: 6px; padding-bottom: 4px; }
+:root[data-rows="roomy"] .row.row-number > .ctl, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number > .ctl { display: contents; }
+:root[data-rows="roomy"] .row.row-number > .lab, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number > .lab { grid-column: 1; grid-row: 1; min-height: 34px; align-self: center; }
+:root[data-rows="roomy"] .row.row-number .num, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number .num { grid-column: 2; grid-row: 1; width: 76px; min-height: 36px; align-self: center; }
+:root[data-rows="roomy"] .row.row-number > .btn.tiny, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number > .btn.tiny { grid-column: 3; grid-row: 1; align-self: center; }
+:root[data-rows="roomy"] .row.row-number .rng, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number .rng { grid-column: 1 / -1; grid-row: 2; width: 100%; min-height: 34px; }
+:root[data-rows="roomy"] .row.row-number > .help, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number > .help { grid-row: 3; }
+/* a wide panel: the two-position and choice rows run the full width, with the name in a fixed column so the buttons sit beside it, not in the middle */
+:root[data-rows="auto"] .panel-body[data-wide="1"] .group-body > .row-enum { grid-template-columns: 170px minmax(0, 1fr) var(--h); }
+:root[data-rows="auto"] .panel-body[data-wide="1"] .group-body { column-gap: 36px; }
+/* the caption of a top-bar button must stay above the picker that fills it */
+.pillfield small { z-index: 1; }
+/* stacked rows keep every control a full touch size (the density's height, 44px on touch): the name line, the number and the track. The track sits close under the name. */
+:root[data-rows="roomy"] .row.row-number > .lab, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number > .lab { min-height: var(--h); }
+:root[data-rows="roomy"] .row.row-number .num, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number .num { min-height: var(--h); }
+:root[data-rows="roomy"] .row.row-number .rng, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number .rng { min-height: var(--h); margin-top: -8px; }
+:root[data-rows="roomy"] .row.row-number, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number { padding-bottom: 0; }

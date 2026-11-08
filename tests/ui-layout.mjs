@@ -73,7 +73,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
   check(`${label}: the Movements section starts ${mvTop}px down the Auto tab (it was about 700px)`, mvTop != null && mvTop < 450, mvTop);
   // slider rows: compact on one line, roomy with the label above a full-width track, two columns when the panel is wide
   await tab('Gait');
-  const geo = () => ev(() => { const rows = [...document.querySelectorAll('#panel-body .group-body:not([hidden]) > .row-number')]; const r = rows[0]; const lab = r.querySelector('.lab').getBoundingClientRect(); const rng = r.querySelector('.rng').getBoundingClientRect(); const r2 = rows[1].getBoundingClientRect(); const r1 = r.getBoundingClientRect(); const b = document.getElementById('panel-body'); return { labelAbove: rng.top >= lab.bottom - 2, trackW: Math.round(rng.width), twoColumns: Math.abs(r1.top - r2.top) < 4 && r2.left > r1.left + 100, wide: b.dataset.wide, screens: +(b.scrollHeight / b.clientHeight).toFixed(2), rowH: Math.round(r1.height), thumb: parseFloat(getComputedStyle(r.querySelector('.rng'), '::-webkit-slider-thumb').width) || null }; });
+  const geo = () => ev(() => { const rows = [...document.querySelectorAll('#panel-body .group-body:not([hidden]) > .row-number')]; const r = rows[0]; const lab = r.querySelector('.lab').getBoundingClientRect(); const rng = r.querySelector('.rng').getBoundingClientRect(); const r2 = rows[1].getBoundingClientRect(); const r1 = r.getBoundingClientRect(); const b = document.getElementById('panel-body'); return { labelAbove: rng.top >= lab.bottom - 12, trackW: Math.round(rng.width), twoColumns: Math.abs(r1.top - r2.top) < 4 && r2.left > r1.left + 100, wide: b.dataset.wide, screens: +(b.scrollHeight / b.clientHeight).toFixed(2), rowH: Math.round(r1.height), thumb: parseFloat(getComputedStyle(r.querySelector('.rng'), '::-webkit-slider-thumb').width) || null }; });
   const g0 = await geo();
   if (label === 'landscape') {
     check('landscape: slider rows are compact by default (label, track and number on one line)', !g0.labelAbove && g0.wide === '0', g0);
@@ -85,7 +85,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
     await page.keyboard.press('Escape'); await page.waitForTimeout(100);
     await ev(() => window.__walkBase.setRows('auto')); await page.waitForTimeout(200);
   } else {
-    check(`portrait: a wide panel sets the slider rows out in two columns (${g0.screens} screens)`, g0.wide === '1' && g0.twoColumns, g0);
+    check(`portrait: a wide panel sets the slider rows out in two columns, name and number on one line with the track below (${g0.screens} screens)`, g0.wide === '1' && g0.twoColumns && g0.labelAbove, g0);
     await ev(() => window.__walkBase.setRows('roomy')); await page.waitForTimeout(250);
     const g1 = await geo();
     check('portrait: Roomy goes back to one column with the label above the track', !g1.twoColumns && g1.labelAbove, g1);
