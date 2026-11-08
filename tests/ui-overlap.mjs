@@ -18,7 +18,7 @@ const errors = [];
 const overlaps = () => {
   const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none' && !el.classList.contains('sr') && s.opacity !== '0'; };
   const groups = {
-    'top bar': '.bar button, .bar select, .bar label.field, .bar .brand',
+    'top bar': '.bar button, .bar select, .bar label.pillfield, .bar .brand',
     'stage bar': '.viewbar > *, .hud, [data-testid="stage-back"]',
     'tabs': '.tabs .tab',
     'transport': '.transport > *, .transport .grp > *',

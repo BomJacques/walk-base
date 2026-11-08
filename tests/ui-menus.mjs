@@ -224,7 +224,7 @@ for (const scheme of ['light', 'dark']) {
     const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
     const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c.a > 0.5) return c; } return { r: 255, g: 255, b: 255, a: 1 }; };
     const ratio = (el) => { const fg = parse(getComputedStyle(el).color); const bg = bgOf(el); const a = lum(fg); const b = lum(bg); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
-    const pick = { 'row label': '.row .lab .name', 'unit text': '.row .lab small', 'field label': '.bar .field span', 'tab': '.tab[aria-selected="false"]', 'selected tab': '.tab[aria-selected="true"]', 'section heading': '.sec-toggle', 'timecode': '#tc', 'menu bar': '.menubar .btn', 'primary button': '.transport .btn.primary', 'hint': '.hint' };
+    const pick = { 'row label': '.row .lab .name', 'unit text': '.row .lab small', 'field label': '.bar .pillfield small', 'tab': '.tab[aria-selected="false"]', 'selected tab': '.tab[aria-selected="true"]', 'section heading': '.sec-toggle', 'timecode': '#tc', 'menu bar': '.menubar .btn', 'primary button': '.transport .btn.primary', 'hint': '.hint' };
     const out = {};
     for (const [k, sel] of Object.entries(pick)) { const el = document.querySelector(sel); if (el) out[k] = +ratio(el).toFixed(2); }
     return out;

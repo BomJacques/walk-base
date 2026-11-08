@@ -61,6 +61,8 @@ The figure travels as the performance says: it slows, stops, or stumbles, and it
 
 ## A less crowded panel
 
+The **top bar** is one line on an iPad: the menus on the left and four pop-up buttons on the right (Figure, Walk, Speed, Source), each as wide as the choice it shows, with a small caption above the value. Tapping one opens the device's own picker (the wheel on an iPhone or iPad). On a phone the buttons drop to a second line.
+
 **Slider rows** (View, Slider rows): **Compact** keeps the label, track and number on one line; **Roomy** puts the label above a full-width track (about three times longer on an iPad in landscape, easier to drag, but longer to scroll); **Automatic** is compact, and roomy on a phone. On a wide panel (an iPad in portrait) the rows are set out in **two columns**, which cuts the scrolling by about a third. On a touch screen the slider thumb is bigger. Dragging a row's label sideways also changes its value.
 
 After a review of the interface on iPad and iPhone sizes: the rarely used groups start **folded** (Body: Hips and shoulders and Proportions; Guides: Onion skin and Colours; Export: Names and Target app; Auto: Saved performances, Length and Record by hand), and a choice you make is remembered. The ten tabs **wrap onto two rows** instead of scrolling sideways. **Arc points** are tap-sized chips with the right and left side by side, a single row to show Both sides, Right, Left, All or None, and the symmetry choices folded under one button. **Movements** show one kind at a time (Pace, Posture, Action, Gesture). A menu opened on one tab no longer floats over the next. `tests/ui-layout.mjs` checks all of this at iPad landscape and portrait sizes.

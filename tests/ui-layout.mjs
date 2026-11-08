@@ -22,6 +22,13 @@ for (const [label, viewport] of Object.entries(sizes)) {
   const ev = (fn, arg) => page.evaluate(fn, arg);
   const tab = async (t) => { await ev((x) => window.__walkBase.setTab(x), t); await page.waitForTimeout(250); };
 
+  // the top bar: four pop-up buttons, as wide as what they show
+  const bar = await ev(() => { const b = document.querySelector('.bar').getBoundingClientRect(); const ps = [...document.querySelectorAll('.pillfield')].map((e) => e.getBoundingClientRect()); return { barH: Math.round(b.height), n: ps.length, minH: Math.min(...ps.map((p) => p.height)), widths: ps.map((p) => Math.round(p.width)), labels: [...document.querySelectorAll('.pillfield small')].map((e) => e.textContent) }; });
+  check(`${label}: the top bar is ${bar.barH}px tall (it was about 96px) with four pop-up buttons ${bar.widths.join(', ')}px wide`, bar.n === 4 && bar.minH >= 44 && bar.widths.every((w) => w < 130) && bar.barH < 70, bar);
+  await page.locator('#rig').selectOption('ceratopsian'); await page.waitForTimeout(250);
+  const after = await ev(() => { const e = document.querySelector('.pillfield:has(#rig)'); return { w: Math.round(e.getBoundingClientRect().width), text: e.querySelector('select').selectedOptions[0].text }; });
+  check('the Figure button grows to fit the figure you pick, and still fits the bar', after.text === 'Ceratopsian' && after.w > bar.widths[0] && after.w < 150, after);
+  await page.locator('#rig').selectOption('human'); await page.waitForTimeout(250);
   // tabs fit without scrolling sideways, and every tab is reachable and big enough
   const tabs = await ev(() => { const t = document.querySelector('.tabs'); const bs = [...t.querySelectorAll('.tab')].map((b) => b.getBoundingClientRect()); const pr = document.querySelector('.panel').getBoundingClientRect(); return { sideways: t.scrollWidth > t.clientWidth + 1, n: bs.length, tall: Math.min(...bs.map((b) => b.height)), inside: bs.every((b) => b.left >= pr.left - 1 && b.right <= pr.right + 1) }; });
   check(`${label}: all ${tabs.n} tabs fit in the panel, with no sideways scrolling`, tabs.n >= 10 && !tabs.sideways && tabs.inside && tabs.tall >= 40, tabs);

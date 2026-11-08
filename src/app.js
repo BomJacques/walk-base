@@ -27,7 +27,7 @@ const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The figures. The human has its own rig; the others are species of the dog's legged rig, each with its own attachments, saved performances and presets. */
 const FIGS = ['human', 'dog', 'theropod', 'bird', 'sauropod', 'ceratopsian'];
-const FIG_LABELS = { human: 'Human', dog: 'Dog', theropod: 'Theropod (T. rex, raptor)', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian' };
+const FIG_LABELS = { human: 'Human', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian' };
 const rigOfFig = (f) => (f === 'human' ? 'human' : 'dog');
 const S = {
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
@@ -625,7 +625,18 @@ function paint() {
   S.last = info; S.map = { x0, y0, zw, zh, fcw, fch, d, left: r.left, top: r.top };
   updateHud(info);
 }
+/** The pop-up buttons in the top bar are as wide as the choice they show (a native picker opens when you tap one), so the bar stays on one line. */
+let pillCtx = null;
+function fitPills() {
+  pillCtx = pillCtx || document.createElement('canvas').getContext('2d');
+  document.querySelectorAll('.pillfield select').forEach((sel) => {
+    const cs = getComputedStyle(sel); pillCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const w = Math.max(60, Math.ceil(pillCtx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width) + 38); // the text, a margin and the arrow
+    if (sel.dataset.fit !== String(w)) { sel.parentElement.style.width = `${w}px`; sel.dataset.fit = String(w); }
+  });
+}
 function updateHud(info) {
+  fitPills();
   hud.hidden = !LAYOUT.hud; // the frame counter is off by default: the frame number and time are already in the transport bar
   const { frames } = cycleFrames(P());
   const key = info.key ? ` · ${info.key.name} (${info.key.side})` : '';
@@ -1474,11 +1485,11 @@ function build() {
     iconBtn('undo', 'Undo', 'undo', undo, { disabled: !hist.canUndo, title: 'Undo (Ctrl or Cmd + Z)' }),
     iconBtn('redo', 'Redo', 'redo', redo, { disabled: !hist.canRedo, title: 'Redo (Shift + Ctrl or Cmd + Z)' }),
     h('div', { class: 'bar-fields' },
-      h('label', { class: 'field' }, h('span', null, 'Figure'), h('select', { id: 'rig', class: 'select', 'aria-label': 'Which figure', testid: 'rig', onChange: (e) => setFigure(e.target.value) },
+      h('label', { class: 'pillfield' }, h('small', null, 'Figure'), h('select', { id: 'rig', class: 'select', 'aria-label': 'Which figure', testid: 'rig', onChange: (e) => setFigure(e.target.value) },
         FIGS.map((f) => h('option', { value: f, selected: f === figKey() }, FIG_LABELS[f])))),
-      h('label', { class: 'field' }, h('span', null, 'Walk'), presetSel),
-      h('label', { class: 'field' }, h('span', null, 'Speed'), speedSel),
-      h('label', { class: 'field' }, h('span', null, 'Source'), h('select', { id: 'source', class: 'select', 'aria-label': 'What is on the stage', testid: 'source', onChange: (e) => setSource(e.target.value) },
+      h('label', { class: 'pillfield' }, h('small', null, 'Walk'), presetSel),
+      h('label', { class: 'pillfield' }, h('small', null, 'Speed'), speedSel),
+      h('label', { class: 'pillfield' }, h('small', null, 'Source'), h('select', { id: 'source', class: 'select', 'aria-label': 'What is on the stage', testid: 'source', onChange: (e) => setSource(e.target.value) },
         h('option', { value: 'walk', selected: S.source === 'walk' }, '3D walk'), h('option', { value: 'sampled', selected: S.source === 'sampled' }, 'Sampled drawings')))),
     settingsFile);
   stage = h('canvas', { class: 'stage', testid: 'stage', 'aria-label': 'Walk preview. Tap a body part to select it. Drag to orbit.', role: 'img' });

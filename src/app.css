@@ -310,3 +310,11 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 :root[data-density="comfortable"] .rng::-webkit-slider-runnable-track { height: 4px; }
 :root[data-density="comfortable"] .rng::-webkit-slider-thumb { width: 26px; height: 26px; margin-top: -11px; }
 :root[data-density="comfortable"] .rng::-moz-range-thumb { width: 22px; height: 22px; }
+
+/* the top bar: four pop-up buttons. The picker fills the whole button, so a tap anywhere on it opens the device's own picker; the caption sits over it. */
+.bar-fields { gap: 4px 6px; }
+.pillfield { position: relative; display: inline-block; height: var(--h); min-width: 60px; cursor: pointer; }
+.pillfield small { position: absolute; left: 10px; top: 5px; font-size: 10px; line-height: 1; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; color: var(--ink-3); pointer-events: none; }
+.pillfield .select { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; border: 1px solid var(--line); border-radius: var(--r); background-color: var(--ctl); padding: 15px 24px 0 10px; margin: 0; font-size: max(16px, var(--fs-in)); line-height: 1.2; font-weight: 500; text-transform: none; letter-spacing: 0; background-position: right 8px center; cursor: pointer; }
+.pillfield .select:hover { background-color: var(--ctl-hover); }
+.pillfield .select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
