@@ -1342,9 +1342,9 @@ function exportSection() {
   const share = h('label', { class: 'chk' }, h('input', { type: 'checkbox', id: 'share', testid: 'chk-share' }), h('span', null, 'Use the share sheet when available'));
   const go = h('button', { type: 'button', class: 'btn primary', id: 'go', testid: 'export-go', onClick: runExport }, 'Export');
   const cancel = h('button', { type: 'button', class: 'btn', id: 'cancel', hidden: true, testid: 'export-cancel', onClick: () => abort?.abort() }, 'Cancel');
+  const keysBtn = h('button', { type: 'button', class: 'btn', id: 'keys', testid: 'export-keys', title: 'Only the frames that mark a change of direction or a contact, as PNGs with a note of why each was chosen', onClick: runKeyPoses }, 'Key frames only');
   const more = menuButton({ label: 'More exports', testid: 'export-more', items: () => [
     { label: 'Contact sheet', testid: 'export-sheet', onClick: runSheet },
-    { label: 'Key poses only', testid: 'export-keys', onClick: runKeyPoses },
     { separator: true },
     { heading: 'Lane data' },
     { label: 'Lane data as CSV', testid: 'export-lanes-csv', onClick: () => runLaneData('csv') },
@@ -1356,7 +1356,7 @@ function exportSection() {
   ] });
   setTimeout(refreshSummary, 0);
   if (!S.video) videoSupport(P(), S.x).then((v) => { S.video = v; const n = document.getElementById('videoNote'); if (n) n.textContent = v.supported ? `H.264 encoder found (${v.codec}). Video is opaque.` : `MP4 is not available here: ${v.reason} Use PNG frames.`; });
-  return h('section', { class: 'group' }, h('h3', null, 'Export'), sum, video, h('div', { class: 'row' }, share), h('div', { class: 'btnrow' }, go, cancel, more), prog, msg, h('div', { class: 'btnrow' }, settingsMenu));
+  return h('section', { class: 'group' }, h('h3', null, 'Export'), sum, video, h('div', { class: 'row' }, share), h('div', { class: 'btnrow' }, go, keysBtn, cancel, more), prog, msg, h('div', { class: 'btnrow' }, settingsMenu));
 }
 async function runExport() {
   if (S.busy) return;
@@ -1389,7 +1389,7 @@ async function runKeyPoses() {
   try {
     const r = await exportKeyFrames(P(), S.s, S.x, { onProgress: ({ done, total }) => setMessage(`Key pose ${done} of ${total}`) });
     await deliver(r.blob, r.name, { share: document.getElementById('share')?.checked });
-    setMessage(`Saved ${r.count} key poses out of ${cycleFrames(P()).frames.length} frames. key_poses.json says why each was chosen.`);
+    setMessage(`Saved ${r.count} key frames out of ${cycleFrames(P()).frames.length}. key_poses.json says why each was chosen.`);
   } catch (e) { setMessage(`Key poses failed: ${e.message}`); } finally { S.busy = null; }
 }
 async function runLaneData(kind) {
@@ -1488,7 +1488,7 @@ const iconBtn = (name, label, testid, onClick, extra = {}) => h('button', { type
 function build() {
   const app = document.getElementById('app');
   app.textContent = '';
-  const presetSel = h('select', { id: 'preset', class: 'select', 'aria-label': 'Walk preset', testid: 'preset', onChange: (e) => { if (e.target.value !== 'Custom') applyPreset(e.target.value); } },
+  const presetSel = h('select', { id: 'preset', class: 'select', 'aria-label': 'Movement preset', testid: 'preset', onChange: (e) => { if (e.target.value !== 'Custom') applyPreset(e.target.value); } },
     [...Object.keys(presetsForFigure(figKey())), 'Custom'].map((n) => h('option', { value: n, selected: n === S.preset }, n)));
   const speedSel = h('select', { class: 'select', 'aria-label': 'Preview speed', testid: 'speed', onChange: (e) => { S.rate = Number(e.target.value); } }, [0.25, 0.5, 1, 2].map((r) => h('option', { value: r, selected: r === 1 }, `${r}×`)));
   const settingsFile = h('input', { type: 'file', accept: '.json,application/json', class: 'sr', tabindex: '-1', 'aria-label': 'Load settings file', testid: 'settings-load', onChange: loadSettings });
@@ -1501,7 +1501,7 @@ function build() {
     h('div', { class: 'bar-fields' },
       h('label', { class: 'pillfield' }, h('small', null, 'Figure'), h('select', { id: 'rig', class: 'select', 'aria-label': 'Which figure', testid: 'rig', onChange: (e) => setFigure(e.target.value) },
         FIGS.map((f) => h('option', { value: f, selected: f === figKey() }, FIG_LABELS[f])))),
-      h('label', { class: 'pillfield' }, h('small', null, 'Walk'), presetSel),
+      h('label', { class: 'pillfield' }, h('small', null, 'Preset'), presetSel),
       h('label', { class: 'pillfield' }, h('small', null, 'Speed'), speedSel),
       h('label', { class: 'pillfield' }, h('small', null, 'Source'), h('select', { id: 'source', class: 'select', 'aria-label': 'What is on the stage', testid: 'source', onChange: (e) => setSource(e.target.value) },
         h('option', { value: 'walk', selected: S.source === 'walk' }, '3D walk'), h('option', { value: 'sampled', selected: S.source === 'sampled' }, 'Sampled drawings')))),
