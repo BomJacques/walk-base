@@ -1,0 +1,248 @@
+// Exports. Every frame goes through drawScene, the same call the stage uses.
+import { drawScene, keyAt, phaseFor } from './draw.js';
+import { cycleFrames, keyPhases } from './rig.js';
+import { ZipWriter } from '../lib/zip.js';
+import { detectH264, encodeH264 } from '../lib/video.js';
+import { PRESETS } from '../lib/recipes.js';
+import { manifestInfo } from './sampler.js';
+import { findKeyFrames } from './keyposes.js';
+
+export const EXPORT_DEFAULTS = Object.freeze({
+  width: 1920,
+  height: 1080,
+  cycles: 1,               // how many times the cycle repeats in the export
+  orbit: 0,                // degrees the camera turns over the whole export
+  format: 'png-zip',       // png-zip | mp4
+  timing: 'expanded',      // expanded: one file per timeline frame. unique: one file per drawing plus exposures.
+  layers: 'composite',     // composite | split (far limbs, body, near limbs as separate transparent layers)
+  background: 'solid',     // solid | transparent
+  includeGuides: false,
+  pattern: 'walk_{frame}',
+  padding: 4,
+  target: 'procreate',
+  bitrate: 12,
+});
+
+export const makeCanvas = (w, h) => {
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+};
+
+export function toBlob(canvas, type = 'image/png') {
+  if (canvas.convertToBlob) return canvas.convertToBlob({ type });
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the image.'))), type));
+}
+
+const pad = (n, d) => String(n).padStart(d, '0');
+const name = (pattern, d, frame) => `${pattern.replace('{frame}', pad(frame, d))}.png`;
+
+/** The timeline an export covers: cycles x the cycle's frames, each carrying its drawing number and phase. */
+export function exportTimeline(params, x) {
+  const { frames, drawings } = cycleFrames(params);
+  const out = [];
+  for (let c = 0; c < x.cycles; c++) {
+    for (const f of frames) out.push({ frame: out.length + 1, cycle: c + 1, cycleFrame: f.frame, drawing: f.drawing, u: f.u });
+  }
+  return { rows: out, drawings, perCycle: frames.length };
+}
+
+export function summary(params, x) {
+  const t = exportTimeline(params, x);
+  const passes = x.layers === 'split' ? 3 : 1;
+  const unique = x.timing === 'unique' ? t.drawings : t.rows.length;
+  return {
+    frames: t.rows.length,
+    drawings: t.drawings,
+    seconds: t.rows.length / params.fps,
+    width: x.width,
+    height: x.height,
+    files: x.format === 'mp4' ? 1 : unique * passes,
+    alpha: x.background === 'transparent' || x.layers === 'split',
+    transparent: x.background === 'transparent' || x.layers === 'split',
+  };
+}
+
+/** Draws one export frame. `part` null draws everything; otherwise only that layer, on transparency. */
+export function renderFrame(params, st, x, rowIndex, part = null, canvas = null) {
+  const t = exportTimeline(params, x).rows[rowIndex];
+  const c = canvas || makeCanvas(x.width, x.height);
+  const ctx = c.getContext('2d', { willReadFrequently: false });
+  const transparent = part ? true : x.background === 'transparent';
+  const rows = exportTimeline(params, x).rows.length;
+  drawScene(ctx, params, st, x.width, x.height, t.cycleFrame, {
+    yawOffset: (x.orbit || 0) * (rowIndex / rows),
+    transparent,
+    layers: { guides: !part && x.includeGuides, figure: true },
+    parts: part ? { far: part === 'far', body: part === 'body', near: part === 'near' } : undefined,
+    onion: x.includeGuides,
+    under: x.under,
+  });
+  return c;
+}
+
+const PARTS = [['far', '1-far-limbs'], ['body', '2-body'], ['near', '3-near-limbs']];
+
+function recipeText(params, x, sum) {
+  const preset = PRESETS[x.target] || PRESETS.other;
+  const lines = [
+    `Walk reference: ${sum.frames} frames at ${params.fps} fps, ${sum.width}x${sum.height}, ${x.timing === 'unique' ? 'unique drawings plus exposure list' : 'one file per timeline frame'}.`,
+    '',
+    `Target: ${preset.label}`,
+    preset.summary,
+    '',
+    ...preset.steps.map((s, i) => `${i + 1}. ${s}`),
+    '',
+    preset.notes,
+    '',
+    'Files are numbered with zero padding, so a plain name sort is frame order.',
+    x.timing === 'unique' ? 'manifest.json lists each drawing with its start frame and exposure length (in frames). Apply those holds yourself.' : 'Repeated exposures are repeated files, so no timing setup is needed.',
+    x.layers === 'split' ? 'Layers: 1-far-limbs is the back layer, 2-body the middle, 3-near-limbs the front. Stack them in that order, same size and position.' : '',
+  ];
+  return lines.filter((l) => l !== undefined).join('\n');
+}
+
+export function manifest(params, st, x) {
+  const t = exportTimeline(params, x);
+  const keys = keyPhases(params);
+  return {
+    format: 'walk-base-export',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    note: 'Original 2D figure generated by the app. Not traced from any source drawing.',
+    fps: params.fps,
+    cycleFrames: t.perCycle,
+    drawingsPerCycle: t.drawings,
+    exposure: params.exposure,
+    cycles: x.cycles,
+    canvas: { width: x.width, height: x.height },
+    travel: params.travel,
+    timing: x.timing,
+    layers: x.layers,
+    background: x.background,
+    guidesIncluded: x.includeGuides,
+    sampler: params.sampled?.active ? manifestInfo() : null,
+    keyPoses: keys.map((k) => ({ name: k.name, nearFootPhase: k.u, farFootPhase: (k.u + 0.5) % 1 })),
+    gait: { ...params, perf: undefined },
+    automation: params.perf ? { frames: params.perf.T, lanes: params.perf.lanes } : null,
+    style: st,
+    frames: t.rows.map((r) => {
+      const ph = phaseFor(params, r.cycleFrame);
+      const key = keyAt(params, ph.u, ph.step);
+      return { frame: r.frame, drawing: r.drawing, cycle: r.cycle, phase: r.u, key: key ? `${key.name} (${key.side})` : null };
+    }),
+  };
+}
+
+/** Builds the export as one or more ZIPs. onProgress({done,total}); signal for cancel. */
+export async function exportPngZip(params, st, x, { onProgress, signal } = {}) {
+  const t = exportTimeline(params, x);
+  const sum = summary(params, x);
+  const man = manifest(params, st, x);
+  const writer = new ZipWriter();
+  const passes = x.layers === 'split' ? PARTS : [[null, 'frames']];
+  // Unique mode writes the first cycle's drawings once; the manifest says how long each is held.
+  const indices = x.timing === 'unique'
+    ? Array.from(new Map(t.rows.filter((r) => r.cycle === 1).map((r) => [r.drawing, r.frame - 1])).values())
+    : t.rows.map((_, i) => i);
+  const total = indices.length * passes.length;
+  let done = 0;
+  const files = [];
+  const scratch = makeCanvas(x.width, x.height);
+  for (const [part, dir] of passes) {
+    for (const i of indices) {
+      if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+      renderFrame(params, st, x, i, part, scratch);
+      const file = `${dir}/${name(x.pattern, x.padding, x.timing === 'unique' ? t.rows[i].drawing : t.rows[i].frame)}`;
+      await writer.add(file, await toBlob(scratch));
+      files.push({ file, drawing: t.rows[i].drawing, startFrame: t.rows[i].frame });
+      done += 1;
+      onProgress?.({ done, total });
+    }
+  }
+  if (x.timing === 'unique') {
+    const runs = [];
+    for (const r of t.rows) {
+      const last = runs[runs.length - 1];
+      if (last && last.drawing === r.drawing && last.cycle === r.cycle) last.lengthFrames += 1;
+      else runs.push({ drawing: r.drawing, cycle: r.cycle, startFrame: r.frame, lengthFrames: 1 });
+    }
+    man.exposures = runs;
+  }
+  man.files = files;
+  await writer.add('manifest.json', JSON.stringify(man, null, 1));
+  await writer.add('IMPORT-RECIPE.txt', recipeText(params, x, sum));
+  return { blob: writer.finish(), name: 'walk_frames.zip', summary: sum, manifest: man };
+}
+
+/** Only the key poses: the frames where the movement turns round or a foot lands, with a note of why each was chosen. */
+export async function exportKeyFrames(params, st, x, { onProgress, signal, minSwing } = {}) {
+  const keys = findKeyFrames(params, { minSwing });
+  const one = { ...x, cycles: 1 };
+  const writer = new ZipWriter();
+  const scratch = makeCanvas(x.width, x.height);
+  const files = []; let done = 0;
+  for (const k of keys) {
+    if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+    renderFrame(params, st, one, k.frame, null, scratch);
+    const file = `key_poses/${name(x.pattern, x.padding, k.frame + 1)}`;
+    await writer.add(file, await toBlob(scratch));
+    files.push({ file, frame: k.frame + 1, seconds: k.frame / params.fps, reasons: k.reasons });
+    done += 1; onProgress?.({ done, total: keys.length });
+  }
+  await writer.add('key_poses.json', JSON.stringify({ format: 'walk-base-key-poses', fps: params.fps, totalFrames: cycleFrames(params).frames.length, note: 'Frame numbers start at 1. A key pose is a frame where a tracked point turns round (a high or a low) or a foot or paw lands.', frames: files }, null, 1));
+  return { blob: writer.finish(), name: 'walk_key_poses.zip', count: keys.length, keys };
+}
+
+export async function videoSupport(params, x) {
+  return detectH264(x.width, x.height, params.fps, x.bitrate);
+}
+
+export async function exportMp4(params, st, x, { onProgress, signal } = {}) {
+  const t = exportTimeline(params, x);
+  const scratch = makeCanvas(x.width, x.height);
+  // H.264 is opaque, so frames are always flattened on the chosen background colour.
+  const solid = { ...x, background: 'solid' };
+  const r = await encodeH264({
+    width: x.width, height: x.height, fps: params.fps, count: t.rows.length, bitrateMbps: x.bitrate, signal,
+    getFrame: async (i) => { renderFrame(params, st, solid, i, null, scratch); return scratch; },
+    onFrame: (n) => onProgress?.({ done: n, total: t.rows.length }),
+  });
+  return { blob: r.blob, name: 'walk_reference.mp4', codec: r.codec, frames: r.frames, summary: summary(params, x) };
+}
+
+/** One image with every drawing of a cycle, labelled by drawing number and key pose. */
+export async function contactSheet(params, st, { columns = 6, cellW = 480, cellH = 360 } = {}) {
+  const { frames, drawings } = cycleFrames(params);
+  const firstOfDrawing = [];
+  for (const f of frames) if (!firstOfDrawing[f.drawing - 1]) firstOfDrawing[f.drawing - 1] = f.frame;
+  const rows = Math.ceil(drawings / columns);
+  const sheet = makeCanvas(columns * cellW, rows * cellH);
+  const sctx = sheet.getContext('2d');
+  sctx.fillStyle = '#fff'; sctx.fillRect(0, 0, sheet.width, sheet.height);
+  const tile = makeCanvas(cellW, cellH);
+  for (let d = 0; d < drawings; d++) {
+    const info = drawScene(tile.getContext('2d'), params, { ...st, showLabels: false, showOnion: false, transparent: false }, cellW, cellH, firstOfDrawing[d]);
+    const x0 = (d % columns) * cellW;
+    const y0 = Math.floor(d / columns) * cellH;
+    sctx.drawImage(tile, x0, y0);
+    sctx.strokeStyle = '#999'; sctx.strokeRect(x0 + 0.5, y0 + 0.5, cellW - 1, cellH - 1);
+    sctx.fillStyle = '#222'; sctx.font = '600 18px system-ui, sans-serif';
+    sctx.fillText(`${d + 1}${info.key ? `  ${info.key.name} (${info.key.side})` : ''}`, x0 + 10, y0 + 24);
+  }
+  return { blob: await toBlob(sheet), name: 'walk_contact_sheet.png' };
+}
+
+/** Download, or share where the browser supports it. */
+export async function deliver(blob, fileName, { share = false } = {}) {
+  const file = new File([blob], fileName, { type: blob.type });
+  if (share && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return 'shared'; } catch (e) { if (e.name === 'AbortError') return 'cancelled'; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return 'downloaded';
+}

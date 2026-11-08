@@ -1,0 +1,16 @@
+{
+  "name": "walk-base",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An adjustable 3D character reference to trace movement from. Runs on the device.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build": "node build.mjs",
+    "package": "node package.mjs",
+    "site": "npm run build && npm run package"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

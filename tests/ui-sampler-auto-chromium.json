@@ -1,0 +1,203 @@
+{
+ "browser": "chromium",
+ "mode": "auto",
+ "at": "2026-11-08T00:45:54.115Z",
+ "results": [
+  {
+   "label": "the picture loads and the cut window opens by itself",
+   "ok": true,
+   "detail": "1800x900, 10 cuts"
+  },
+  {
+   "label": "automatic detection finds the 10 drawings and ignores the caption, numerals and specks",
+   "ok": true,
+   "detail": "10"
+  },
+  {
+   "label": "frame numbers run 1 to 10 in reading order",
+   "ok": true,
+   "detail": "1,2,3,4,5,6,7,8,9,10"
+  },
+  {
+   "label": "rows read left to right, top to bottom",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "dragging a cut's edge handle resizes it",
+   "ok": true,
+   "detail": "60 to 99"
+  },
+  {
+   "label": "tapping a cut selects it",
+   "ok": true,
+   "detail": "2"
+  },
+  {
+   "label": "Stamp drops a numbered box with every tap, the size of the selected one",
+   "ok": true,
+   "detail": "10 to 12"
+  },
+  {
+   "label": "only one cut window is open",
+   "ok": true,
+   "detail": "1"
+  },
+  {
+   "label": "stamped boxes are numbered on from the one before",
+   "ok": true,
+   "detail": "1,2,3,4,5,6,7,8,9,10,11,12"
+  },
+  {
+   "label": "Delete removes them again",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "a frame number you type sticks, and the next ones count on from it",
+   "ok": true,
+   "detail": "1,2,20,21,22,23,24,25,26,27"
+  },
+  {
+   "label": "a hold can be set per frame",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "Split cuts one box into two",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "Merge next joins them again",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "the erase brush removes pixels",
+   "ok": true,
+   "detail": "0 to 14520"
+  },
+  {
+   "label": "Undo puts them back exactly",
+   "ok": true,
+   "detail": "0 vs 0"
+  },
+  {
+   "label": "Redo erases them again",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "the restore brush paints it back",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "label": "a box erases what it covers",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "a lasso erases inside its loop",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "the wand erases the connected paper around a tap",
+   "ok": true,
+   "detail": "9028 to 73095"
+  },
+  {
+   "label": "Reset slice clears this slice's erasing",
+   "ok": true,
+   "detail": "73095 to 0"
+  },
+  {
+   "label": "the undo history kept every edit",
+   "ok": true,
+   "detail": "5"
+  },
+  {
+   "label": "Remove paper makes the slice transparent",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "Done puts the frames on the stage and the timeline",
+   "ok": true,
+   "detail": "{\"source\":\"sampled\",\"frames\":22,\"drawings\":10,\"cells\":22,\"holds\":[2,2,3,3,2,2,2,2,2,2]}"
+  },
+  {
+   "label": "the timeline length is the sum of every hold",
+   "ok": true,
+   "detail": "22"
+  },
+  {
+   "label": "timeline cells show your frame numbers",
+   "ok": true,
+   "detail": "1,2,20,21,22,23,24,25,26,27"
+  },
+  {
+   "label": "the sampled frames play",
+   "ok": true,
+   "detail": "0 to 16"
+  },
+  {
+   "label": "every sampled frame shows ink",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "label": "with Feet registration every drawing's ink ends on the same line",
+   "ok": true,
+   "detail": "284,186"
+  },
+  {
+   "label": "the 3D walk is still there",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "sampled frames export",
+   "ok": true,
+   "detail": "22"
+  },
+  {
+   "label": "after a reload the picture is gone but the cuts are remembered",
+   "ok": true,
+   "detail": "{\"loaded\":false,\"saved\":10,\"source\":\"walk\"}"
+  },
+  {
+   "label": "loading the same picture again restores your cuts and numbers",
+   "ok": true,
+   "detail": "1,2,20,21,22,23,24,25,26,27"
+  },
+  {
+   "label": "and does not re-open the cut window over restored work",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "label": "landscape: the cut window's controls are at least 44 px and nothing overflows",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "portrait: the cut window's controls are at least 44 px and nothing overflows",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "narrow: the cut window's controls are at least 44 px and nothing overflows",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "label": "the Sampler tab's controls are at least 44 px",
+   "ok": true,
+   "detail": ""
+  }
+ ],
+ "errors": []
+}
