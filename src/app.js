@@ -19,6 +19,8 @@ import { openCutWindow } from './cutwindow.js';
 import { SLICE_DEFAULTS, numberCuts } from './slicer.js';
 import { History } from './history.js';
 import { findKeyFrames, laneTable, tableCsv } from './keyposes.js';
+import { VISEMES, VISEME_BY_ID, buildSpeech, cleanSpeech, keyOn } from './lipsync.js';
+import { paintMouth } from './mouth.js';
 import { icon } from './icons.js';
 import { attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner } from './menu.js';
@@ -35,6 +37,8 @@ const S = {
   source: 'walk', tool: 'orbit', sel: null, link: true, edit: null, busy: null, message: '', video: null, last: null, map: null,
   // Automation: lanes change a value over a longer performance. perfLen 0 means the performance is just one cycle.
   fixMode: false, fixSpread: 10, lanes: {}, perfLen: 0, bank: { human: null, dog: null }, perfs: { human: {}, dog: {} }, perfName: '', attach: { human: [], dog: [] }, attachSel: null, ver: 0, recMode: 'touch', armed: false, recording: false, laneEdit: null, clip: 'stop', clipStart: 0, clipLen: null, clipK: 1,
+  // Speech: the text becomes key mouth shapes on the timeline. speechDraft is what is typed but not built yet.
+  speech: null, speechDraft: null, speechStart: 0, speechSpeed: 1, mouthPreview: null,
 };
 const rec = new Recorder();
 // A picture to compare against, shown under the figure. It is a view aid, so it is kept out of undo and the settings file.
@@ -56,7 +60,7 @@ function perfData() {
   return { ...perfCache, lanes: S.lanes, live: Object.keys(live).length ? live : null };
 }
 /** The parameters every drawing and export reads: gait, proportions and the motion you have changed. */
-const P = () => ({ ...S.p, proportions: S.r, motion: S.motion, attach: S.source === 'sampled' ? [] : (S.attach[figKey()] || []), perf: S.source === 'sampled' ? null : perfData(), sampled: S.source === 'sampled' ? sampledSummary() : null });
+const P = () => ({ ...S.p, proportions: S.r, motion: S.motion, attach: S.source === 'sampled' ? [] : (S.attach[figKey()] || []), speech: S.source === 'sampled' ? null : S.speech, perf: S.source === 'sampled' ? null : perfData(), sampled: S.source === 'sampled' ? sampledSummary() : null });
 
 // ---------- small DOM helper ----------
 function h(tag, attrs = {}, ...kids) {
@@ -79,7 +83,7 @@ const hist = new History({ gap: 250 });
 let restoring = false;
 const snapState = () => JSON.stringify({
   p: S.p, s: Object.fromEntries(Object.entries(S.s).filter(([k]) => !/^cam|^autoOrbit/.test(k))), x: S.x, r: S.r, motion: S.motion, lanes: S.lanes,
-  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset,
+  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech,
 });
 function refreshHistory() {
   for (const [id, ok] of [['undo', hist.canUndo], ['redo', hist.canRedo]]) { const b = document.querySelector(`[data-testid="${id}"]`); if (b) b.disabled = !ok; }
@@ -116,7 +120,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -162,6 +166,7 @@ function adopt(raw) {
   if (raw.attach && typeof raw.attach === 'object') S.attach = cleanAttach(raw.attach);
   if (raw.perfs && typeof raw.perfs === 'object') for (const r of FIGS) { const o = {}; for (const [name, v] of Object.entries(raw.perfs[r] || {})) { const nm = String(name).slice(0, 40); if (nm && v) o[nm] = { lanes: cleanLanes(v.lanes), perfLen: Math.max(0, Math.round(finite(v.perfLen))) }; } S.perfs[r] = o; }
   S.motion = cleanMotion(raw.motion);
+  S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(2400, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
   adoptSampler(raw.sampler);
   if (raw.preset) S.preset = raw.preset;
@@ -617,7 +622,7 @@ function paint() {
   const zw = fw * S.zoom; const zh = fh * S.zoom;
   const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
   if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
-  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.sel, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false });
+  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false });
   const x0 = (cw - zw) / 2 + S.panX * d; const y0 = (ch - zh) / 2 + S.panY * d;
   ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = '#fff'; ctx.fillRect(x0, y0, zw, zh);
@@ -663,6 +668,7 @@ const nowValues = () => { const q = P(); return q.perf ? { p: paramsAt(q, q.perf
 function setFrame(i) {
   const n = cycleFrames(P()).frames.length;
   S.frame = ((Math.round(i) % n) + n) % n;
+  S.mouthPreview = null; // a held mouth shape lasts until the playhead moves
   render();
 }
 function markCustom() { if (S.preset !== 'Custom') { S.preset = 'Custom'; const sel = document.getElementById('preset'); if (sel) sel.value = 'Custom'; } }
@@ -735,6 +741,12 @@ function selectPart(sel, { openTab = true } = {}) {
 }
 
 // ---------- timeline ----------
+/** The small label under a timeline frame: the mouth shape that starts there, or else the pose or cycle name. */
+function setKeyLabel(cell, f, fallback) {
+  const k = keyOn(S.speech, f); const el = cell.querySelector('.k');
+  el.textContent = k ? VISEME_BY_ID[k.v].code : fallback;
+  if (k) el.dataset.mouth = '1'; else delete el.dataset.mouth;
+}
 function buildStrip() {
   const host = document.getElementById('strip');
   if (!host) return;
@@ -747,7 +759,7 @@ function buildStrip() {
     // A performance has many cycles: label where each one starts instead of the pose names.
     const n = Math.max(2, Math.round(S.p.cycleFrames));
     host.dataset.perf = '1';
-    requestAnimationFrame(() => host.querySelectorAll('.cell').forEach((cell) => { const f = Number(cell.dataset.cell); cell.querySelector('.k').textContent = f % n === 0 ? `c${f / n + 1}` : ''; }));
+    requestAnimationFrame(() => host.querySelectorAll('.cell').forEach((cell) => { const f = Number(cell.dataset.cell); setKeyLabel(cell, f, f % n === 0 ? `c${f / n + 1}` : ''); }));
   } else delete host.dataset.perf;
   if (!sampled && !perf) import('./rig.js').then(({ keyPhases }) => {
     for (const k of keyPhases(S.p)) {
@@ -757,7 +769,7 @@ function buildStrip() {
         if (!marks.has(f.frame)) marks.set(f.frame, `${k.name[0]}${off ? 'f' : 'n'}`);
       }
     }
-    host.querySelectorAll('.cell').forEach((cell) => { const m = marks.get(Number(cell.dataset.cell)); cell.querySelector('.k').textContent = m || ''; });
+    host.querySelectorAll('.cell').forEach((cell) => { const m = marks.get(Number(cell.dataset.cell)); setKeyLabel(cell, Number(cell.dataset.cell), m || ''); });
   });
   let lastDrawing = 0;
   frames.forEach((f) => {
@@ -1271,6 +1283,7 @@ function renderPanel() {
   else if (S.tab === 'Attach') host.append(attachSection());
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
+    if (S.tab === 'Speech') host.append(speechSection());
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
     for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group' }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
     if (S.tab === 'View') host.append(viewExtras());
@@ -1282,6 +1295,59 @@ function renderPanel() {
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
   document.querySelector('.tab[aria-selected="true"]')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
   setTimeout(refreshSparks, 0);
+}
+
+// ---------- speech: text to mouth shapes ----------
+function buildSpeechNow() {
+  const text = String(S.speechDraft ?? S.speech?.text ?? '').trim();
+  if (!text) { setMessage('Type something for the head to say first.'); return; }
+  S.speech = buildSpeech(text, { fps: S.p.fps, start: S.speechStart, speed: S.speechSpeed });
+  const n = Math.max(2, Math.round(S.p.cycleFrames)); const need = S.speech.end + 6;
+  if (need > n && S.perfLen < need) { S.perfLen = Math.min(2400, need); } // the timeline grows to hold the speech
+  S.ver++; S.mouthPreview = null; S.frame = Math.min(S.speech.start, Math.max(0, (S.perfLen > 0 ? S.perfLen : n) - 1));
+  buildStrip(); renderPanel(); render(); save();
+  setMessage(`${S.speech.keys.length} mouth shapes from frame ${S.speech.start + 1} to ${S.speech.end + 1}.`);
+}
+function clearSpeech() { S.speech = null; S.mouthPreview = null; S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage('Speech cleared.'); }
+function playWithVoice() {
+  const sp = S.speech; if (!sp) return;
+  pause(); setFrame(sp.start); play();
+  // The device's own voice reads the text as the mouth plays. Its timing is its own, so the two only roughly agree.
+  if (typeof speechSynthesis !== 'undefined' && sp.text) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(sp.text); u.rate = Math.min(2, Math.max(0.5, sp.speed)); speechSynthesis.speak(u); } catch { /* no voice on this device */ } }
+}
+function drawChart(canvas, id) {
+  const ctx = canvas.getContext('2d'); const w = 96; const h = 64;
+  canvas.width = w * 2; canvas.height = h * 2; ctx.scale(2, 2);
+  ctx.fillStyle = '#f6f1e7'; ctx.fillRect(0, 0, w, h);
+  paintMouth(ctx, id, ([z, y]) => ({ x: w / 2 + z * 86, y: h * 0.56 - y * 86 }), { line: '#26231f', lw: 2 });
+}
+function speechSection() {
+  const wrap = h('div', { class: 'speech' });
+  const sp = S.speech;
+  const num = (label, value, min, max, on, tid) => h('label', { class: 'field' }, h('span', null, label), h('input', { type: 'number', class: 'num', inputmode: 'numeric', min, max, value, testid: tid, onChange: (e) => on(Number(e.target.value)) }));
+  const say = h('section', { class: 'group', testid: 'speech-say' }, h('h3', null, 'Say'),
+    figKey() === 'human' ? null : h('p', { class: 'hint' }, 'Mouth shapes are drawn on the human head for now. Choose Human in the Figure menu to see them.'),
+    h('textarea', { class: 'speechtext', rows: 3, testid: 'speech-text', 'aria-label': 'What the head says', placeholder: 'Type what the head should say', onInput: (e) => { S.speechDraft = e.target.value; } }, S.speechDraft ?? sp?.text ?? ''),
+    h('div', { class: 'btnrow' },
+      num('Starts at frame', S.speechStart + 1, 1, 2400, (v) => { S.speechStart = Math.max(0, Math.round(v) - 1); }, 'speech-start'),
+      h('button', { type: 'button', class: 'btn', testid: 'speech-playhead', onClick: () => { S.speechStart = S.frame; renderPanel(); } }, 'Use playhead')),
+    h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Speed'), h('input', { type: 'range', class: 'rng', min: 0.5, max: 2, step: 0.05, value: S.speechSpeed, testid: 'speech-speed', 'aria-label': 'Speech speed', onInput: (e) => { S.speechSpeed = Number(e.target.value); } })),
+    h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn primary', testid: 'speech-build', onClick: buildSpeechNow }, sp ? 'Rebuild mouth shapes' : 'Build mouth shapes'),
+      h('button', { type: 'button', class: 'btn', testid: 'speech-voice', disabled: !sp, onClick: playWithVoice }, 'Play with voice'),
+      h('button', { type: 'button', class: 'btn', testid: 'speech-clear', disabled: !sp, onClick: clearSpeech }, 'Clear')),
+    h('p', { class: 'hint' }, 'The words are turned into mouth shapes with simple English spelling rules, so odd spellings can come out a little wrong. Each shape sits on a frame in the timeline, labelled by its sounds.'));
+  const chart = h('section', { class: 'group', testid: 'speech-chart' }, h('h3', null, 'Mouth shapes'),
+    h('p', { class: 'hint' }, 'Tap a shape to hold it on the head and trace it. The head keeps it until the playhead moves.'),
+    h('div', { class: 'mouthchart' }, VISEMES.map((v) => {
+      const cv = document.createElement('canvas'); cv.className = 'mouththumb'; drawChart(cv, v.id);
+      return h('button', { type: 'button', class: 'mouthbtn', testid: `mouth-${v.id}`, 'aria-pressed': String(S.mouthPreview === v.id), title: `${v.hint} (${v.sounds})`, onClick: () => { S.mouthPreview = S.mouthPreview === v.id ? null : v.id; renderPanel(); render(); } },
+        cv, h('span', { class: 'mn' }, v.label), h('span', { class: 'ms' }, v.sounds));
+    })));
+  const keys = sp ? h('section', { class: 'group', testid: 'speech-keys' }, h('h3', null, `Shapes on the timeline (${sp.keys.length})`),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Mouth shapes in order' }, sp.keys.map((k) => h('button', { type: 'button', class: 'pchip', testid: `speech-key-${k.f}`, onClick: () => { pause(); setFrame(k.f); } }, `${k.f + 1} ${VISEME_BY_ID[k.v].code}`)))) : null;
+  wrap.append(say, chart); if (keys) wrap.append(keys);
+  return wrap;
 }
 
 function viewExtras() {
@@ -1406,7 +1472,7 @@ async function runSheet() {
   try { const r = await contactSheet(P(), S.s); await deliver(r.blob, r.name); setMessage('Saved the contact sheet.'); } catch (e) { setMessage(`Contact sheet failed: ${e.message}`); }
 }
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, images: usedImages() }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, images: usedImages() }, null, 1)], { type: 'application/json' });
   deliver(blob, 'walk-settings.json').then(() => setMessage('Saved walk-settings.json.'));
 }
 async function loadSettings(e) {
@@ -1426,10 +1492,11 @@ function refreshViewbar() {
   document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === S.tool)));
   const t = document.querySelector('[data-testid="turntable"]');
   if (t) t.setAttribute('aria-pressed', String(S.s.autoOrbit));
+  document.querySelector('[data-testid="head-view"]')?.setAttribute('aria-pressed', String(S.s.focus === 'head'));
 }
 function resetAll() {
   if (!confirm('Reset every setting to its default?')) return;
-  closeEditor(true); S.p = clone(DEFAULTS); S.s = clone(STYLE_DEFAULTS); S.x = clone(EXPORT_DEFAULTS); S.r = {}; S.motion = {}; S.lanes = {}; S.perfLen = 0; S.bank = { human: null, dog: null };
+  closeEditor(true); S.p = clone(DEFAULTS); S.s = clone(STYLE_DEFAULTS); S.x = clone(EXPORT_DEFAULTS); S.r = {}; S.motion = {}; S.lanes = {}; S.perfLen = 0; S.bank = { human: null, dog: null }; S.speech = null; S.speechDraft = null; S.mouthPreview = null;
   S.ver++; pause(); setArmed(false); S.sel = null; S.preset = 'Normal'; S.zoom = 1; S.panX = S.panY = 0; S.frame = 0; build(); render(); save();
 }
 const goTab = (t) => { S.tab = t; renderPanel(); };
@@ -1517,6 +1584,7 @@ function build() {
     vb('pan', 'Pan', 'tool-pan', () => { S.tool = 'pan'; refreshViewbar(); }, { 'data-tool': 'pan' }),
     h('span', { class: 'vsep cam', role: 'presentation' }), viewMenu, h('span', { class: 'vsep cam', role: 'presentation' }),
     vb('spin', 'Spin', 'turntable', () => { S.s.autoOrbit = !S.s.autoOrbit; refreshViewbar(); save(); }, { 'aria-pressed': 'false' }),
+    vb('face', 'Head view', 'head-view', () => { S.s.focus = S.s.focus === 'head' ? 'body' : 'head'; S.zoom = 1; S.panX = S.panY = 0; refreshViewbar(); if (S.tab === 'Speech') renderPanel(); render(); save(); }, { 'aria-pressed': 'false' }),
     vb('fit', 'Fit', 'fit', () => { S.zoom = 1; S.panX = S.panY = 0; render(); }));
   const back = h('button', { type: 'button', class: 'btn back', testid: 'stage-back', onClick: () => { S.stageOnly = false; document.body.classList.remove('stage-only'); render(); } }, 'Show controls');
   wrapEl = h('section', { class: 'stage-wrap' }, stage, hud, viewbar, back);
@@ -1642,7 +1710,7 @@ function gestures() {
     if (pts.length >= 2) {
       down = null;
       const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      S.zoom = Math.min(8, Math.max(0.5, start.zoom * (d / start.dist)));
+      S.zoom = Math.min(8, Math.max(0.25, start.zoom * (d / start.dist)));
       S.panX = start.panX + ((pts[0].x + pts[1].x) / 2 - start.cx); S.panY = start.panY + ((pts[0].y + pts[1].y) / 2 - start.cy);
     } else if (down) {
       const dx = pts[0].x - down.x; const dy = pts[0].y - down.y;
@@ -1670,7 +1738,7 @@ function gestures() {
     down = null; start = ptrs.size ? snap() : null;
   };
   stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
-  stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.5, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); render(); }, { passive: false });
+  stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.25, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); render(); }, { passive: false });
   stage.addEventListener('dblclick', () => { S.zoom = 1; S.panX = S.panY = 0; render(); });
   function snap() {
     const pts = [...ptrs.values()];
@@ -1808,7 +1876,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
-  setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t; renderPanel(); },
+  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),

@@ -347,3 +347,14 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .group[data-hue] { border-left: 4px solid hsl(var(--hue) var(--sec-st-s) var(--sec-st-l)); }
 .group[data-hue] > h3 { background: hsl(var(--hue) var(--sec-bg-s) var(--sec-bg-l)); }
 .group[data-hue] .sec-toggle:hover { background: hsl(var(--hue) var(--sec-bg-s) calc(var(--sec-bg-l) - 4%)); }
+
+/* speech tab: the text box, the chart of mouth shapes, and the head-view toggle */
+.speechtext { width: 100%; box-sizing: border-box; min-height: 88px; margin: 6px 0; padding: 8px 10px; font: inherit; font-size: var(--fs-in); line-height: 1.4; color: var(--ink); background: var(--ctl); border: 1px solid var(--line); border-radius: var(--r); resize: vertical; }
+.mouthchart { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; margin: 6px 0 4px; }
+.mouthbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: var(--h); padding: 6px; border: 1px solid var(--line); border-radius: var(--r); background: var(--ctl); color: var(--ink); cursor: pointer; font: inherit; }
+.mouthbtn:hover { background: var(--ctl-hover); }
+.mouthbtn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.mouththumb { width: 96px; height: 64px; border-radius: 4px; }
+.mouthbtn .mn { font-size: 12px; font-weight: 650; letter-spacing: .04em; }
+.mouthbtn .ms { font-size: 11px; color: var(--ink-3); text-align: center; line-height: 1.25; }
+.cell .k[data-mouth] { color: var(--accent); font-weight: 700; }

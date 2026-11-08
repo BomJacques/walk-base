@@ -82,6 +82,14 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Tail length | dog | × | 0.3 to 2.5 | 1 | Scale of the tail. |
 | Ear length | dog | × | 0.4 to 2.5 | 1 | Scale of the ears. |
 
+## Speech
+
+| Control | Figure | Unit | Range | Default | What it does |
+|---|---|---|---|---|---|
+| Look at | both |  | body, head | body | Body keeps the whole figure in view. Head fills the stage with the face. Drag to turn the head around, pinch or scroll to zoom in and out, two fingers to move it. |
+| Head size | both | × | 3 to 14 | 4.6 | How large the head is when the view is on the head. |
+| Mouth shape label | both |  | bool | true | Names the current mouth shape and the sounds it stands for, in the top corner. |
+
 ## View
 
 | Control | Figure | Unit | Range | Default | What it does |
@@ -115,7 +123,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 |---|---|---|---|---|---|
 | Ground line and ticks | both |  | bool | true | Ticks stay on the ground, so a sliding foot shows. |
 | Footprints | both |  | bool | true | Where each foot plants. |
-| Foot labels | both |  | bool | true | Names the ankle, heel, ball and toe on the near foot. |
+| Foot labels | both |  | bool | false | Names the ankle, heel, ball and toe on the near foot. |
 | Motion arcs | both |  | bool | false | Paths of the points you tick below through the cycle. Drag a dot to reshape the movement. |
 | Frame dots | both |  | bool | true | One dot on the path for every frame, so the spacing shows speed and ease. Drag a dot to bend the path there. |
 | Pose labels | both |  | bool | true | Names CONTACT, DOWN, PASSING and UP on the frames where they fall. |

@@ -337,3 +337,14 @@ Host the app as a free static website from a GitHub repository instead of Netlif
 - Keep it working offline: the page already needs nothing from a network; a small service worker would make it installable on the iPad home screen.
 - Remove the Netlify-only files (headers and redirects) or translate them: Pages cannot set custom headers, so check nothing depends on them.
 - Needs from the user: a GitHub repository (new or existing) and permission to push to it. Nothing is pushed until they say so.
+
+## Phase: head view and lip sync (done, 2026-11-09)
+
+A Speech tab turns typed text into mouth shapes on the timeline. 15 shapes (rest, M B P, F V, TH, L N T D, AH, AE E, EE, OH, OO W, UH, CH SH J, R, S Z, K G), each drawn on the human head's own surface so it turns and foreshortens with the head. English spelling rules plus a short exceptions list (`src/lipsync.js`); keys land on timeline frames, labelled by their code, saved with the settings and carried into every export frame. A Head view (button in the stage bar, or Speech > Look at) centres and zooms the camera on the face; orbit, pan, pinch and zoom out still work. A chart of all 15 shapes lets you hold one on the head to trace. Optional spoken audio uses the device's own voice (its timing is its own).
+
+Limits: human head only (dogs and species have a jaw channel but no mouth shapes); no real phonetics, so odd spellings drift; shapes are discrete per frame with no in-between tweening; no hand editing of single keys yet.
+
+## Next phases (asked for 2026-11-09)
+
+- **More gait control.** The Gait tab is thin. Ideas: separate left and right (limp, uneven stride), step width and toe-out, cadence curve across the cycle, pelvis and shoulder counter-rotation tied to the stride, knee lift and swing path shape, foot roll curve (heel to toe), arm swing offset and elbow path, weight shift side to side, stride from speed (walk to run blend with flight time), terrain (slope, steps), plus a visible gait diagram (stance and swing bars per foot).
+- **More proportion adjustments, and a rubber hose model.** Wider proportion sliders for every segment (neck, hands, feet, torso parts, head shape), then a second human model in the 1930s rubber hose style: tube limbs with no joints (bending curves), pie-cut eyes, round gloved hands, circle head, thick even outline, squash and stretch along the limb. Needs research on the style's rules (limb as a bezier hose, no elbows or knees, overlapping and follow-through, bouncy walk cycles on twos or threes) before building.

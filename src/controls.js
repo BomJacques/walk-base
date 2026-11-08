@@ -8,7 +8,7 @@ const e = (scope, id, tab, group, label, options, help) => ({ scope, id, tab, gr
 const b = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, label, type: 'bool', help });
 const c = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, label, type: 'color', help });
 
-export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Body', 'View', 'Look', 'Guides', 'Sampler', 'Export'];
+export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Body', 'Speech', 'View', 'Look', 'Guides', 'Sampler', 'Export'];
 
 export const CONTROLS = [
   // Gait
@@ -108,6 +108,9 @@ export const CONTROLS = [
   // Guides
   b('s', 'showGround', 'Guides', 'Ground', 'Ground line and ticks', 'Ticks stay on the ground, so a sliding foot shows.'),
   b('s', 'showFootprints', 'Guides', 'Ground', 'Footprints', 'Where each foot plants.'),
+  e('s', 'focus', 'Speech', 'Head view', 'Look at', ['body', 'head'], 'Body keeps the whole figure in view. Head fills the stage with the face. Drag to turn the head around, pinch or scroll to zoom in and out, two fingers to move it.'),
+  n('s', 'headZoom', 'Speech', 'Head view', 'Head size', '×', 3, 14, 0.1, 'How large the head is when the view is on the head.'),
+  b('s', 'showMouthLabel', 'Speech', 'Head view', 'Mouth shape label', 'Names the current mouth shape and the sounds it stands for, in the top corner.'),
   b('s', 'showFootLabels', 'Guides', 'Poses', 'Foot labels', 'Names the ankle, heel, ball and toe on the near foot.'),
   b('s', 'showArcs', 'Guides', 'Arcs', 'Motion arcs', 'Paths of the points you tick below through the cycle. Drag a dot to reshape the movement.'),
   b('s', 'arcDots', 'Guides', 'Arcs', 'Frame dots', 'One dot on the path for every frame, so the spacing shows speed and ease. Drag a dot to bend the path there.'),

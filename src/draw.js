@@ -11,6 +11,8 @@ import { speciesOf } from './dogdefaults.js';
 import { buildDogShapes, dogSticks, dogPivot, DOG_ARCS, dogPrints } from './dogdraw.js';
 import { arcPoint, samplePaths, arcColor, arcOffsetX } from './arcs.js';
 import { stripSims } from './physics.js';
+import { paintMouth } from './mouth.js';
+import { speechAt, VISEME_BY_ID } from './lipsync.js';
 import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
 
@@ -38,8 +40,11 @@ export const STYLE_DEFAULTS = Object.freeze({
   arcsDog: ['head', 'hip', 'paw.FR', 'paw.FL', 'paw.HR', 'paw.HL', 'tail'],
   arcDots: true,
   showLabels: true,
-  showFootLabels: true,
+  showFootLabels: false,
   showGizmo: true,
+  showMouthLabel: true,
+  focus: 'body',             // body | head: the camera looks at the whole figure or at the face
+  headZoom: 4.6,               // how large the head is in the head view
   showOnion: false,
   onionBefore: 2,
   onionAfter: 2,
@@ -55,12 +60,12 @@ const rad = (d) => (d * Math.PI) / 180;
 const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
 
 /** Camera and canvas mapping. target is the world point kept at the centre of the figure. */
-export function makeCam(st, w, h, target, yawOffset = 0, zoomMul = 1) {
+export function makeCam(st, w, h, target, yawOffset = 0, zoomMul = 1, centered = false) {
   const yaw = rad(st.camYaw + yawOffset);
   const pitch = rad(st.camPitch);
   const scale = ((h * st.figureHeight) / 2.1) * zoomMul;
   const cx = w / 2 + st.offsetX * w;
-  const cy = h * st.groundHeight - target[1] * scale;
+  const cy = centered ? h * 0.5 : h * st.groundHeight - target[1] * scale; // the head view puts the target mid-stage
   const cyw = Math.cos(yaw); const syw = Math.sin(yaw); const cp = Math.cos(pitch); const sp = Math.sin(pitch);
   return {
     scale, cx, cy, w, h, k: h / 1080, lw: st.lineWidth * (h / 1080), yaw, pitch, target,
@@ -103,9 +108,12 @@ function buildShapes(pz, cam) {
   // Head: an ellipsoid sampled on three great circles.
   const hr = pz.headR;
   const headPts = [];
-  for (let i = 0; i < 20; i++) {
-    const t = (i / 20) * TAU;
-    for (const q of [[Math.cos(t) * 0.95, Math.sin(t) * 1.08, 0], [Math.cos(t) * 0.95, 0, Math.sin(t) * 0.85], [0, Math.cos(t) * 1.08, Math.sin(t) * 0.85]]) {
+  // The whole ellipsoid sampled on latitudes and longitudes, so its outline is a true ellipse from any angle (the close-up shows every facet).
+  for (let lat = 0; lat <= 12; lat++) {
+    const ph = (lat / 12) * Math.PI;
+    for (let lon = 0; lon < (lat === 0 || lat === 12 ? 1 : 32); lon++) {
+      const th = (lon / 32) * TAU;
+      const q = [0.95 * Math.sin(ph) * Math.cos(th), 1.08 * Math.cos(ph), 0.85 * Math.sin(ph) * Math.sin(th)];
       const P = S(add(pz.headC, apply(pz.Rh, mul(q, hr))));
       headPts.push([P.x, P.y]);
     }
@@ -180,6 +188,19 @@ function paintAttachLines(ctx, pz, cam, opts, parts) {
   return placed;
 }
 
+/** The mouth on the head's surface: its flat outline is bent onto the ellipsoid of the head, so it turns with the head and foreshortens at an angle. */
+function paintHeadMouth(ctx, pz, cam, st, id) {
+  const hr = pz.headR; const y0 = -0.45 * hr;
+  const W = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
+  const surf = ([z, y]) => {
+    const yy = y0 + y * hr; const zz = z * hr;
+    const r2 = (yy / (1.08 * hr)) ** 2 + (zz / (0.85 * hr)) ** 2;
+    return W(add(pz.headC, apply(pz.Rh, [0.95 * hr * Math.sqrt(Math.max(0.02, 1 - r2)) + 0.004 * hr, yy, zz])));
+  };
+  if (surf([0, 0]).d <= W(pz.headC).d) return; // turned away from the camera
+  paintMouth(ctx, id, surf, { line: st.lineColor, lw: cam.lw * 0.85 });
+}
+
 function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
   const parts = opts.parts || { far: true, body: true, near: true };
   const ghost = opts.tint || null;
@@ -240,9 +261,10 @@ function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam); continue; }
     paintShape(ctx, sh, cam, st, ghost);
+    if (sh.part === 'head' && opts.mouth && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHeadMouth(ctx, pz, cam, st, opts.mouth);
     if ((sh.part === 'head' || sh.part === 'dog.head') && (st.style === 'mannequin' || st.style === 'outline') && !ghost) {
       ctx.strokeStyle = st.lineColor; ctx.fillStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.9;
-      for (const e of face.eyes) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9), 0, TAU); ctx.fill(); }
+      for (const e of face.eyes) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9, 0.05 * pz.headR * cam.scale), 0, TAU); ctx.fill(); }
       if (face.dot) { ctx.beginPath(); ctx.arc(face.dot.x, face.dot.y, Math.max(2, cam.lw * 1.4), 0, TAU); ctx.fill(); }
       if (face.nose) { ctx.beginPath(); ctx.moveTo(face.noseBase.x, face.noseBase.y); ctx.lineTo(face.nose.x, face.nose.y); ctx.stroke(); }
     }
@@ -310,8 +332,12 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   const pz = poseAt(t0);
   const sp = perf ? valuesAt(t0).p : params;
   const step = dog ? sp.dogStride / 2 : sp.stepLength;
-  const target = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? 0.45 : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? 0.45 : 0)), dog ? speciesOf(params).view.y + Math.min(1, params.dogFlight || 0) * (params.dogFlightHeight ?? 0) * 0.85 : 0.9, 0];
-  const cam = makeCam(st, w, h, target, opts.yawOffset || 0, dog ? speciesOf(params).view.zoom / (1 + 0.15 * Math.min(1, params.dogFlight || 0)) : 1);
+  const bodyTarget = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? 0.45 : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? 0.45 : 0)), dog ? speciesOf(params).view.y + Math.min(1, params.dogFlight || 0) * (params.dogFlightHeight ?? 0) * 0.85 : 0.9, 0];
+  // The head view looks at the face: the camera is centred on the head and zoomed in, and still orbits around it.
+  const headView = st.focus === 'head' && !dog;
+  const target = headView ? [pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]] : bodyTarget;
+  const mouthId = dog ? null : (opts.mouth ?? speechAt(params.speech, perf ? t0 : frame) ?? (headView ? 'rest' : null));
+  const cam = makeCam(st, w, h, target, opts.yawOffset || 0, headView ? st.headZoom : dog ? speciesOf(params).view.zoom / (1 + 0.15 * Math.min(1, params.dogFlight || 0)) : 1, headView);
   const transparent = opts.transparent ?? st.transparent;
   const layers = opts.layers || { guides: true, figure: true };
   // Swinging strips are simulated over the whole cycle ahead of time; this frame's shape is passed on with the item.
@@ -331,7 +357,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   const arcDots = [];
   if (layers.guides) {
     const line = (a, b) => { const A = cam.p(a); const B = cam.p(b); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); };
-    if (st.showGround) {
+    if (st.showGround && !headView) {
       const x0 = target[0] - 5; const x1 = target[0] + 5;
       ctx.strokeStyle = hexA(st.guideColor, 0.75); ctx.lineWidth = cam.lw * 0.8;
       ctx.beginPath(); line([x0, 0, 0], [x1, 0, 0]); ctx.stroke();
@@ -347,7 +373,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       for (let x = first; x < x1; x += half) { const A = cam.p([x, 0, 0]); ctx.moveTo(A.x, A.y); ctx.lineTo(A.x, A.y + 11 * cam.k); }
       ctx.stroke();
     }
-    if (st.showFootprints && dog) {
+    if (headView) { /* no ground in the head view */ } else if (st.showFootprints && dog) {
       ctx.fillStyle = hexA(st.guideColor, 0.38);
       for (const pl of perf ? perf.plants : dogPrints(params, target[0] - 4, target[0] + 4)) {
         if (Math.abs(pl.x - target[0]) > 4) continue;
@@ -418,7 +444,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       for (let k = st.onionBefore; k >= 1; k--) drawFigureShapes(ctx, ghost(-k), cam, ghostStyle, { tint: st.onionBeforeTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
       for (let k = st.onionAfter; k >= 1; k--) drawFigureShapes(ctx, ghost(k), cam, ghostStyle, { tint: st.onionAfterTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
     }
-    const fig = drawFigureShapes(ctx, pz, cam, st, { parts: opts.parts, attach: attachNow });
+    const fig = drawFigureShapes(ctx, pz, cam, st, { parts: opts.parts, attach: attachNow, mouth: mouthId });
     shapes = fig.shapes; placedAttach = fig.placed || [];
     const sel = opts.selection;
     if (sel && st.style !== 'stick') {
@@ -465,7 +491,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   }
   ctx.restore();
 
-  if (layers.guides && layers.figure && st.showFootLabels && !dog && !pz.legs && st.style !== 'silhouette') {
+  if (layers.guides && layers.figure && st.showFootLabels && !dog && !headView && !pz.legs && st.style !== 'silhouette') {
     // Names on the near foot: ankle, heel, ball and toe, each with a dot and a short leader line.
     ctx.save();
     ctx.font = `600 ${Math.round(11 * cam.k)}px system-ui, sans-serif`;
@@ -482,6 +508,16 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       ctx.textAlign = dx * dir >= 0 && m.name !== 'ball' ? 'left' : m.name === 'ball' ? 'center' : 'right';
       ctx.fillText(m.name, tx, ty + (dy > 0 ? 4 : -2) * k);
     }
+    ctx.restore();
+  }
+  if (layers.guides && layers.figure && st.showMouthLabel && mouthId && (opts.mouth || params.speech)) {
+    // Which mouth shape this is, and the sounds it stands for.
+    const v = VISEME_BY_ID[mouthId];
+    ctx.save(); ctx.textAlign = 'right';
+    ctx.font = `600 ${Math.round(28 * cam.k)}px system-ui, sans-serif`; ctx.fillStyle = hexA(st.guideColor, 0.95);
+    ctx.fillText(`Mouth: ${v.label}`, w - 28 * cam.k, 88 * cam.k);
+    ctx.font = `500 ${Math.round(20 * cam.k)}px system-ui, sans-serif`; ctx.fillStyle = hexA(st.guideColor, 0.85);
+    ctx.fillText(v.sounds, w - 28 * cam.k, 118 * cam.k);
     ctx.restore();
   }
   const key = dog ? null : keyAt(params, ph.u, ph.step);
