@@ -294,7 +294,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   const pz = poseAt(t0);
   const sp = perf ? valuesAt(t0).p : params;
   const step = dog ? sp.dogStride / 2 : sp.stepLength;
-  const target = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? 0.45 : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? 0.45 : 0)), dog ? speciesOf(params).view.y + Math.min(1, params.dogFlight || 0) * (params.dogFlightHeight ?? 0) * 0.6 : 0.9, 0];
+  const target = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? 0.45 : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? 0.45 : 0)), dog ? speciesOf(params).view.y + Math.min(1, params.dogFlight || 0) * (params.dogFlightHeight ?? 0) * 0.85 : 0.9, 0];
   const cam = makeCam(st, w, h, target, opts.yawOffset || 0, dog ? speciesOf(params).view.zoom / (1 + 0.15 * Math.min(1, params.dogFlight || 0)) : 1);
   const transparent = opts.transparent ?? st.transparent;
   const layers = opts.layers || { guides: true, figure: true };

@@ -3,6 +3,7 @@
 // Angles are radians (forward is positive). `k` scales how strongly it is done.
 import { laneValue, replaceSpan, targetOfParam, targetOfChannel, CADENCE } from './automation.js';
 import { HUMAN_MOVES, DOG_MOVES } from './moves.js';
+import { SPECIES_MOVES, speciesSharedIds } from './moves2.js'; // also adds the kneel, limp, scratch and roll over movements to the two lists above
 
 const P = targetOfParam;
 const C = targetOfChannel;
@@ -157,13 +158,20 @@ CLIPS.human = [...CLIPS.human, ...HUMAN_MOVES];
 CLIPS.dog = [...CLIPS.dog, ...DOG_MOVES];
 /** The movements are shown in these groups, in this order. */
 export const CLIP_GROUPS = [
-  ['Pace', ['begin', 'stop', 'run', 'slow', 'speedup', 'slowdown', 'trip']],
-  ['Posture', ['sit', 'down', 'beg', 'crouch', 'standup', 'bow', 'stretch', 'playbow']],
-  ['Action', ['jump', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff']],
-  ['Gesture', ['wave', 'cheer', 'shrug', 'nod', 'look', 'lookaround', 'wag']],
+  ['Pace', ['begin', 'stop', 'run', 'slow', 'speedup', 'slowdown', 'limp', 'nolimp', 'takeoff', 'land', 'trip']],
+  ['Posture', ['sit', 'down', 'beg', 'kneel', 'crouch', 'standup', 'bow', 'stretch', 'playbow', 'headdown', 'rollover']],
+  ['Action', ['jump', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff', 'peck', 'roar', 'lunge', 'rearup', 'toss']],
+  ['Gesture', ['wave', 'cheer', 'shrug', 'nod', 'look', 'lookaround', 'wag', 'scratch', 'neckswing']],
 ];
 export const groupOfClip = (id) => CLIP_GROUPS.find(([, ids]) => ids.includes(id))?.[0] || 'Other';
 export const clipsFor = (rig) => CLIPS[rig] || [];
+/** The movements for one figure: the human's, the dog's, or (for the other animals) the dog's that suit them and their own. */
+export function clipsForFigure(fig) {
+  if (fig === 'human') return CLIPS.human;
+  if (fig === 'dog' || !SPECIES_MOVES[fig]) return CLIPS.dog;
+  const keep = speciesSharedIds(fig) || [];
+  return [...CLIPS.dog.filter((c) => keep.includes(c.id)), ...SPECIES_MOVES[fig]];
+}
 const neutral = (target) => (target.endsWith(':amount') ? 1 : target === CADENCE ? 1 : 0);
 
 /**

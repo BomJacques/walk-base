@@ -174,6 +174,8 @@ Requested 2026-11-08. The big rounded buttons in rows read as quickly generated.
 
 ## Added 2026-11-08 (later): flight, wording, corrections, movements
 
+- **More movements (`src/moves2.js`):** kneel, limp and walk normally, scratch head (human); scratch, roll over (dog); take off, land, peck (bird); roar, lunge (theropod); rear up, swing the neck (sauropod); lower the head, toss the head (ceratopsian). The animals' movement lists are built by `clipsForFigure`. **Not yet:** a human lie-down and get-up, crawl, climb, dance; a bird's flap-glide-flap, a hop-up, preening; a theropod's feeding head-shake; a ceratopsian's charge with the head lowered all the way through the run. A limp is approximated with hip drop, lean and a slower pace; a true limp needs left and right gait settings.
+
 - **Theropod run (requested with a Deinonychus run-cycle drawing):** the gait list per figure (theropod: walk, run; no hop or gallop), and a two-legged run gait with flight, high foot tuck, squash and stretch once per step, forward lean and a level tail (`runPawPath` in `src/dog3.js`, `run` in `src/dogdefaults.js`). **Not yet:** the stretch pose in the drawing has the whole body arching over a single planted foot; the reach and tuck could be tuned further against the drawing, with a body roll and a head that stays steadier than the hips. Feathered raptor tail and arms.
 - **Corrections at the base of a part:** a square handle at the start of the selected part moves the part before it (the base of the neck is the end of the upper spine).
 - **Bird feathers and flap clock:** quills drawn as separate feathers (secondaries along the forearm, primaries fanning from the wrist); Frames per wing beat gives the wings a clock of their own in a performance.

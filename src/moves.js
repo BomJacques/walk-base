@@ -3,15 +3,15 @@
 // and a stand up can follow a sit, a crouch or a beg, and a walk can start again after it.
 import { targetOfParam as P, targetOfChannel as C, CADENCE } from './automation.js';
 
-const at = (D, list) => list.map(([f, v]) => ({ t: Math.round(f * D), v }));
-const BASE_ARMS = ['arm.pitch.R', 'arm.pitch.L', 'elbow.flex.R', 'elbow.flex.L'];
+export const at = (D, list) => list.map(([f, v]) => ({ t: Math.round(f * D), v }));
+export const BASE_ARMS = ['arm.pitch.R', 'arm.pitch.L', 'elbow.flex.R', 'elbow.flex.L'];
 
 /**
  * A movement from poses. keys: [[fraction, { channel: offset, ... }], ...]. A channel a pose does not name is at 0 there.
  * `kill` lists channels whose built-in walk motion is switched off while the movement is held (their offsets then are the angles themselves).
  * `stay` leaves them off at the end, for a movement that finishes in a held pose (a sit); a later stand up switches them back on.
  */
-function poseBuild(keys, { kill = [], stay = false } = {}) {
+export function poseBuild(keys, { kill = [], stay = false } = {}) {
   // Unless it stays in its pose, a movement always ends by returning every channel to 0 at its last frame.
   const ks = stay || keys[keys.length - 1][0] >= 1 ? keys : [...keys, [1, {}]];
   return (b, D, k = 1) => {
@@ -29,7 +29,7 @@ const ramp = (names, to, D, from = 0, end = 0.85) => Object.fromEntries(names.ma
 // ------------------------------------------------------------------------------------------------ human
 const H_WALK = ['stepLength', 'footLift', 'bob', 'armSwing', 'elbowSwing', 'sway', 'pelvisYaw', 'shoulderCounter', 'torsoSway', 'heelStrike', 'toeOff', 'swingToe'];
 /** Every channel the sitting, crouching and ducking movements touch, so a stand up can return all of them to neutral. */
-const H_STATE = ['pelvis.y', 'pelvis.x', 'pelvis.pitch', 'spine1.pitch', 'spine2.pitch', 'spine3.pitch', 'neck.pitch', 'head.pitch', ...BASE_ARMS, 'foot.x.R', 'foot.x.L'];
+const H_STATE = ['pelvis.y', 'pelvis.x', 'pelvis.pitch', 'spine1.pitch', 'spine2.pitch', 'spine3.pitch', 'neck.pitch', 'head.pitch', ...BASE_ARMS, 'foot.x.R', 'foot.x.L', 'foot.y.R', 'foot.y.L'];
 
 const seated = { 'pelvis.x': -0.22, 'pelvis.y': -0.52, 'spine1.pitch': 0.04, 'spine2.pitch': 0.04, 'spine3.pitch': 0.02, 'arm.pitch.R': 0.45, 'arm.pitch.L': 0.45, 'elbow.flex.R': 0.8, 'elbow.flex.L': 0.8 };
 const crouched = { 'pelvis.y': -0.38, 'pelvis.x': -0.18, 'spine1.pitch': 0.5, 'spine2.pitch': 0.4, 'spine3.pitch': 0.25, 'neck.pitch': -0.35, 'arm.pitch.R': 0.5, 'arm.pitch.L': 0.5, 'elbow.flex.R': 0.5, 'elbow.flex.L': 0.5 };
@@ -170,10 +170,10 @@ export const HUMAN_MOVES = [
 const D_WALK = ['dogStride', 'dogLift', 'dogBob', 'dogFlex', 'dogArch', 'dogTwist', 'dogShoulder', 'dogHeadNod'];
 const D_STATE = ['dog.pelvis.y', 'dog.pelvis.pitch', 'dog.spine1.pitch', 'dog.spine2.pitch', 'dog.spine3.pitch', 'dog.neck.pitch', 'dog.head.pitch', 'dog.jaw.open',
   'dog.hpaw.x.R', 'dog.hpaw.x.L', 'dog.hpaw.y.R', 'dog.hpaw.y.L', 'dog.fpaw.x.R', 'dog.fpaw.x.L', 'dog.fpaw.y.R', 'dog.fpaw.y.L', 'dog.fpaw.pitch.R', 'dog.fpaw.pitch.L',
-  'dog.tail1.pitch', 'dog.tail2.pitch', 'dog.tail3.pitch', 'dog.hleg.out.R', 'dog.hleg.out.L'];
+  'dog.tail1.pitch', 'dog.tail2.pitch', 'dog.tail3.pitch', 'dog.hleg.out.R', 'dog.hleg.out.L', 'dog.pelvis.roll', 'dog.spine1.roll', 'dog.spine2.roll', 'dog.spine3.roll', 'dog.neck.roll', 'dog.head.roll', 'dog.head.yaw', 'dog.neck.yaw'];
 
-const dSit = { 'dog.pelvis.y': -0.5, 'dog.pelvis.pitch': -0.6, 'dog.neck.pitch': 0.35, 'dog.hpaw.x.R': 0.3, 'dog.hpaw.x.L': 0.3, 'dog.tail1.pitch': -0.5, 'dog.tail2.pitch': -0.3, 'dog.tail3.pitch': -0.2 };
-const dDown = { 'dog.pelvis.y': -0.62, 'dog.pelvis.pitch': -0.12, 'dog.spine3.pitch': -0.1, 'dog.neck.pitch': 0.1, 'dog.hpaw.x.R': 0.32, 'dog.hpaw.x.L': 0.32, 'dog.fpaw.x.R': 0.42, 'dog.fpaw.x.L': 0.42, 'dog.tail1.pitch': -0.5, 'dog.tail2.pitch': -0.3 };
+export const dSit = { 'dog.pelvis.y': -0.5, 'dog.pelvis.pitch': -0.6, 'dog.neck.pitch': 0.35, 'dog.hpaw.x.R': 0.3, 'dog.hpaw.x.L': 0.3, 'dog.tail1.pitch': -0.5, 'dog.tail2.pitch': -0.3, 'dog.tail3.pitch': -0.2 };
+export const dDown = { 'dog.pelvis.y': -0.62, 'dog.pelvis.pitch': -0.12, 'dog.spine3.pitch': -0.1, 'dog.neck.pitch': 0.1, 'dog.hpaw.x.R': 0.32, 'dog.hpaw.x.L': 0.32, 'dog.fpaw.x.R': 0.42, 'dog.fpaw.x.L': 0.42, 'dog.tail1.pitch': -0.5, 'dog.tail2.pitch': -0.3 };
 
 export const DOG_MOVES = [
   {

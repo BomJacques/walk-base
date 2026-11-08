@@ -71,6 +71,8 @@ Corrections are lanes named "correction" (Auto tab), so they can be edited, copi
 
 ## Movements
 
+New since: **Kneel**, **Limp** and **Walk normally**, **Scratch head** for the human; **Scratch** (sits and scratches with a hind leg) and **Roll over** for the dog. The other animals have movements of their own: the **bird** can **Take off**, **Land** and **Peck**; the **theropod** can **Roar** and **Lunge and bite**; the **sauropod** can **Rear up** and **Swing the neck**; the **ceratopsian** can **Lower the head** and **Toss the head**. All of them also start, stop, speed up and slow down, and look around.
+
 The **Auto** tab has about twenty movements for each of the human and the dog, in four groups (Pace, Posture, Action, Gesture). Human: start walking, walk to stop, break into a run, slow to a walk, sit, stand up, crouch, bow, stretch, jump, kick, throw, pick up, reach, point, wave, cheer, shrug, nod, shake head, look around, trip. Dog: start, stop, speed up, slow down, sit, lie down, sit up and beg, stand up, play bow, leap, chase tail, shake off, sniff the ground, bark, howl, pick up, reach, look around, excited tail wag, trip.
 
 Every movement starts from whatever the figure is doing when it begins, and the lanes ease from one value to the next, so they chain: **Walk to stop, Sit, Stand up, Start walking** runs as one smooth performance. Sit, lie down, beg and crouch hold their pose until you **Stand up**, which returns every part they changed to neutral. A movement is ordinary automation, so you can edit it afterwards, and strength (the K setting) and length can be changed before applying.

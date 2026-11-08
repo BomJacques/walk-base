@@ -1,7 +1,7 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
 import { DEFAULTS, cycleFrames, cycleTravel, foot } from './rig.js';
 import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, paramsAt, motionAt, integrate, Recorder, laneValue } from './automation.js';
-import { clipsFor, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
+import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
 import { EXPORT_DEFAULTS, exportPngZip, exportKeyFrames, exportMp4, videoSupport, contactSheet, deliver, summary, renderFrame, exportTimeline, manifest } from './export.js';
@@ -668,7 +668,7 @@ function setFigure(fig) {
   S.lanes = b?.lanes ?? {}; S.perfLen = b?.perfLen ?? 0; S.ver++;
   const rig = rigOfFig(fig); const wasRig = S.p.rig; const wasSpecies = S.p.dogSpecies;
   S.p.rig = rig; S.sel = null; S.attachSel = null; S.frame = 0; S.clipLen = null; S.clipStart = 0;
-  S.clip = clipsFor(rig)[0]?.id ?? '';
+  S.clip = clipsForFigure(fig)[0]?.id ?? '';
   if (rig === 'dog' && (wasRig === 'dog' || wasSpecies !== fig)) { S.p.dogSpecies = fig; applyPreset(Object.keys(presetsForFigure(fig))[0]); build(); render(); save(); return; }
   if (rig === 'dog') S.p.dogSpecies = fig;
   if (!(S.preset in presetsForFigure(fig))) S.preset = Object.keys(presetsForFigure(fig))[0];
@@ -1073,7 +1073,7 @@ function autoSection() {
     h('div', { class: 'btnrow' }, seg([['touch', 'Touch'], ['latch', 'Latch']], S.recMode, (m) => { S.recMode = m; rec.setMode(S.armed ? m : 'off'); renderPanel(); }, 'rec-mode'),
       h('button', { type: 'button', class: 'btn primary', testid: 'rec-arm', 'aria-pressed': String(S.armed), onClick: () => { setArmed(!S.armed); } }, S.armed ? 'Armed: press Play' : 'Arm recording'))));
 
-  const clips = clipsFor(S.p.rig);
+  const clips = clipsForFigure(figKey());
   const clip = clips.find((c) => c.id === S.clip) || clips[0];
   const D = S.clipLen ?? clip.frames;
   host.append(h('section', { class: 'group' }, h('h3', null, 'Movements'),
@@ -1743,7 +1743,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
 });
 window.__walkBase = {
-  setFigure, figKey, clipsFor, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
+  setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
   setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),

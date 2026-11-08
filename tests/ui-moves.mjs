@@ -84,6 +84,18 @@ if (h2) { const a2 = await client(h2.x, h2.y); const b2 = await client(h2.x + 25
 if (shots) { await page.screenshot({ path: path.join(shots, `wb-fix-${name}.png`) }); }
 await page.locator('[data-testid="fix-clear"]').click(); await wait(300);
 check('Clear corrections removes them all', Object.keys(await lanes()).filter((k) => k.endsWith(':fix')).length === 0 && /No corrections/.test(await page.locator('[data-testid="fix-count"]').innerText()));
+// the other animals have movements that suit them
+for (const [fig, ids, none] of [['bird', ['takeoff', 'land', 'peck'], ['beg', 'pickup']], ['theropod', ['roar', 'lunge'], ['beg', 'bark']], ['sauropod', ['rearup', 'neckswing'], ['beg']], ['ceratopsian', ['headdown', 'toss'], ['beg']]]) {
+  await ev((x) => { const w = window.__walkBase; w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.setFigure(x); }, fig); await wait(250);
+  await ev(() => window.__walkBase.setTab('Auto')); await wait(250);
+  const have = []; for (const id of [...ids, ...none]) have.push([id, await page.locator(`.pchip[data-testid="clip-${id}"]`).count()]);
+  check(`${fig}: has ${ids.join(', ')} and none of the dog-only movements`, have.every(([id, n]) => (ids.includes(id) ? n === 1 : n === 0)), have);
+  const txt = await page.locator('#panel-body').innerText(); check(`${fig}: the movements talk about the ${fig}, not the dog`, !/\bdog\b|\bpaws?\b/i.test(txt), (txt.match(/.{0,20}\b(dog|paws?)\b.{0,20}/i) || [''])[0]);
+}
+await ev(() => { const w = window.__walkBase; w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.setFigure('bird'); const c = (id) => w.clipsForFigure('bird').find((x) => x.id === id); w.addClip(c('takeoff'), 10, c('takeoff').frames, 1); });
+await wait(300);
+const up = []; for (const f of [4, 40, 70]) { await ev((k) => window.__walkBase.setFrame(k), f); await wait(150); up.push(await ev(() => window.__walkBase.S.last.pz.pelvis[1])); }
+check('Take off lifts the bird off the ground', up[2] > up[0] + 0.6, up.map((v) => +v.toFixed(2)));
 check('no page errors', errors.length === 0, errors.slice(0, 3));
 await browser.close();
 process.exit(fails ? 1 : 0);
