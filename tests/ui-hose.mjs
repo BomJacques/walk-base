@@ -41,7 +41,7 @@ check('it starts with its own walk (Bouncy, on twos) and proportions', st.preset
 const presets = await page.locator('[data-testid="preset"] option').allTextContents();
 check('the Preset menu lists the hose walks', ['Bouncy', 'Strut', 'Sneak', 'Skip', 'Stomp', 'Tired'].every((p) => presets.includes(p)), presets);
 const look = await panelText('Look');
-for (const l of ['Limb thickness', 'Limb curve', 'Squash and stretch', 'Ears', 'Eyes', 'Body colour', 'Glove colour', 'Shoe colour']) check(`the Look tab has ${l}`, look.includes(l));
+for (const l of ['Limb thickness', 'Limb curve', 'Squash and stretch', 'Ears', 'Eyes', 'Body colour', 'Glove colour', 'Foot colour']) check(`the Look tab has ${l}`, look.includes(l));
 
 // ---- it draws as a rubber hose figure
 const hosePng = await stagePng();

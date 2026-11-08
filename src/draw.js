@@ -55,7 +55,7 @@ export const STYLE_DEFAULTS = Object.freeze({
   selectColor: '#e0662e',
   // the rubber hose figure
   hoseLimb: 1, hoseBend: 1, hoseSquash: 0.6, hoseEars: 'none', hoseEyes: 'pie',
-  hoseBody: '#2d2a2e', hoseFace: '#fff8e8', hoseGlove: '#ffffff', hoseShoe: '#f0b72f', hoseShorts: '#d6402f',
+  hoseBody: '#2d2a2e', hoseFace: '#fff8e8', hoseGlove: '#ffffff', hoseShoe: '#2d2a2e', hoseShorts: '#d6402f',
 });
 
 const TAU = Math.PI * 2;
@@ -225,11 +225,10 @@ function buildHoseShapes(pz, cam, st) {
     // legs and arms are single tubes with no knee or elbow: one curve through the three joints
     tubeOf(hoseCurve(sd.hip, sd.knee, sd.ankle, bend), Array(14).fill(0.052 * limbK * wMul), 'leg', side, role, st.hoseBody);
     tubeOf(hoseCurve(sd.shoulder, sd.elbow, sd.wrist, bend), Array(14).fill(0.04 * limbK * wMul), 'arm', side, role, st.hoseBody);
-    // a big round shoe
-    const k = pr.footSize ?? 1; const f = sd.foot; const a = 0.24 * k; const b = 0.085 * k; const c3 = 0.075 * k;
-    const shoeC = add(sd.ankle, add(mul(f.fx, 0.09 * k), mul(f.fy, -0.075 + b)));
-    const shoeR = [f.fx[0], f.fy[0], f.lat[0], f.fx[1], f.fy[1], f.lat[1], f.fx[2], f.fy[2], f.lat[2]];
-    add1(blob(shoeC, shoeR, [a, b, c3], 10, 20), S(sd.ankle).d, 'foot', side, role, st.hoseShoe);
+    // the foot: a short, round tube along the sole, the same colour as the leg so the two read as one hose
+    const k = pr.footSize ?? 1; const f = sd.foot; const r = 0.055 * k; const cy = -0.075 + r; // its underside rests on the ground
+    const along = (x) => add(sd.ankle, add(mul(f.fx, x * k), mul(f.fy, cy)));
+    tubeOf([along(-0.02), along(0.12), along(0.27)], [r, r * 1.02, r * 0.9], 'foot', side, role, st.hoseShoe);
     // a round glove with a thumb
     const hs = pr.handSize ?? 1; const hc2 = add(sd.wrist, mul([sd.hand[0] - sd.wrist[0], sd.hand[1] - sd.wrist[1], sd.hand[2] - sd.wrist[2]], 0.6));
     const H = S(hc2); const Wr = S(sd.wrist); const dx = H.x - Wr.x; const dy = H.y - Wr.y; const dl = Math.hypot(dx, dy) || 1;

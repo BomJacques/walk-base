@@ -121,7 +121,7 @@ export const CONTROLS = [
   c('s', 'hoseBody', 'Look', 'Rubber hose', 'Body colour', 'The head, body, arms and legs.'),
   c('s', 'hoseFace', 'Look', 'Rubber hose', 'Face colour', 'The face patch on the head.'),
   c('s', 'hoseGlove', 'Look', 'Rubber hose', 'Glove colour', 'The hands.'),
-  c('s', 'hoseShoe', 'Look', 'Rubber hose', 'Shoe colour', 'The feet.'),
+  c('s', 'hoseShoe', 'Look', 'Rubber hose', 'Foot colour', 'The feet. The same as the body colour by default, so a leg and its foot read as one hose.'),
   c('s', 'hoseShorts', 'Look', 'Rubber hose', 'Shorts colour', 'The hips.'),
   c('s', 'lineColor', 'Look', 'Figure', 'Line colour', 'Outline and silhouette colour.'),
   c('s', 'fillColor', 'Look', 'Figure', 'Fill colour', 'Mannequin fill.'),

@@ -132,7 +132,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Body colour | both |  | color | #2d2a2e | The head, body, arms and legs. |
 | Face colour | both |  | color | #fff8e8 | The face patch on the head. |
 | Glove colour | both |  | color | #ffffff | The hands. |
-| Shoe colour | both |  | color | #f0b72f | The feet. |
+| Foot colour | both |  | color | #2d2a2e | The feet. The same as the body colour by default, so a leg and its foot read as one hose. |
 | Shorts colour | both |  | color | #d6402f | The hips. |
 | Line colour | both |  | color | #26231f | Outline and silhouette colour. |
 | Fill colour | both |  | color | #f6f1e7 | Mannequin fill. |
