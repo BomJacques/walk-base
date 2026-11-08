@@ -39,7 +39,7 @@ export const DOG_GAITS = Object.freeze({
   // A second, shorter flight comes with the legs stretched out. `phases` gives each paw's landing; the body is highest in the two flights.
   // A two-legged run (a theropod, or a chicken): the feet alternate, there is a flight phase between steps, and the back squashes (legs gathered under the body, hips low,
   // back arched) at mid-stance and stretches (legs reaching, hips high, back long) in flight, once every step, so twice a cycle.
-  run: { front: 0, bobRate: 2, bobPhase: 0.45, bobDown: true, chestSign: 1, chestLag: 0, curlPhase: 0.2, curlRate: 2, phases: { HR: 0, HL: 0.5, FR: 0, FL: 0.5 } },
+  run: { front: 0, bobRate: 2, bobPhase: 0.45, bobDown: true, chestSign: 1, chestLag: 0, curlPhase: 0.2, curlRate: 2, tailCurl: 0.9, phases: { HR: 0, HL: 0.5, FR: 0, FL: 0.5 } },
   // Both feet land together (a hop).
   hop: { front: 0, bobRate: 1, phases: { HL: 0, HR: 0, FL: 0, FR: 0 } },
   gallop: { front: 0.5, bobRate: 2, bobPhase: 0.36, bobDown: true, chestSign: 1, chestLag: 0, phases: { HL: 0, HR: 0.1, FL: 0.38, FR: 0.5 }, curlPhase: 0.85 },

@@ -158,7 +158,7 @@ dsided('ear.flop', 'ear', 'Flop', { ...deg, min: -45, max: 60 }, (u, g, p) => ra
 // Tail: three joints. The wag lags a little more along the tail, so it whips instead of swinging stiffly.
 [['tail1', 'Tail base', 0.5, 0], ['tail2', 'Tail middle', 0.7, 0.06], ['tail3', 'Tail tip', 1, 0.12]].forEach(([id, name, amt, lag]) => {
   dch(`${id}.yaw`, id, `${name}: wag`, { ...deg, min: -60, max: 60 }, (u, g, p) => rad(p.dogWag) * amt * Math.sin(TAU * 2 * (u - lag)));
-  dch(`${id}.pitch`, id, `${name}: up and down`, { ...deg, min: -60, max: 80 }, (u, g, p) => rad(3) * amt * dbob(u, p));
+  dch(`${id}.pitch`, id, `${name}: up and down`, { ...deg, min: -60, max: 80 }, (u, g, p) => rad(3) * amt * dbob(u, p) + (DOG_GAITS[p.dogGait]?.tailCurl ?? 0) * amt * dCurl(u, p));
 });
 // Shoulder blades: a bone on the ribs, pivoting at the withers. It drops, slides and swings forward as its paw lands, then rises and swings back as the leg passes under.
 dsided('fshoulder.x', 'fshoulder', 'Blade slide forward and back', { ...dlen, min: -0.1, max: 0.1 }, (u, g, p) => 0.1 * p.dogShoulder * Math.cos(TAU * (u - dFront(p))));

@@ -153,3 +153,11 @@ test('the theropod has walk and run only, and the run is a real run: flight, squ
   const lift = zs.map((z) => Math.max(z.legs.HR.paw[1], z.legs.HL.paw[1])); assert.ok(Math.max(...lift) > 0.3, 'the swing foot tucks up high under the body');
   const walk = mk(PRESETS_SPECIES.theropod.Walk); const w0 = Array.from({ length: 30 }, (_, f) => poseFor(walk, f)); assert.ok(w0.every((z) => z.legs.HR.stance || z.legs.HL.stance), 'a walk always has a foot down');
 });
+
+test('the theropod run arches and flattens its back, and the tail rises and falls through each step', () => {
+  const p = mk(PRESETS_SPECIES.theropod.Run); const T = cycleFrames(p).frames.length; const zs = Array.from({ length: T }, (_, f) => poseFor(p, f));
+  const ang = (z) => { const a = [z.j1[0] - z.pelvis[0], z.j1[1] - z.pelvis[1]]; const b = [z.j3[0] - z.j1[0], z.j3[1] - z.j1[1]]; return Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]); };
+  const arch = zs.map(ang); assert.ok(Math.max(...arch) - Math.min(...arch) > 0.12, `the back bends by ${(Math.max(...arch) - Math.min(...arch)).toFixed(2)} rad`);
+  const tail = zs.map((z) => z.tail[3][1]); assert.ok(Math.max(...tail) - Math.min(...tail) > 0.2, 'the tail tip rises and falls');
+  assert.ok(zs.every((z) => z.tail[3][1] > 0.8), 'and never comes near the ground');
+});

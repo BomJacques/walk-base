@@ -14,7 +14,7 @@ const HIDE = {
   dog: new Set([...BIPED_ONLY, ...BIRD_ONLY]),
   sauropod: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS]),
   ceratopsian: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS]),
-  theropod: new Set([...BIRD_ONLY, ...EARS, ...QUAD_ONLY]),
+  theropod: new Set([...BIRD_ONLY.filter((x) => x !== 'dogHeadHold'), ...EARS, ...QUAD_ONLY]), // a theropod holds its head steady in a run too
   bird: new Set([...EARS, ...QUAD_ONLY, 'dogArmSwing']),
 };
 

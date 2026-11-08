@@ -179,8 +179,8 @@ export const PRESETS_SPECIES = {
   theropod: {
     Walk: sp('theropod', { dogGait: 'walk', dogStride: 1.7, dogDuty: 0.62, dogLift: 0.14, dogBob: 0.025, dogFlex: 2, dogArch: 1, dogTwist: 3, dogWidth: 0.07, dogTilt: 6, dogNeckAngle: 28, dogHeadAngle: 24, dogTailAngle: -4, dogWag: 5, dogHeadNod: 2, dogArmSwing: 0.03, cycleFrames: 30 }),
     Stalk: sp('theropod', { dogGait: 'walk', dogStride: 1.1, dogDuty: 0.72, dogLift: 0.1, dogBob: 0.012, dogTwist: 4, dogWidth: 0.06, dogTilt: 2, dogNeckAngle: 38, dogHeadAngle: 36, dogTailAngle: -6, dogWag: 8, dogArmSwing: 0.015, cycleFrames: 40 }),
-    Run: sp('theropod', { dogGait: 'run', dogStride: 4.0, dogDuty: 0.4, dogLift: 0.45, dogBob: 0.16, dogCurl: 16, dogFlex: 1, dogArch: 0, dogTwist: 2, dogWidth: 0.06, dogTilt: -4, dogNeckAngle: 40, dogHeadAngle: 52, dogTailAngle: 2, dogWag: 2, dogHeadNod: 2, dogArmSwing: 0.04, cycleFrames: 12 }),
-    'Small fast runner': sp('theropod', { dogGait: 'run', dogStride: 3.2, dogDuty: 0.36, dogLift: 0.4, dogBob: 0.14, dogCurl: 14, dogFlex: 1, dogArch: 0, dogTwist: 2, dogWidth: 0.05, dogTilt: -8, dogNeckAngle: 42, dogHeadAngle: 56, dogTailAngle: 4, dogWag: 2, dogArmSwing: 0.05, cycleFrames: 10 }),
+    Run: sp('theropod', { dogGait: 'run', dogStride: 4.2, dogDuty: 0.4, dogLift: 0.5, dogBob: 0.2, dogCurl: 24, dogFlex: 1, dogArch: 0, dogTwist: 2, dogWidth: 0.06, dogTilt: -6, dogNeckAngle: 44, dogHeadAngle: 58, dogTailAngle: 0, dogWag: 2, dogHeadNod: 0, dogHeadHold: 0.5, dogArmSwing: 0.04, cycleFrames: 12 }),
+    'Small fast runner': sp('theropod', { dogGait: 'run', dogStride: 3.4, dogDuty: 0.36, dogLift: 0.45, dogBob: 0.18, dogCurl: 20, dogFlex: 1, dogArch: 0, dogTwist: 2, dogWidth: 0.05, dogTilt: -10, dogNeckAngle: 46, dogHeadAngle: 60, dogTailAngle: 2, dogWag: 2, dogHeadNod: 0, dogHeadHold: 0.5, dogArmSwing: 0.05, cycleFrames: 10 }),
   },
   bird: {
     Walk: sp('bird', { dogGait: 'walk', dogStride: 0.75, dogDuty: 0.64, dogLift: 0.2, dogBob: 0.02, dogFlex: 3, dogArch: 0, dogTwist: 4, dogWidth: 0.05, dogTilt: 38, dogNeckAngle: 40, dogHeadAngle: 74, dogTailAngle: 20, dogWag: 4, dogHeadNod: 0, dogHeadHold: 1, dogWingOpen: 0, cycleFrames: 24 }),
