@@ -295,3 +295,18 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .arcshow { display: flex; width: 100%; margin: 4px 0; }
 .arcshow .segbtn { flex: 1; padding: 0 6px; }
 .arcchips { gap: 4px; }
+
+/* slider rows: roomy puts the label above a full-width track; wide panels set the rows out in two columns; a bigger thumb to grab on a touch screen */
+:root[data-rows="roomy"] .row { grid-template-columns: minmax(0, 1fr) var(--h); }
+:root[data-rows="roomy"] .row.noreset { grid-template-columns: minmax(0, 1fr); }
+:root[data-rows="roomy"] .row > .ctl, :root[data-rows="roomy"] .row > .seg, :root[data-rows="roomy"] .row > .chk, :root[data-rows="roomy"] .row > input, :root[data-rows="roomy"] .row > .hint { grid-column: 1 / -1; grid-row: 2; }
+:root[data-rows="roomy"] .row .lab { grid-column: 1; grid-row: 1; min-height: 30px; }
+:root[data-rows="roomy"] .row .btn.tiny { grid-column: 2; grid-row: 1; }
+:root[data-rows="roomy"] .row .help { grid-row: 3; }
+:root[data-rows="roomy"] .row .rng { min-width: 0; }
+.panel-body[data-wide="1"] .group-body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-items: start; }
+:root[data-rows="roomy"] .panel-body[data-wide="1"] .group-body { display: block; }
+.panel-body[data-wide="1"] .group-body > :not(.row-number):not(.row-bool):not(.row-color) { grid-column: 1 / -1; }
+:root[data-density="comfortable"] .rng::-webkit-slider-runnable-track { height: 4px; }
+:root[data-density="comfortable"] .rng::-webkit-slider-thumb { width: 26px; height: 26px; margin-top: -11px; }
+:root[data-density="comfortable"] .rng::-moz-range-thumb { width: 22px; height: 22px; }

@@ -1238,6 +1238,7 @@ let lastTab = null;
 function renderPanel() {
   if (S.tab !== lastTab) { closeMenus(); lastTab = S.tab; } // a menu opened on one tab must not float over the next
   const host = document.getElementById('panel-body');
+  watchPanelWidth();
   const top = host.scrollTop;
   host.textContent = '';
   if (S.tab === 'Auto') host.append(autoSection());
@@ -1437,6 +1438,9 @@ function menuBar() {
       { heading: 'Theme' },
       ...[['auto', 'Follow the device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => ({ label: l, testid: `theme-${v}`, radio: true, checked: LAYOUT.theme === v, onClick: () => setTheme(v) })),
       { separator: true },
+      { heading: 'Slider rows' },
+      ...[['auto', 'Automatic'], ['compact', 'Compact'], ['roomy', 'Roomy: label above the slider']].map(([v, l]) => ({ label: l, testid: `rows-${v}`, radio: true, checked: (LAYOUT.rows || 'auto') === v, onClick: () => setRows(v) })),
+      { separator: true },
       { heading: 'Interface size' },
       ...[['auto', 'Automatic'], ['compact', 'Compact'], ['comfortable', 'Comfortable']].map(([v, l]) => ({ label: l, testid: `density-${v}`, radio: true, checked: LAYOUT.density === v, onClick: () => setDensity(v) })),
     ]),
@@ -1517,7 +1521,12 @@ function build() {
 
 // ---------- resizable animation window ----------
 const LAYOUT_KEY = 'walkbase.layout';
-const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcSym: 'alt', expandAll: false, collapsed: {} };
+const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcSym: 'alt', expandAll: false, rows: 'auto', collapsed: {} };
+/** Slider rows: compact (label, track and number on one line), roomy (the label above a full-width track, easier to drag), or automatic (compact, roomy on a phone). */
+// A wide panel (an iPad in portrait) sets the slider rows out in two columns.
+function watchPanelWidth() { const el = document.getElementById('panel-body'); if (!el || el.dataset.watched || typeof ResizeObserver === 'undefined') return; el.dataset.watched = '1'; const set = () => { el.dataset.wide = el.clientWidth >= 700 ? '1' : '0'; }; set(); new ResizeObserver(set).observe(el); }
+function applyRows() { document.documentElement.dataset.rows = ['compact', 'roomy'].includes(LAYOUT.rows) ? LAYOUT.rows : 'auto'; }
+function setRows(v) { LAYOUT.rows = v; applyRows(); layoutSave(); render(); }
 /** Light or dark: follows the device unless you choose. */
 function applyTheme() { if (LAYOUT.theme === 'light' || LAYOUT.theme === 'dark') document.documentElement.dataset.theme = LAYOUT.theme; else delete document.documentElement.dataset.theme; }
 function setTheme(v) { LAYOUT.theme = v; applyTheme(); layoutSave(); render(); }
@@ -1754,7 +1763,7 @@ function samplerSection() {
 }
 
 try { Object.assign(LAYOUT, JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}')); } catch { /* keep defaults */ }
-applyDensity(); applyTheme();
+applyDensity(); applyTheme(); applyRows();
 // Each visit starts clean unless File > Reopen with last session is on.
 if (LAYOUT.resume) {
   load();
@@ -1773,7 +1782,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
 });
 window.__walkBase = {
-  setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
+  setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
   setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),

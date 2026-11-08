@@ -176,7 +176,9 @@ Requested 2026-11-08. The big rounded buttons in rows read as quickly generated.
 
 **Done:** folded advanced groups; tabs that wrap; arc points as chips with one Show row and folded symmetry; one group of movements at a time; pop-ups close when the tab changes; Auto's long explanations folded; a layout test.
 
-**Recommended and not yet done:** on the phone the panel gets only about 214px (a bottom sheet that snaps between peek and half-height, with Figure and Walk in its header); slider rows that stack the label over a full-width track on phone and portrait, and a two-column grid of paired sliders on landscape; the top bar's four selects as compact pop-up pills (native pickers on touch); Parts as a body-region picker instead of 33 buttons; Attach's Place and Look groups behind Advanced; help text behind an info toggle per section; merging rarely used tabs (Look, Guides, Sampler, Export) into one More menu or into the top menus; phone tap targets still under 44px in Guides and Body.
+**Done since:** slider rows: Compact, Roomy (label above a full-width track) and Automatic in the View menu, two columns on a wide panel, a bigger thumb on touch.
+
+**Recommended and not yet done:** on the phone the panel gets only about 214px (a bottom sheet that snaps between peek and half-height, with Figure and Walk in its header); the top bar's four selects as compact pop-up pills (native pickers on touch); Parts as a body-region picker instead of 33 buttons; Attach's Place and Look groups behind Advanced; help text behind an info toggle per section; merging rarely used tabs (Look, Guides, Sampler, Export) into one More menu or into the top menus; phone tap targets still under 44px in Guides and Body.
 
 ## Added 2026-11-08 (later): flight, wording, corrections, movements
 
