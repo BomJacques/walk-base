@@ -77,9 +77,9 @@ export function pose3(params, motion, u, extra = null) {
   const R3 = mm(R2, seg(c('spine3.yaw'), c('spine3.pitch'), c('spine3.roll')));
   const tl = sc('torso');
   const base0 = add(P, apply(Rp, [0, 0.1, 0]));
-  const j1 = add(base0, apply(R1, [0, TORSO.lower * tl, 0]));
+  const j1 = add(base0, apply(R1, [0, TORSO.lower * tl * sc('waist'), 0]));
   const j2 = add(j1, apply(R2, [0, TORSO.mid * tl, 0]));
-  const j3 = add(j2, apply(R3, [0, TORSO.upper * tl, 0]));
+  const j3 = add(j2, apply(R3, [0, TORSO.upper * tl * sc('chest'), 0]));
 
   // The head's vertical wobble is steadied toward level by headBob.
   const steady = -(P[1] - hContact - meanDev) * clamp(p.headBob, 0, 1);
@@ -99,11 +99,11 @@ export function pose3(params, motion, u, extra = null) {
     const armScale = side === 'L' ? Math.max(0, 1 + (p.asymArm || 0)) : 1; // the far arm can swing more or less
     const Ru = mm(R3, mm(Rpitch(-k('arm.pitch') * armScale), Rroll(-s * k('arm.roll'))));
     const aL = sc('arm');
-    const elbow = add(shoulder, apply(Ru, [0, -BODY.upperArm * aL, 0]));
+    const elbow = add(shoulder, apply(Ru, [0, -BODY.upperArm * aL * sc('upperArm'), 0]));
     const Rf = mm(Ru, Rpitch(-k('elbow.flex')));
-    const wrist = add(elbow, apply(Rf, [0, -BODY.foreArm * aL, 0]));
+    const wrist = add(elbow, apply(Rf, [0, -BODY.foreArm * aL * sc('foreArm'), 0]));
     const Rw = mm(Rf, Rpitch(-k('wrist.flex')));
-    const hand = add(wrist, apply(Rw, [0, -BODY.hand * aL, 0]));
+    const hand = add(wrist, apply(Rw, [0, -BODY.hand * aL * sc('handSize'), 0]));
 
     const sg = sideGait(p, side);
     const w = wrap(uw - sg.off);
@@ -113,7 +113,9 @@ export function pose3(params, motion, u, extra = null) {
     const fwdDir = norm([Rp[0], 0, Rp[2]]);
     const out = k('knee.out');
     const pole = norm(add(mul(fwdDir, Math.cos(out)), [0, 0, s * Math.sin(out)]));
-    const leg = ik3(hip, ankle, BODY.thigh, BODY.shin, pole);
+    // the thigh takes a bigger or smaller share of the same leg length, so the gait is untouched
+    const l1 = clamp(BODY.thigh * sc('thighShare'), 0.35 * LEG_LENGTH, 0.65 * LEG_LENGTH);
+    const leg = ik3(hip, ankle, l1, LEG_LENGTH - l1, pole);
 
     const psi = -s * k('foot.yaw');
     const theta = f.theta + k('foot.pitch');
@@ -123,7 +125,7 @@ export function pose3(params, motion, u, extra = null) {
     const fy = add(mul(fHead, -Math.sin(theta)), [0, Math.cos(theta), 0]);
     sides[side] = { s, shoulder, elbow, wrist, hand, hip, knee: leg.knee, ankle: leg.ankle, reached: leg.reached, stance: w < sg.p.duty, w, foot: { fx, fy, lat, theta }, frames: { Ru, Rf, Rw } };
   }
-  return { u: uw, pelvisX: extra?.worldX ?? uw * 2 * p.stepLength, params: p, hw, pelvis: P, Rp, R1, R2, R3, Rn, Rh, base0, j1, j2, j3, neckBase, neckTop, headC, headR, sides };
+  return { u: uw, pelvisX: extra?.worldX ?? uw * 2 * p.stepLength, bobDev: P[1] - hContact - meanDev, params: p, hw, pelvis: P, Rp, R1, R2, R3, Rn, Rh, base0, j1, j2, j3, neckBase, neckTop, headC, headR, sides };
 }
 
 /** A foot's local frame to world: x forward along the sole, y up from the ankle, z across. */
@@ -135,9 +137,10 @@ const SHOE = [ // in order round the outline: a squared heel, a high collar at t
   [0.305, -0.04, 0.044], [0.305, -0.065, 0.044], [0.295, -0.075, 0.044], [0.2, -0.075, 0.05], [0.12, -0.067, 0.042], [0.0, -0.067, 0.034], [-0.02, -0.075, 0.032],
 ];
 /** Both faces of the shoe as ordered outlines (the near side and the far side), world space. Seen from the side either one is the shoe; seen from above the two spread to its width. */
-export function footShape(pz, side) {
+export function footShape(pz, side, k = 1) {
   const sd = pz.sides[side];
-  const face = (sg) => SHOE.map(([x, y, hw]) => footPt(sd, x, y, sg * hw));
+  // k scales the shoe about the ankle and the sole, so a bigger foot still stands on the ground
+  const face = (sg) => SHOE.map(([x, y, hw]) => footPt(sd, x * k, -0.075 + (y + 0.075) * k, sg * hw * k));
   return { a: face(1), b: face(-1) };
 }
 /** Named places on the foot (world space), for labels. */

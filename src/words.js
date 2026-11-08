@@ -35,7 +35,7 @@ export function wordsFor(fig) {
       return t.replace(/\bDog\b/g, name).replace(/\bdog\b/g, low).replace(/\bPaws\b/g, 'Feet').replace(/\bpaws\b/g, 'feet').replace(/\bPaw\b/g, 'Foot').replace(/\bpaw\b/g, 'foot');
     };
   }
-  f.hides = (c) => hide.has(c.id);
+  f.hides = (c) => hide.has(c.id) || (fig !== 'hose' && /^hose/.test(c.id)); // the rubber hose controls belong to that figure
   /** The choices a control offers this figure (a theropod has no hop or gallop). */
   f.options = (c) => (c.id === 'dogGait' && GAITS[fig] ? c.options.filter((o) => GAITS[fig].includes(o)) : c.options);
   f.hidesPart = (id) => Boolean(sp && fig !== 'dog' && id === 'dog.ear');

@@ -61,7 +61,16 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Torso length | human | × | 0.6 to 1.5 | 1 | Scale of the spine. |
 | Arm length | human | × | 0.6 to 1.5 | 1 | Scale of both arms. |
 | Neck length | human | × | 0.3 to 2.5 | 1 | Scale of the neck. |
-| Head size | human | × | 0.6 to 1.8 | 1 | Scale of the head. |
+| Head size | human | × | 0.6 to 2.2 | 1 | Scale of the head. |
+| Waist length | human | × | 0.5 to 1.8 | 1 | Scale of the lower spine, between the hips and the ribs. |
+| Chest length | human | × | 0.5 to 1.8 | 1 | Scale of the upper spine, from the ribs to the shoulders. |
+| Upper arm length | human | × | 0.6 to 1.6 | 1 | Scale of the upper arm only, on top of Arm length. |
+| Forearm length | human | × | 0.6 to 1.6 | 1 | Scale of the forearm only, on top of Arm length. |
+| Hand size | human | × | 0.5 to 2.5 | 1 | Scale of the hand, in length and in the drawing. |
+| Upper leg share | human | × | 0.75 to 1.25 | 1 | How much of the leg is thigh and how much is shin. The leg stays the same total length, so the walk does not change. |
+| Foot size | human | × | 0.6 to 2 | 1 | Scale of the drawn foot. Large for a clown shoe, small for a dancer. |
+| Limb thickness | human | × | 0.5 to 2.2 | 1 | Thickness of the arms and legs in the drawing. |
+| Body thickness | human | × | 0.6 to 1.8 | 1 | Thickness of the hips, waist, chest and neck in the drawing. |
 | Body bounce | dog | heights | 0 to 0.3 | 0.03 | Up and down travel of the hips. |
 | Spine bend | dog | ° | 0 to 25 | 6 | Side to side bend of the spine as the dog walks. |
 | Back arch | dog | ° | 0 to 12 | 2 | How much the back arches and dips with each footfall. |
@@ -115,6 +124,16 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 |---|---|---|---|---|---|
 | Style | both |  | mannequin, outline, stick, silhouette | mannequin | Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
 | Line width | both | px | 0.5 to 12 | 3 | At 1080 pixels tall. It scales with the canvas. |
+| Limb thickness | both | × | 0.5 to 2 | 1 | How thick the tube arms and legs are. |
+| Limb curve | both |  | 0 to 1 | 1 | 1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint. |
+| Squash and stretch | both |  | 0 to 1.5 | 0.6 | The body swells when it is lowest in the step and thins as it rises. |
+| Ears | both |  | none, round | none | Round ears on top of the head. Off by default. |
+| Eyes | both |  | pie, round, dots | pie | Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots. |
+| Body colour | both |  | color | #2d2a2e | The head, body, arms and legs. |
+| Face colour | both |  | color | #fff8e8 | The face patch on the head. |
+| Glove colour | both |  | color | #ffffff | The hands. |
+| Shoe colour | both |  | color | #f0b72f | The feet. |
+| Shorts colour | both |  | color | #d6402f | The hips. |
 | Line colour | both |  | color | #26231f | Outline and silhouette colour. |
 | Fill colour | both |  | color | #f6f1e7 | Mannequin fill. |
 | Fill opacity | both |  | 0 to 1 | 0.55 | Lower it to trace through the body. |

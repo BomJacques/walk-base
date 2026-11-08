@@ -53,6 +53,9 @@ export const STYLE_DEFAULTS = Object.freeze({
   onionAfterTint: '#1f7a3d',
   guideColor: '#e0662e',
   selectColor: '#e0662e',
+  // the rubber hose figure
+  hoseLimb: 1, hoseBend: 1, hoseSquash: 0.6, hoseEars: 'none', hoseEyes: 'pie',
+  hoseBody: '#2d2a2e', hoseFace: '#fff8e8', hoseGlove: '#ffffff', hoseShoe: '#f0b72f', hoseShorts: '#d6402f',
 });
 
 const TAU = Math.PI * 2;
@@ -84,16 +87,17 @@ function buildShapes(pz, cam) {
   const shapes = [];
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
   const sc = cam.scale;
-  const capsule = (a, b, ra, rb, part, side, role) => {
+  const pr = pz.params?.proportions || {}; const gk = pr.limbGirth ?? 1; const tk = pr.torsoGirth ?? 1; // drawn thickness of the limbs and of the body
+  const capsule = (a, b, ra, rb, part, side, role, k = 1) => {
     const A = S(a); const B = S(b);
-    shapes.push({ pts: hull([...circlePts(A, ra * sc), ...circlePts(B, rb * sc)]), depth: (A.d + B.d) / 2, part, side, role });
+    shapes.push({ pts: hull([...circlePts(A, ra * k * sc), ...circlePts(B, rb * k * sc)]), depth: (A.d + B.d) / 2, part, side, role });
   };
   const section = (C, M, rf, rl, n = 12) => Array.from({ length: n }, (_, i) => {
     const t = (i / n) * TAU;
     return S(add(C, apply(M, [rf * Math.cos(t), 0, rl * Math.sin(t)])));
   });
   const tube = (C0, C1, M0, M1, r0, r1, part) => {
-    const a = section(C0, M0, r0[0], r0[1]); const b = section(C1, M1, r1[0], r1[1]);
+    const a = section(C0, M0, r0[0] * tk, r0[1] * tk); const b = section(C1, M1, r1[0] * tk, r1[1] * tk);
     shapes.push({ pts: hull([...a, ...b].map((q) => [q.x, q.y])), depth: (S(C0).d + S(C1).d) / 2, part, side: null, role: 'body' });
   };
   const hw = pz.hw;
@@ -103,7 +107,7 @@ function buildShapes(pz, cam) {
   tube(pz.base0, pz.j1, pz.R1, pz.R1, [0.085, 0.135], [0.095, 0.15], 'spine.lower');
   tube(pz.j1, pz.j2, pz.R2, pz.R2, [0.095, 0.15], [0.1, 0.165], 'spine.mid');
   tube(pz.j2, pz.j3, pz.R3, pz.R3, [0.1, 0.17], [0.075, 0.165], 'spine.upper');
-  capsule(pz.neckBase, pz.neckTop, 0.04, 0.034, 'neck', null, 'body');
+  capsule(pz.neckBase, pz.neckTop, 0.04, 0.034, 'neck', null, 'body', tk);
 
   // Head: an ellipsoid sampled on three great circles.
   const hr = pz.headR;
@@ -130,24 +134,137 @@ function buildShapes(pz, cam) {
   for (const side of ['R', 'L']) {
     const sd = pz.sides[side];
     const role = side === 'R' ? 'near' : 'far';
-    capsule(sd.hip, sd.knee, 0.088, 0.062, 'leg', side, role);
-    capsule(sd.knee, sd.ankle, 0.058, 0.038, 'leg', side, role);
-    const fs3 = footShape(pz, side); const fa = fs3.a.map(S).map((q) => [q.x, q.y]); const fb = fs3.b.map(S).map((q) => [q.x, q.y]);
+    capsule(sd.hip, sd.knee, 0.088, 0.062, 'leg', side, role, gk);
+    capsule(sd.knee, sd.ankle, 0.058, 0.038, 'leg', side, role, gk);
+    const fs3 = footShape(pz, side, pr.footSize ?? 1); const fa = fs3.a.map(S).map((q) => [q.x, q.y]); const fb = fs3.b.map(S).map((q) => [q.x, q.y]);
     const area = (poly) => Math.abs(poly.reduce((t, q, i) => { const r = poly[(i + 1) % poly.length]; return t + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
     const fh = hull([...fa, ...fb]); const big = area(fa) >= area(fb) ? fa : fb;
     // Side on, one face is the shoe (with its dip at the instep). Turned toward the camera the faces spread apart, so the outline is their hull.
     const shoePts = area(big) >= 0.9 * area(fh) ? big : fh;
     shapes.push({ pts: shoePts, depth: S(sd.ankle).d, part: 'foot', side, role });
-    capsule(sd.shoulder, sd.elbow, 0.05, 0.038, 'arm', side, role);
-    capsule(sd.elbow, sd.wrist, 0.036, 0.028, 'forearm', side, role);
+    capsule(sd.shoulder, sd.elbow, 0.05, 0.038, 'arm', side, role, gk);
+    capsule(sd.elbow, sd.wrist, 0.036, 0.028, 'forearm', side, role, gk);
     const hc2 = add(sd.wrist, mul([sd.hand[0] - sd.wrist[0], sd.hand[1] - sd.wrist[1], sd.hand[2] - sd.wrist[2]], 0.6));
     const H = S(hc2);
-    shapes.push({ pts: circlePts(H, 0.045 * sc, 14), depth: H.d, part: 'hand', side, role });
+    shapes.push({ pts: circlePts(H, 0.045 * (pr.handSize ?? 1) * sc, 14), depth: H.d, part: 'hand', side, role });
     const SH = S(sd.shoulder);
     shapes.push({ pts: circlePts(SH, 0.052 * sc, 14), depth: SH.d + 0.0005, part: 'girdle', side, role });
   }
   shapes.sort((a, b) => a.depth - b.depth);
   return { shapes, face };
+}
+
+// ---------- the rubber hose figure ----------
+const mixHex = (a, b, t) => { const pa = parseInt(a.slice(1), 16); const pb = parseInt(b.slice(1), 16); const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t); return '#' + [16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join(''); };
+const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+/** A limb as one curve through three joints. bend 1 is a single smooth curve that passes through the middle joint; 0 is the joint's sharp corner. */
+function hoseCurve(a, m, b, bend, n = 14) {
+  const c = [2 * m[0] - (a[0] + b[0]) / 2, 2 * m[1] - (a[1] + b[1]) / 2, 2 * m[2] - (a[2] + b[2]) / 2];
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1);
+    const smooth = [0, 1, 2].map((k) => (1 - t) ** 2 * a[k] + 2 * (1 - t) * t * c[k] + t * t * b[k]);
+    const joint = t < 0.5 ? lerp3(a, m, t * 2) : lerp3(m, b, t * 2 - 1);
+    return lerp3(joint, smooth, bend);
+  });
+}
+/** The outline of a tube (a thick line with round ends and a radius that can change along it) from screen points and radii. */
+function tubePoly(pts, radii) {
+  const n = pts.length; const L = []; const R = [];
+  const nrm = (i) => { const a = pts[Math.max(0, i - 1)]; const b = pts[Math.min(n - 1, i + 1)]; let tx = b.x - a.x; let ty = b.y - a.y; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l; return [-ty, tx]; };
+  for (let i = 0; i < n; i++) { const [nx, ny] = nrm(i); L.push([pts[i].x + nx * radii[i], pts[i].y + ny * radii[i]]); R.push([pts[i].x - nx * radii[i], pts[i].y - ny * radii[i]]); }
+  const cap = (c, r, a0, a1, steps = 9) => Array.from({ length: steps - 1 }, (_, k) => { const a = a0 + (a1 - a0) * ((k + 1) / steps); return [c.x + r * Math.cos(a), c.y + r * Math.sin(a)]; });
+  const e = nrm(n - 1); const a1 = Math.atan2(e[1], e[0]); const s0 = nrm(0); const a0 = Math.atan2(s0[1], s0[0]);
+  return [...L, ...cap(pts[n - 1], radii[n - 1], a1, a1 - Math.PI), ...R.reverse(), ...cap(pts[0], radii[0], a0 + Math.PI, a0)];
+}
+/** Where a point of the face [z, y] (in head radii from the head's centre) lands on the front of the head. */
+function headMap(pz, cam) {
+  const hr = pz.headR; const W = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
+  return ([z, y]) => {
+    const yy = y * hr; const zz = z * hr; const r2 = (yy / (1.08 * hr)) ** 2 + (zz / (0.85 * hr)) ** 2;
+    return W(add(pz.headC, apply(pz.Rh, [0.95 * hr * Math.sqrt(Math.max(0.02, 1 - r2)) + 0.004 * hr, yy, zz])));
+  };
+}
+function buildHoseShapes(pz, cam, st) {
+  const shapes = [];
+  const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
+  const sc = cam.scale;
+  const pr = pz.params?.proportions || {}; const limbK = (st.hoseLimb ?? 1) * (pr.limbGirth ?? 1); const bodyK = pr.torsoGirth ?? 1;
+  const sq = Math.max(-1, Math.min(1, -(pz.bobDev || 0) / (Math.max(0.02, pz.params?.bob ?? 0.075) / 2)));
+  const wMul = 1 + 0.16 * (st.hoseSquash ?? 0.6) * sq; // fuller at the bottom of the bounce, thinner at the top
+  const bend = Math.max(0, Math.min(1, st.hoseBend ?? 1));
+  const col = (c, role) => (role === 'far' ? mixHex(c, st.farTint, 0.3) : c);
+  const add1 = (pts, depth, part, side, role, color, lw = 1.6) => shapes.push({ pts, depth, part, side, role, fill: col(color, role), lw });
+  const tubeOf = (pts3, radii, part, side, role, color, bias = 0) => {
+    const P = pts3.map(S); const poly = tubePoly(P, radii.map((r) => r * sc));
+    add1(poly, P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
+  };
+  const blob = (center, R, rad, n = 10, m = 24) => { // an ellipsoid's outline
+    const out = [];
+    for (let lat = 0; lat <= n; lat++) { const ph = (lat / n) * Math.PI; for (let lon = 0; lon < (lat === 0 || lat === n ? 1 : m); lon++) { const th = (lon / m) * TAU; const q = [rad[0] * Math.sin(ph) * Math.cos(th), rad[1] * Math.cos(ph), rad[2] * Math.sin(ph) * Math.sin(th)]; const P = S(add(center, apply(R, q))); out.push([P.x, P.y]); } }
+    return hull(out);
+  };
+
+  // body: a pear of overlapping round sections from the hips to the shoulders, then shorts over the hips and a short neck
+  const T = [pz.pelvis, pz.base0, pz.j1, pz.j2, pz.j3];
+  tubeOf(T, [0.125, 0.13, 0.14, 0.13, 0.105].map((r) => r * bodyK * wMul), 'spine.mid', null, 'body', st.hoseBody);
+  tubeOf([add(pz.pelvis, apply(pz.Rp, [0, -0.06, 0])), pz.pelvis, pz.base0].map((p) => p), [0.12, 0.125, 0.13].map((r) => r * bodyK * wMul * 1.04), 'pelvis', null, 'body', st.hoseShorts, 0.0004);
+  tubeOf([pz.neckBase, pz.neckTop], [0.05 * bodyK, 0.045 * bodyK], 'neck', null, 'body', st.hoseBody);
+
+  // head and ears
+  const hr = pz.headR; const hc = S(pz.headC);
+  shapes.push({ pts: blob(pz.headC, pz.Rh, [0.95 * hr, 1.08 * hr, 0.85 * hr], 12, 32), depth: hc.d, part: 'head', side: null, role: 'body', fill: st.hoseBody, lw: 1.6, face: true });
+  if (st.hoseEars === 'round') {
+    for (const sg of [1, -1]) {
+      const C = S(add(pz.headC, apply(pz.Rh, [-0.05 * hr, 1.0 * hr, sg * 0.7 * hr])));
+      shapes.push({ pts: circlePts(C, 0.46 * hr * sc, 22), depth: hc.d - 0.0008, part: 'head', side: null, role: 'body', fill: st.hoseBody, lw: 1.6 });
+    }
+  }
+
+  for (const side of ['R', 'L']) {
+    const sd = pz.sides[side]; const role = side === 'R' ? 'near' : 'far';
+    // legs and arms are single tubes with no knee or elbow: one curve through the three joints
+    tubeOf(hoseCurve(sd.hip, sd.knee, sd.ankle, bend), Array(14).fill(0.052 * limbK * wMul), 'leg', side, role, st.hoseBody);
+    tubeOf(hoseCurve(sd.shoulder, sd.elbow, sd.wrist, bend), Array(14).fill(0.04 * limbK * wMul), 'arm', side, role, st.hoseBody);
+    // a big round shoe
+    const k = pr.footSize ?? 1; const f = sd.foot; const a = 0.24 * k; const b = 0.085 * k; const c3 = 0.075 * k;
+    const shoeC = add(sd.ankle, add(mul(f.fx, 0.09 * k), mul(f.fy, -0.075 + b)));
+    const shoeR = [f.fx[0], f.fy[0], f.lat[0], f.fx[1], f.fy[1], f.lat[1], f.fx[2], f.fy[2], f.lat[2]];
+    add1(blob(shoeC, shoeR, [a, b, c3], 10, 20), S(sd.ankle).d, 'foot', side, role, st.hoseShoe);
+    // a round glove with a thumb
+    const hs = pr.handSize ?? 1; const hc2 = add(sd.wrist, mul([sd.hand[0] - sd.wrist[0], sd.hand[1] - sd.wrist[1], sd.hand[2] - sd.wrist[2]], 0.6));
+    const H = S(hc2); const Wr = S(sd.wrist); const dx = H.x - Wr.x; const dy = H.y - Wr.y; const dl = Math.hypot(dx, dy) || 1;
+    const th = { x: H.x + (-dy / dl) * 0.05 * hs * sc + (dx / dl) * 0.02 * hs * sc, y: H.y + (dx / dl) * 0.05 * hs * sc + (dy / dl) * 0.02 * hs * sc };
+    add1(hull([...circlePts(H, 0.062 * hs * sc, 18), ...circlePts(th, 0.03 * hs * sc, 10)]), H.d + 0.0003, 'hand', side, role, st.hoseGlove);
+  }
+  shapes.sort((x, y) => x.depth - y.depth);
+  return { shapes, face: { eyes: [], nose: null } };
+}
+
+/** The face of the rubber hose figure: a face patch, eyes (pie-cut by default), a nose and the mouth, bent onto the front of the head. */
+function paintHoseFace(ctx, pz, cam, st, mouthId) {
+  const map = headMap(pz, cam);
+  const hcP = cam.p([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]);
+  if (map([0, 0]).d <= hcP.d) return; // turned away
+  const poly = (pts) => { ctx.beginPath(); pts.map(map).forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); };
+  const ell = (cz, cy, rz, ry, n = 22, a0 = 0, a1 = Math.PI * 2) => Array.from({ length: n }, (_, i) => { const t = a0 + ((a1 - a0) * i) / n; return [cz + rz * Math.cos(t), cy + ry * Math.sin(t)]; });
+  const lw = cam.lw * 1.2;
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  poly(ell(0, -0.1, 0.68, 0.8, 28)); ctx.fillStyle = st.hoseFace; ctx.fill(); // the face patch
+  const kind = st.hoseEyes || 'pie';
+  for (const sg of [1, -1]) {
+    const ez = sg * 0.3; const ey = 0.3;
+    if (kind === 'dots') { poly(ell(ez, ey - 0.02, 0.07, 0.1)); ctx.fillStyle = '#111'; ctx.fill(); continue; }
+    poly(ell(ez, ey, 0.21, 0.3)); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.strokeStyle = st.lineColor; ctx.lineWidth = lw; ctx.stroke();
+    const pz2 = ez + sg * 0.03; const py = ey - 0.05; const pr = kind === 'round' ? [0.12, 0.2] : [0.11, 0.19];
+    poly(ell(pz2, py, pr[0], pr[1])); ctx.fillStyle = '#111'; ctx.fill();
+    if (kind === 'pie') { // a wedge cut out of the pupil
+      const R = 0.3; const wedge = [[pz2, py], [pz2 + R * Math.cos(0.45), py + R * Math.sin(0.45)], [pz2 + R * Math.cos(1.15), py + R * Math.sin(1.15)]];
+      ctx.save(); poly(ell(pz2, py, pr[0], pr[1])); ctx.clip(); poly(wedge); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore();
+    }
+  }
+  poly(ell(0, -0.07, 0.13, 0.09)); ctx.fillStyle = '#111'; ctx.fill(); // the nose
+  ctx.restore();
+  paintMouth(ctx, mouthId || 'rest', ([z, y]) => map([z, -0.42 + y * 0.9]), { line: st.lineColor, lw: cam.lw * 1.1 });
 }
 
 /** The pivot point (screen) of a part, for the selection marker. */
@@ -170,13 +287,13 @@ function paintShape(ctx, sh, cam, st, ghost) {
   ctx.closePath();
   if (st.style === 'silhouette' && !ghost) { ctx.fillStyle = st.lineColor; ctx.fill(); return; }
   // Outline: the whole figure's edge was already drawn in a first pass, so this fill covers every line inside it.
-  if (st.style === 'outline' && !ghost) { ctx.fillStyle = hexA(st.fillColor, 1); ctx.fill(); return; }
+  if (st.style === 'outline' && !ghost) { ctx.fillStyle = sh.fill ?? hexA(st.fillColor, 1); ctx.fill(); return; }
   if (st.style === 'mannequin') {
-    ctx.fillStyle = ghost ? hexA(ghost, 0.1) : far ? hexA(st.farTint, st.farOpacity * 0.55) : hexA(st.fillColor, st.fillOpacity);
+    ctx.fillStyle = ghost ? hexA(ghost, 0.1) : sh.fill ?? (far ? hexA(st.farTint, st.farOpacity * 0.55) : hexA(st.fillColor, st.fillOpacity));
     ctx.fill();
   }
-  ctx.strokeStyle = ghost || (far ? st.farTint : st.lineColor);
-  ctx.lineWidth = cam.lw;
+  ctx.strokeStyle = ghost || (far && !sh.fill ? st.farTint : st.lineColor);
+  ctx.lineWidth = cam.lw * (sh.lw || 1);
   ctx.stroke();
 }
 
@@ -190,14 +307,9 @@ function paintAttachLines(ctx, pz, cam, opts, parts) {
 
 /** The mouth on the head's surface: its flat outline is bent onto the ellipsoid of the head, so it turns with the head and foreshortens at an angle. */
 function paintHeadMouth(ctx, pz, cam, st, id) {
-  const hr = pz.headR; const y0 = -0.45 * hr;
-  const W = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
-  const surf = ([z, y]) => {
-    const yy = y0 + y * hr; const zz = z * hr;
-    const r2 = (yy / (1.08 * hr)) ** 2 + (zz / (0.85 * hr)) ** 2;
-    return W(add(pz.headC, apply(pz.Rh, [0.95 * hr * Math.sqrt(Math.max(0.02, 1 - r2)) + 0.004 * hr, yy, zz])));
-  };
-  if (surf([0, 0]).d <= W(pz.headC).d) return; // turned away from the camera
+  const map = headMap(pz, cam);
+  const surf = ([z, y]) => map([z, -0.45 + y]);
+  if (surf([0, 0]).d <= cam.p([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]).d) return; // turned away from the camera
   paintMouth(ctx, id, surf, { line: st.lineColor, lw: cam.lw * 0.85 });
 }
 
@@ -243,7 +355,8 @@ function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
     ctx.restore();
     return { shapes: [], placed: placedLines };
   }
-  const built = pz.legs ? buildDogShapes(pz, cam) : buildShapes(pz, cam);
+  const hose = !pz.legs && pz.params?.model === 'hose';
+  const built = pz.legs ? buildDogShapes(pz, cam) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam);
   const { face } = built; let shapes = built.shapes;
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
@@ -261,8 +374,9 @@ function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam); continue; }
     paintShape(ctx, sh, cam, st, ghost);
-    if (sh.part === 'head' && opts.mouth && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHeadMouth(ctx, pz, cam, st, opts.mouth);
-    if ((sh.part === 'head' || sh.part === 'dog.head') && (st.style === 'mannequin' || st.style === 'outline') && !ghost) {
+    if (sh.face && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHoseFace(ctx, pz, cam, st, opts.mouth);
+    if (sh.part === 'head' && opts.mouth && !hose && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHeadMouth(ctx, pz, cam, st, opts.mouth);
+    if ((sh.part === 'head' || sh.part === 'dog.head') && !hose && (st.style === 'mannequin' || st.style === 'outline') && !ghost) {
       ctx.strokeStyle = st.lineColor; ctx.fillStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.9;
       for (const e of face.eyes) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9, 0.05 * pz.headR * cam.scale), 0, TAU); ctx.fill(); }
       if (face.dot) { ctx.beginPath(); ctx.arc(face.dot.x, face.dot.y, Math.max(2, cam.lw * 1.4), 0, TAU); ctx.fill(); }

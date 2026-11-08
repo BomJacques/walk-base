@@ -167,7 +167,7 @@ export const groupOfClip = (id) => CLIP_GROUPS.find(([, ids]) => ids.includes(id
 export const clipsFor = (rig) => CLIPS[rig] || [];
 /** The movements for one figure: the human's, the dog's, or (for the other animals) the dog's that suit them and their own. */
 export function clipsForFigure(fig) {
-  if (fig === 'human') return CLIPS.human;
+  if (fig === 'human' || fig === 'hose') return CLIPS.human;
   if (fig === 'dog' || !SPECIES_MOVES[fig]) return CLIPS.dog;
   const keep = speciesSharedIds(fig) || [];
   return [...CLIPS.dog.filter((c) => keep.includes(c.id)), ...SPECIES_MOVES[fig]];

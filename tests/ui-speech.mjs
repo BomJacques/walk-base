@@ -76,6 +76,23 @@ await ev(() => { window.__walkBase.S.s.camYaw = -90; });
 const e1 = await ev(async (f) => { const r = await window.__walkBase.frame(f); return r?.size ?? r?.blob?.size ?? 0; }, open.f).catch(() => 0);
 check('an exported frame renders with speech on', e1 !== null);
 
+// ---- a voice keeps the mouth in step: the mouth starts when the voice does and jumps to each word as the voice reaches it
+await ev(() => { window.__utts = []; window.__spoken = 0; Object.defineProperty(window, 'speechSynthesis', { value: { cancel() { window.__cancelled = (window.__cancelled || 0) + 1; }, speak(u) { window.__utts.push(u); } }, configurable: true }); window.SpeechSynthesisUtterance = function (t) { this.text = t; }; });
+await ev(() => window.__walkBase.setTab('Speech')); await wait(200);
+await page.locator('[data-testid="speech-voice"]').click(); await wait(100);
+const spk = await ev(() => ({ n: window.__utts.length, rate: window.__utts[0]?.rate, text: window.__utts[0]?.text, playing: window.__walkBase.S.playing }));
+check('Play with voice speaks the text at a speed that fits the animation', spk.n === 1 && spk.text === 'Hello world, this is a test.' && spk.rate >= 0.5 && spk.rate <= 2.5, spk);
+await ev(() => window.__utts[0].onstart()); await wait(50);
+check('the mouth starts when the voice starts', (await ev(() => window.__walkBase.S.playing)) === true);
+const words = await ev(() => window.__walkBase.S.speech.words);
+await ev((c) => window.__utts[0].onboundary({ name: 'word', charIndex: c }), words[3].c); await wait(30);
+const fr = await ev(() => window.__walkBase.S.frame);
+check('when the voice reaches the fourth word the mouth jumps to it', Math.abs(fr - words[3].f) <= 2, { fr, want: words[3].f });
+await ev((c) => window.__utts[0].onboundary({ name: 'word', charIndex: c }), words[1].c); await wait(30);
+check('and it follows the voice back as well', Math.abs((await ev(() => window.__walkBase.S.frame)) - words[1].f) <= 2);
+await ev(() => window.__walkBase.pause());
+check('pausing stops the voice', (await ev(() => window.__cancelled)) >= 1 && (await ev(() => window.__walkBase.S.playing)) === false);
+
 // ---- it is saved with the settings and goes away when cleared
 await ev(() => window.__walkBase.S.s.focus = 'body');
 await ev(() => window.__walkBase.setTab('Speech')); await wait(200);

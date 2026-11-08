@@ -34,16 +34,21 @@ export function paintMouth(ctx, id, map, o) {
     const inner = (arr, i) => Math.abs(arr[i][0]) <= TEETH_SPAN * sh.W;
     const idx = [...Array(N).keys()].filter((i) => inner(sh.top, i));
     const taper = (i) => Math.pow(Math.max(0, 1 - (sh.top[i][0] / (TEETH_SPAN * sh.W)) ** 2), 0.35); // the row rounds off toward its ends
-    if (sh.tongue === 1) { poly(ellipse(0, yBotC + sh.H * 0.3, sh.W * 0.55, sh.H * 0.34)); ctx.fillStyle = c.tongue; ctx.fill(); }
-    if (sh.tongue === 2) { poly(ellipse(0, yTopC - sh.H * 0.5, sh.W * 0.45, sh.H * 0.3)); ctx.fillStyle = c.tongue; ctx.fill(); }
     if (sh.teeth >= 1) { poly([...idx.map((i) => sh.top[i]), ...[...idx].reverse().map((i) => [sh.top[i][0], sh.top[i][1] - td * taper(i)])]); ctx.fillStyle = c.teeth; ctx.fill(); }
     if (sh.teeth >= 2) { poly([...idx.map((i) => [sh.bot[i][0], sh.bot[i][1] + td * 0.85 * taper(i)]), ...[...idx].reverse().map((i) => sh.bot[i])]); ctx.fillStyle = c.teeth; ctx.fill(); }
-    if (sh.tongue === 3) { poly(ellipse(0, (yTopC + yBotC) / 2, sh.W * 0.5, sh.H * 0.2)); ctx.fillStyle = c.tongue; ctx.fill(); }
+    const tongue = (cz, cy, rz, ry) => { poly(ellipse(cz, cy, rz, ry)); ctx.fillStyle = c.tongue; ctx.fill(); ctx.strokeStyle = c.line; ctx.lineWidth = c.lw * 0.6; ctx.stroke(); };
+    if (sh.tongue === 1) tongue(0, yBotC + sh.H * 0.3, sh.W * 0.62, sh.H * 0.38); // resting low in the mouth
+    if (sh.tongue === 2) { tongue(0, yTopC - td - sh.H * 0.18, sh.W * 0.5, sh.H * 0.3); ctx.strokeStyle = c.line; ctx.lineWidth = c.lw * 0.5; line([[-sh.W * 0.3, yTopC - td - sh.H * 0.3], [sh.W * 0.3, yTopC - td - sh.H * 0.3]], c.lw * 0.5); } // the tip lifted to the top teeth
     if (sh.tuck) { // the lower lip rides up over the lower teeth
       poly([...sh.top.map((p) => [p[0], yTopC - td * 1.05]), ...[...sh.bot].reverse()]); ctx.fillStyle = c.lip; ctx.fill();
     }
     ctx.restore();
     ctx.strokeStyle = c.line; line(sh.top, c.lw * 0.8); line(sh.bot, c.lw * 0.8);
+    if (sh.tongue === 3) { // the tip of the tongue between the teeth, reaching over the lower lip
+      const tip = ellipse(0, yBotC + sh.H * 0.18, sh.W * 0.5, sh.H * 0.42, 20);
+      poly(tip); ctx.fillStyle = c.tongue; ctx.fill(); ctx.strokeStyle = c.line; ctx.lineWidth = c.lw * 0.8; ctx.stroke();
+      line([[0, yBotC + sh.H * 0.4], [0, yBotC - sh.H * 0.08]], c.lw * 0.5);
+    }
   } else {
     // shut or nearly shut: the seam between the lips; pressed lips have it heavier, with small ticks at the corners
     const seam = sh.top.map((p, i) => [p[0], (p[1] + sh.bot[i][1]) / 2]);

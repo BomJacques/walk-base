@@ -95,3 +95,17 @@ test('a saved speech is cleaned on the way back in', () => {
   assert.deepEqual(dirty.keys, [{ f: 3, v: 'mbp' }, { f: 9, v: 'ah' }]);
   assert.ok(dirty.start === 0 && dirty.speed === 2.5);
 });
+
+test('each word is placed in the text and on the timeline, so a voice can be followed', () => {
+  const sp = buildSpeech('Hello world, this is a test.', { fps: 24, start: 10 });
+  assert.equal(sp.words.length, 6);
+  assert.deepEqual(sp.words.map((w) => w.c), [0, 6, 13, 18, 21, 23]);
+  for (let i = 1; i < sp.words.length; i++) assert.ok(sp.words[i].f >= sp.words[i - 1].f);
+  assert.ok(sp.words[0].f >= 10 && sp.words.at(-1).f < sp.end);
+  assert.deepEqual(cleanSpeech(JSON.parse(JSON.stringify(sp))).words, sp.words);
+});
+
+test('TH and the tongue sounds open the mouth wide enough to see the tongue', () => {
+  for (const id of ['th', 'l', 'r']) assert.ok(mouthShape(id).H > 0.15, `${id} opening ${mouthShape(id).H}`);
+  assert.equal(mouthShape('th').tongue, 3);
+});

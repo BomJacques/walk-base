@@ -14,8 +14,8 @@ export const VISEMES = [
   { id: 'rest', code: 'rest', label: 'Rest', sounds: 'between words', hint: 'Lips together, relaxed.', open: 0.04, wide: 0.15, round: 0, teeth: 0, tongue: 0, tuck: 0, press: 0 },
   { id: 'mbp', code: 'mbp', label: 'M B P', sounds: 'm, b, p', hint: 'Lips pressed together.', open: 0, wide: 0, round: 0, teeth: 0, tongue: 0, tuck: 0, press: 1 },
   { id: 'fv', code: 'fv', label: 'F V', sounds: 'f, v, ph', hint: 'Lower lip tucked under the upper teeth.', open: 0.12, wide: 0.2, round: 0, teeth: 1, tongue: 0, tuck: 1, press: 0 },
-  { id: 'th', code: 'th', label: 'TH', sounds: 'th', hint: 'Tongue tip between the teeth.', open: 0.14, wide: 0.25, round: 0, teeth: 2, tongue: 3, tuck: 0, press: 0 },
-  { id: 'l', code: 'l', label: 'L N T D', sounds: 'l, n, t, d', hint: 'Mouth a little open, tongue tip up behind the top teeth.', open: 0.28, wide: 0.2, round: 0, teeth: 1, tongue: 2, tuck: 0, press: 0 },
+  { id: 'th', code: 'th', label: 'TH', sounds: 'th', hint: 'Tongue tip pushed out between the teeth.', open: 0.34, wide: 0.3, round: 0, teeth: 2, tongue: 3, tuck: 0, press: 0 },
+  { id: 'l', code: 'l', label: 'L N T D', sounds: 'l, n, t, d', hint: 'Mouth open, tongue tip lifted to the top teeth.', open: 0.42, wide: 0.25, round: 0, teeth: 1, tongue: 2, tuck: 0, press: 0 },
   { id: 'ah', code: 'ah', label: 'AH', sounds: 'a in father, o in hot', hint: 'Wide open, jaw dropped.', open: 1, wide: 0.1, round: 0, teeth: 1, tongue: 1, tuck: 0, press: 0 },
   { id: 'ae', code: 'ae', label: 'AE E', sounds: 'a in cat, e in bed, ay', hint: 'Open and drawn wide.', open: 0.7, wide: 0.7, round: 0, teeth: 2, tongue: 1, tuck: 0, press: 0 },
   { id: 'ee', code: 'ee', label: 'EE', sounds: 'ee, i in sit, y', hint: 'Lips stretched wide, teeth close.', open: 0.22, wide: 1, round: 0, teeth: 2, tongue: 0, tuck: 0, press: 0 },
@@ -23,7 +23,7 @@ export const VISEMES = [
   { id: 'oo', code: 'oo', label: 'OO W', sounds: 'oo, w, u in blue', hint: 'Small tight circle.', open: 0.2, wide: -0.8, round: 1, teeth: 0, tongue: 0, tuck: 0, press: 0 },
   { id: 'uh', code: 'uh', label: 'UH', sounds: 'u in cup, the schwa', hint: 'Relaxed and half open.', open: 0.45, wide: 0, round: 0, teeth: 1, tongue: 1, tuck: 0, press: 0 },
   { id: 'chsh', code: 'ch', label: 'CH SH J', sounds: 'ch, sh, j', hint: 'Lips pushed forward, teeth close.', open: 0.2, wide: -0.4, round: 0.5, teeth: 2, tongue: 0, tuck: 0, press: 0 },
-  { id: 'r', code: 'r', label: 'R', sounds: 'r', hint: 'Lips pursed a little, tongue pulled back.', open: 0.25, wide: -0.3, round: 0.4, teeth: 1, tongue: 2, tuck: 0, press: 0 },
+  { id: 'r', code: 'r', label: 'R', sounds: 'r', hint: 'Lips pursed a little, tongue pulled back.', open: 0.34, wide: -0.3, round: 0.4, teeth: 1, tongue: 2, tuck: 0, press: 0 },
   { id: 'sz', code: 'sz', label: 'S Z', sounds: 's, z, soft c', hint: 'Teeth together, lips drawn back.', open: 0.1, wide: 0.5, round: 0, teeth: 2, tongue: 0, tuck: 0, press: 0 },
   { id: 'kg', code: 'kg', label: 'K G', sounds: 'k, g, ng, hard c', hint: 'Open a little, the back of the tongue lifted.', open: 0.4, wide: 0.1, round: 0, teeth: 1, tongue: 1, tuck: 0, press: 0 },
 ];
@@ -90,8 +90,8 @@ function tokens(text) {
   const items = [];
   for (const m of String(text).toLowerCase().matchAll(/[a-z']+|\d|[.,!?;:—–-]+/g)) {
     const t = m[0];
-    if (/^\d$/.test(t)) items.push({ shapes: wordToShapes(DIGITS[Number(t)]) });
-    else if (/^[a-z']/.test(t)) items.push({ shapes: wordToShapes(t) });
+    if (/^\d$/.test(t)) items.push({ c: m.index, shapes: wordToShapes(DIGITS[Number(t)]) });
+    else if (/^[a-z']/.test(t)) items.push({ c: m.index, shapes: wordToShapes(t) });
     else items.push({ pause: /[.!?;:]/.test(t) ? 1.8 : 1 });
   }
   return items;
@@ -106,10 +106,11 @@ const PRIORITY = (v) => (v === 'mbp' || v === 'fv' ? 3 : VOWELS.has(v) ? 2 : 1);
  */
 export function buildSpeech(text, { fps = 24, start = 0, speed = 1 } = {}) {
   const upf = Math.max(0.2, fps / (14 * Math.max(0.25, speed))); // frames per unit of weight
-  const raw = []; let t = 0;
+  const raw = []; let t = 0; const words = []; // words: where each word starts in the text and on the timeline, so a voice can be kept in step
   raw.push({ t: 0, v: 'rest' }); t = 0.5 * upf;
   for (const it of tokens(text)) {
     if (it.pause) { raw.push({ t, v: 'rest' }); t += it.pause * upf; continue; }
+    words.push({ c: it.c, f: start + Math.round(t) });
     for (const v of it.shapes) { raw.push({ t, v }); t += (WEIGHT[v] ?? 1) * upf; }
   }
   const endT = t + 0.5 * upf;
@@ -124,7 +125,7 @@ export function buildSpeech(text, { fps = 24, start = 0, speed = 1 } = {}) {
   }
   const endF = Math.max((keys[keys.length - 1]?.f ?? start) + 1, start + Math.round(endT));
   if (keys[keys.length - 1]?.v !== 'rest') keys.push({ f: endF, v: 'rest' });
-  return { text: String(text), start, speed, fps, keys, end: keys[keys.length - 1].f };
+  return { text: String(text), start, speed, fps, keys, words, end: keys[keys.length - 1].f };
 }
 
 /** The shape id on frame `frame`, or null when there is no speech there (before it starts). */
@@ -143,7 +144,8 @@ export function cleanSpeech(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.keys)) return null;
   const keys = raw.keys.map((k) => ({ f: Math.max(0, Math.round(Number(k?.f))), v: k?.v })).filter((k) => Number.isFinite(k.f) && VISEME_BY_ID[k.v]).sort((a, b) => a.f - b.f);
   if (!keys.length) return null;
-  return { text: String(raw.text ?? '').slice(0, 600), start: Math.max(0, Math.round(Number(raw.start) || 0)), speed: Math.min(2.5, Math.max(0.25, Number(raw.speed) || 1)), fps: Number(raw.fps) || 24, keys, end: keys[keys.length - 1].f };
+  const words = Array.isArray(raw.words) ? raw.words.map((w) => ({ c: Math.max(0, Math.round(Number(w?.c))), f: Math.max(0, Math.round(Number(w?.f))) })).filter((w) => Number.isFinite(w.c) && Number.isFinite(w.f)).sort((a, b) => a.c - b.c) : [];
+  return { words, text: String(raw.text ?? '').slice(0, 600), start: Math.max(0, Math.round(Number(raw.start) || 0)), speed: Math.min(2.5, Math.max(0.25, Number(raw.speed) || 1)), fps: Number(raw.fps) || 24, keys, end: keys[keys.length - 1].f };
 }
 
 // ---------- the shape of the mouth ----------

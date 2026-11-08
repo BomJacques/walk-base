@@ -59,7 +59,16 @@ export const CONTROLS = [
   n('r', 'torso', 'Body', 'Proportions', 'Torso length', '×', 0.6, 1.5, 0.01, 'Scale of the spine.'),
   n('r', 'arm', 'Body', 'Proportions', 'Arm length', '×', 0.6, 1.5, 0.01, 'Scale of both arms.'),
   n('r', 'neck', 'Body', 'Proportions', 'Neck length', '×', 0.3, 2.5, 0.01, 'Scale of the neck.'),
-  n('r', 'head', 'Body', 'Proportions', 'Head size', '×', 0.6, 1.8, 0.01, 'Scale of the head.'),
+  n('r', 'head', 'Body', 'Proportions', 'Head size', '×', 0.6, 2.2, 0.01, 'Scale of the head.'),
+  n('r', 'waist', 'Body', 'Proportions', 'Waist length', '×', 0.5, 1.8, 0.01, 'Scale of the lower spine, between the hips and the ribs.'),
+  n('r', 'chest', 'Body', 'Proportions', 'Chest length', '×', 0.5, 1.8, 0.01, 'Scale of the upper spine, from the ribs to the shoulders.'),
+  n('r', 'upperArm', 'Body', 'Proportions', 'Upper arm length', '×', 0.6, 1.6, 0.01, 'Scale of the upper arm only, on top of Arm length.'),
+  n('r', 'foreArm', 'Body', 'Proportions', 'Forearm length', '×', 0.6, 1.6, 0.01, 'Scale of the forearm only, on top of Arm length.'),
+  n('r', 'handSize', 'Body', 'Proportions', 'Hand size', '×', 0.5, 2.5, 0.01, 'Scale of the hand, in length and in the drawing.'),
+  n('r', 'thighShare', 'Body', 'Proportions', 'Upper leg share', '×', 0.75, 1.25, 0.01, 'How much of the leg is thigh and how much is shin. The leg stays the same total length, so the walk does not change.'),
+  n('r', 'footSize', 'Body', 'Proportions', 'Foot size', '×', 0.6, 2, 0.01, 'Scale of the drawn foot. Large for a clown shoe, small for a dancer.'),
+  n('r', 'limbGirth', 'Body', 'Proportions', 'Limb thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the arms and legs in the drawing.'),
+  n('r', 'torsoGirth', 'Body', 'Proportions', 'Body thickness', '×', 0.6, 1.8, 0.01, 'Thickness of the hips, waist, chest and neck in the drawing.'),
   // Dog (shown when the figure is the dog). Units are shoulder heights.
   e('p', 'dogGait', 'Gait', 'Dog gait', 'Gait', ['walk', 'trot', 'pace', 'gallop', 'run', 'hop'], 'Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between.'),
   n('p', 'dogStride', 'Gait', 'Dog stride', 'Stride', 'heights', 0.1, 5, 0.01, 'Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster.'),
@@ -104,6 +113,16 @@ export const CONTROLS = [
   // Look
   e('s', 'style', 'Look', 'Figure', 'Style', ['mannequin', 'outline', 'stick', 'silhouette'], 'Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape.'),
   n('s', 'lineWidth', 'Look', 'Figure', 'Line width', 'px', 0.5, 12, 0.25, 'At 1080 pixels tall. It scales with the canvas.'),
+  n('s', 'hoseLimb', 'Look', 'Rubber hose', 'Limb thickness', '×', 0.5, 2, 0.01, 'How thick the tube arms and legs are.'),
+  n('s', 'hoseBend', 'Look', 'Rubber hose', 'Limb curve', '', 0, 1, 0.01, '1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint.'),
+  n('s', 'hoseSquash', 'Look', 'Rubber hose', 'Squash and stretch', '', 0, 1.5, 0.05, 'The body swells when it is lowest in the step and thins as it rises.'),
+  e('s', 'hoseEars', 'Look', 'Rubber hose', 'Ears', ['none', 'round'], 'Round ears on top of the head. Off by default.'),
+  e('s', 'hoseEyes', 'Look', 'Rubber hose', 'Eyes', ['pie', 'round', 'dots'], 'Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots.'),
+  c('s', 'hoseBody', 'Look', 'Rubber hose', 'Body colour', 'The head, body, arms and legs.'),
+  c('s', 'hoseFace', 'Look', 'Rubber hose', 'Face colour', 'The face patch on the head.'),
+  c('s', 'hoseGlove', 'Look', 'Rubber hose', 'Glove colour', 'The hands.'),
+  c('s', 'hoseShoe', 'Look', 'Rubber hose', 'Shoe colour', 'The feet.'),
+  c('s', 'hoseShorts', 'Look', 'Rubber hose', 'Shorts colour', 'The hips.'),
   c('s', 'lineColor', 'Look', 'Figure', 'Line colour', 'Outline and silhouette colour.'),
   c('s', 'fillColor', 'Look', 'Figure', 'Fill colour', 'Mannequin fill.'),
   n('s', 'fillOpacity', 'Look', 'Figure', 'Fill opacity', '', 0, 1, 0.01, 'Lower it to trace through the body.'),
@@ -161,7 +180,7 @@ export const PRESETS = {
   Limp: { stepLength: 0.6, duty: 0.62, asymDuty: -0.1, asymTiming: 0.05, asymLift: -0.4, asymArm: -0.5, bob: 0.07, lean: 5, headNod: 3, torsoSway: 3, pelvisRoll: 6, cycleFrames: 30, footLift: 0.1 },
   Shuffle: { stepLength: 0.42, duty: 0.68, footLift: 0.03, heelStrike: 4, toeOff: 8, armSwing: 8, lean: 9, bob: 0.03, headNod: 3, cycleFrames: 32, heelDown: 0.35, heelUp: 0.8, liftPeak: 0.5 },
   March: { stepLength: 0.8, duty: 0.56, footLift: 0.3, armSwing: 44, elbowBase: 80, elbowSwing: 6, lean: 0, headBob: 1, bob: 0.05, heelStrike: 18, cycleFrames: 20, liftPeak: 0.5, swingReach: 0.5, torsoSway: 0.5 },
-  Stomp: { stepLength: 0.7, duty: 0.6, footLift: 0.22, bob: 0.14, heelStrike: 30, heelDown: 0.07, liftPeak: 0.3, swingReach: 0.95, legExtend: 0.995, armSwing: 22, lean: 4, cycleFrames: 22, torsoSway: 3 },
+  Stomp: { stepLength: 0.7, duty: 0.6, footLift: 0.22, bob: 0.11, heelStrike: 30, heelDown: 0.07, liftPeak: 0.3, swingReach: 0.95, legExtend: 0.985, armSwing: 22, lean: 4, cycleFrames: 22, torsoSway: 3 },
   Sneak: { stepLength: 0.5, duty: 0.72, footLift: 0.22, bob: 0.03, lean: 12, armSwing: 6, cycleFrames: 40, heelStrike: 3, headBob: 0.9, legExtend: 0.9, liftPeak: 0.55, heelDown: 0.3, torsoSway: 0.6 },
   Strut: { stepLength: 0.8, duty: 0.58, footLift: 0.15, bob: 0.09, lean: -2, armSwing: 30, headBob: 0.7, pelvisRoll: 7, pelvisYaw: 12, sway: 0.05, torsoSway: 3, shoulderCounter: 14, toeOut: 12, cycleFrames: 28 },
   Waddle: { stepLength: 0.5, duty: 0.64, bob: 0.06, pelvisRoll: 9, sway: 0.07, torsoSway: 5, toeOut: 22, stepWidth: 0.12, armSwing: 10, armOut: 14, lean: 2, cycleFrames: 34, headNod: 4 },
@@ -220,5 +239,16 @@ export const PRESETS_SPECIES = {
   },
 };
 /** The presets for one figure: 'human', 'dog', or a species name. */
-export const presetsForFigure = (fig) => (fig === 'human' ? PRESETS : PRESETS_SPECIES[fig] || PRESETS_DOG);
+/** The rubber hose figure: bouncy, on twos, with a lot of arm swing and bob. */
+export const PRESETS_HOSE = {
+  Bouncy: { stepLength: 0.72, bob: 0.16, duty: 0.56, armSwing: 46, elbowBase: 4, elbowSwing: 10, footLift: 0.26, cycleFrames: 12, exposure: 2, lean: 3, torsoSway: 4, headNod: 5, headBob: 0.1, pelvisRoll: 6, sway: 0.05, heelStrike: 8, toeOff: 40, toeOut: 14, liftPeak: 0.4, swingReach: 0.7 },
+  Strut: { stepLength: 0.7, bob: 0.12, duty: 0.58, armSwing: 40, elbowBase: 6, elbowSwing: 12, footLift: 0.2, cycleFrames: 16, exposure: 2, lean: -3, torsoSway: 3, headNod: 4, headBob: 0.4, pelvisRoll: 9, pelvisYaw: 12, sway: 0.07, heelStrike: 12, toeOut: 16 },
+  Sneak: { stepLength: 0.45, bob: 0.06, duty: 0.7, armSwing: 8, elbowBase: 30, elbowSwing: 10, footLift: 0.2, cycleFrames: 32, exposure: 2, lean: 14, torsoSway: 1, headNod: 3, headBob: 0.6, heelStrike: 0, toeOff: 45, legExtend: 0.9, heelDown: 0.1, heelUp: 0.35 },
+  Skip: { stepLength: 0.85, bob: 0.2, duty: 0.52, armSwing: 55, elbowBase: 20, elbowSwing: 20, footLift: 0.36, cycleFrames: 14, exposure: 2, lean: 2, torsoSway: 5, headNod: 6, headBob: 0, pelvisRoll: 5, heelStrike: 6, toeOff: 45, liftPeak: 0.35, swingReach: 0.6 },
+  Stomp: { stepLength: 0.66, bob: 0.11, duty: 0.6, armSwing: 28, elbowBase: 40, elbowSwing: 14, footLift: 0.24, cycleFrames: 18, exposure: 2, lean: 6, torsoSway: 3, headNod: 5, heelStrike: 28, heelDown: 0.07, liftPeak: 0.3, swingReach: 0.95, legExtend: 0.985, toeOut: 10 },
+  Tired: { stepLength: 0.5, bob: 0.07, duty: 0.66, armSwing: 14, elbowBase: 8, elbowSwing: 6, footLift: 0.07, cycleFrames: 32, exposure: 2, lean: 14, torsoSway: 3, headNod: 6, headBob: 0, heelStrike: 4, toeOff: 18, legExtend: 0.94, toeOut: 20 },
+};
+/** The proportions the rubber hose figure starts with: a big head, a short body, long thin limbs. */
+export const HOSE_PROPORTIONS = Object.freeze({ head: 1.5, neck: 0.35, torso: 0.8, waist: 0.9, shoulderWidth: 0.8, arm: 1.15, handSize: 1.3, footSize: 1.35, limbGirth: 1 });
+export const presetsForFigure = (fig) => (fig === 'human' ? PRESETS : fig === 'hose' ? PRESETS_HOSE : PRESETS_SPECIES[fig] || PRESETS_DOG);
 export const presetsFor = (rig) => (rig === 'dog' ? PRESETS_DOG : PRESETS);

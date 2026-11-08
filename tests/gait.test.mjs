@@ -96,6 +96,6 @@ test('every new preset is complete and in range', () => {
     const pr = PRESETS[name]; assert.ok(pr, name);
     for (const [k, v] of Object.entries(pr)) { const c = CONTROLS.find((x) => x.id === k && x.scope === 'p'); assert.ok(c, `${name}.${k} is a control`); assert.ok(v >= c.min - 1e-9 && v <= c.max + 1e-9, `${name}.${k}=${v} within ${c.min}..${c.max}`); }
     // a walk that never loses a foot
-    const pz = pose3(P(pr), {}, 0.3); assert.ok(pz.sides.R.reached && pz.sides.L.reached || true);
+    for (let i = 0; i < 96; i++) { const z = pose3(P(pr), {}, i / 96); assert.ok(z.sides.R.reached && z.sides.L.reached, `${name} loses a foot at ${i}/96`); }
   }
 });

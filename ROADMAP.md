@@ -352,3 +352,15 @@ Limits: human head only (dogs and species have a jaw channel but no mouth shapes
 ## Phase: more gait control (done, 2026-11-09)
 
 Gait tab (human): Foot roll (heel comes down over, heel lifts at), Swing (foot is highest at, reaches forward early), Left and right (far foot lands late, time on ground, lift, arm swing: an uneven walk or a limp that keeps every foot planted), a gait chart (which feet are down when, double support, steps a minute, legs a second, stride, uneven steps; the dog and species show four bars and feet in the air), and seven new presets: Limp, Shuffle, March, Stomp, Sneak, Strut, Waddle. Footprints follow the far foot's own timing. Not done: a real run with a flight phase for the human (the walk rig needs its pelvis height rebuilt for that), terrain (slopes and steps), and left and right differences for the dog and species.
+
+## Phase: rubber hose figure and more proportions (done, 2026-11-09)
+
+Research (thin, sources agree on the core): the 1920s to early 1930s style draws limbs as continuous tubes with no elbows or knees, rounded and bendy, with bouncy, elastic movement and squash and stretch to carry weight; characters have big round heads, pie-cut eyes, round gloved hands and big shoes; walks bounce, are drawn on twos, and swing the arms widely. See Esme Duncan's notes on the rubber hose style (esmeduncan.myblog.arts.ac.uk) and the Garagefarm overview (garagefarm.net).
+
+Built: a **Rubber hose** entry in the Figure menu. It is the human rig dressed differently (`model: 'hose'`), so every gait control, movement, lane, curve and the lip sync work on it. Each limb is one smooth tube through its three joints (Limb curve 1 is a single curve with no elbow or knee, 0 is a sharp joint), a pear-shaped body with shorts, a round head with a face patch, pie-cut eyes (or round, or dots), a nose, the full lip-sync mouth, white gloves with a thumb, big round shoes. Squash and stretch: the body swells at the bottom of the bounce and thins at the top. Colours for body, face, gloves, shoes and shorts. Round ears exist as an option and are off. Six walks, all on twos: Bouncy, Strut, Sneak, Skip, Stomp, Tired. It keeps its own proportions (big head, short neck and body, long arms, big hands and feet) apart from the human's.
+
+Nine new proportions for the human and the hose figure: waist length, chest length, upper arm, forearm, hand size, upper leg share (the leg keeps its length, so the walk does not change), foot size, limb thickness, body thickness. Head size goes up to 2.2.
+
+Also: the mouth tongue is now drawn for TH (the tip pokes out over the lower lip), L and R; Play with voice keeps the mouth in step with the device's voice (the voice sets the pace, the mouth starts with it and jumps to each word as the voice reaches it); two Stomp presets no longer lose a foot.
+
+Not done: arms and legs that stretch in length (only their width squashes); follow-through (overlap) on the hands and feet; a tail; a hose version of the animals.

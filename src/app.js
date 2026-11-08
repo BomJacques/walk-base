@@ -5,7 +5,7 @@ import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from '.
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
 import { EXPORT_DEFAULTS, exportPngZip, exportKeyFrames, exportMp4, videoSupport, contactSheet, deliver, summary, renderFrame, exportTimeline, manifest } from './export.js';
-import { CONTROLS, TABS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor } from './controls.js';
+import { CONTROLS, TABS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor, HOSE_PROPORTIONS } from './controls.js';
 import { SPECIES } from './dogdefaults.js';
 import { wordsFor } from './words.js';
 import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
@@ -28,9 +28,9 @@ import { menuButton, closeMenus, menuOwner } from './menu.js';
 const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The figures. The human has its own rig; the others are species of the dog's legged rig, each with its own attachments, saved performances and presets. */
-const FIGS = ['human', 'dog', 'theropod', 'bird', 'sauropod', 'ceratopsian'];
-const FIG_LABELS = { human: 'Human', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian' };
-const rigOfFig = (f) => (f === 'human' ? 'human' : 'dog');
+const FIGS = ['human', 'hose', 'dog', 'theropod', 'bird', 'sauropod', 'ceratopsian'];
+const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian' };
+const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, stageOnly: false,
@@ -157,6 +157,7 @@ function cleanLanes(raw) {
 }
 function adopt(raw) {
   if (raw.p?.rig === 'dog' || raw.p?.rig === 'human') S.p.rig = raw.p.rig;
+  if (raw.p?.model === 'hose' || raw.p?.model === 'mannequin') S.p.model = raw.p.model;
   if (SPECIES[raw.p?.dogSpecies]) S.p.dogSpecies = raw.p.dogSpecies;
   if (raw.bank && typeof raw.bank === 'object') for (const r of FIGS) { const b = raw.bank[r]; S.bank[r] = b ? { lanes: cleanLanes(b.lanes), perfLen: Math.max(0, Math.round(finite(b.perfLen))) } : null; }
   for (const c of CONTROLS) {
@@ -200,7 +201,7 @@ function load() {
 
 // ---------- attachments ----------
 const ATT_IMG_KEY = 'walkbase.attachimgs';
-const figKey = (p = S.p) => (p.rig === 'dog' ? (SPECIES[p.dogSpecies] ? p.dogSpecies : 'dog') : 'human');
+const figKey = (p = S.p) => (p.rig === 'dog' ? (SPECIES[p.dogSpecies] ? p.dogSpecies : 'dog') : p.model === 'hose' ? 'hose' : 'human');
 const wd = (s) => wordsFor(figKey())(s);
 const attachList = () => S.attach[figKey()] || (S.attach[figKey()] = []);
 const attachItem = (id = S.attachSel) => (id ? attachList().find((a) => a.id === id) || null : null);
@@ -686,10 +687,10 @@ const DOG_KEYS = Object.keys(DEFAULTS).filter((k) => k.startsWith('dog'));
 const SHARED_KEYS = ['rig', 'fps', 'cycleFrames', 'exposure', 'travel'];
 function applyPreset(name) {
   const rig = S.p.rig; const fig = figKey();
-  const mine = rig === 'dog' ? DOG_KEYS : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig');
+  const mine = rig === 'dog' ? DOG_KEYS : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
   const reset = Object.fromEntries(mine.map((k) => [k, DEFAULTS[k]]));
   const { camYaw, ...presetP } = presetsForFigure(fig)[name] || {}; // a preset may also turn the camera, to show its movement best
-  S.p = { ...S.p, ...reset, ...presetP, rig };
+  S.p = { ...S.p, ...reset, ...presetP, rig, model: S.p.model };
   if (camYaw != null) S.s.camYaw = camYaw;
   for (const k of SHARED_KEYS) if (!(k in (presetsForFigure(fig)[name] || {})) && k !== 'rig') S.p[k] = DEFAULTS[k];
   for (const id of Object.keys(S.motion)) if (rig === 'dog' ? id.startsWith('dog.') : !id.startsWith('dog.')) delete S.motion[id];
@@ -705,11 +706,15 @@ function setFigure(fig) {
   S.bank[figKey()] = { lanes: S.lanes, perfLen: S.perfLen };
   const b = S.bank[fig];
   S.lanes = b?.lanes ?? {}; S.perfLen = b?.perfLen ?? 0; S.ver++;
-  const rig = rigOfFig(fig); const wasRig = S.p.rig; const wasSpecies = S.p.dogSpecies;
+  const rig = rigOfFig(fig); const wasRig = S.p.rig; const wasSpecies = S.p.dogSpecies; const wasFig = figKey();
+  (S.rBank ||= {})[wasFig] = S.r; // each figure keeps its own proportions
+  S.r = S.rBank[fig] ?? (fig === 'hose' ? { ...HOSE_PROPORTIONS } : {});
+  if (rig === 'human') S.p.model = fig === 'hose' ? 'hose' : 'mannequin';
   S.p.rig = rig; S.sel = null; S.attachSel = null; S.frame = 0; S.clipLen = null; S.clipStart = 0;
   S.clip = clipsForFigure(fig)[0]?.id ?? '';
   if (rig === 'dog' && (wasRig === 'dog' || wasSpecies !== fig)) { S.p.dogSpecies = fig; applyPreset(Object.keys(presetsForFigure(fig))[0]); build(); render(); save(); return; }
   if (rig === 'dog') S.p.dogSpecies = fig;
+  if (rig === 'human' && (fig === 'hose' || wasFig === 'hose')) { applyPreset(Object.keys(presetsForFigure(fig))[0]); build(); render(); save(); return; } // a new walk for the new figure
   if (!(S.preset in presetsForFigure(fig))) S.preset = Object.keys(presetsForFigure(fig))[0];
   build(); render(); save();
 }
@@ -819,6 +824,7 @@ function play() {
   S.playing = true; last = performance.now(); acc = 0; setPlayButton(); raf = requestAnimationFrame(tick);
 }
 function pause() {
+  voiceToken++; try { if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel(); } catch { /* no voice */ } // pausing stops the voice too
   if (!S.playing) return;
   S.playing = false; cancelAnimationFrame(raf);
   if (S.recording) endTake();
@@ -1351,11 +1357,33 @@ function buildSpeechNow() {
   setMessage(`${S.speech.keys.length} mouth shapes from frame ${S.speech.start + 1} to ${S.speech.end + 1}.`);
 }
 function clearSpeech() { S.speech = null; S.mouthPreview = null; S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage('Speech cleared.'); }
+let voiceToken = 0;
+/** Jumps the playhead without stopping playback, for keeping the mouth in step with a voice. */
+function seekLive(f) { const n = cycleFrames(P()).frames.length; S.frame = Math.max(0, Math.min(n - 1, Math.round(f))); acc = 0; S.mouthPreview = null; render(); }
+/**
+ * The device's voice reads the text while the mouth plays. The voice sets the pace: its speed is chosen to fit the length of the speech,
+ * the mouth starts when the voice does, and each time the voice reaches a new word the mouth jumps to where that word begins.
+ */
 function playWithVoice() {
   const sp = S.speech; if (!sp) return;
-  pause(); setFrame(sp.start); play();
-  // The device's own voice reads the text as the mouth plays. Its timing is its own, so the two only roughly agree.
-  if (typeof speechSynthesis !== 'undefined' && sp.text) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(sp.text); u.rate = Math.min(2, Math.max(0.5, sp.speed)); speechSynthesis.speak(u); } catch { /* no voice on this device */ } }
+  pause(); setFrame(sp.start);
+  if (typeof speechSynthesis === 'undefined' || !sp.text) { play(); setMessage('There is no voice on this device. The mouth plays without sound.'); return; }
+  try {
+    const mark = ++voiceToken; let heard = false;
+    const u = new SpeechSynthesisUtterance(sp.text);
+    const secs = Math.max(0.3, (sp.end - sp.start) / S.p.fps);
+    u.rate = Math.min(2.5, Math.max(0.5, sp.text.length / 14 / secs)); // about 14 letters a second at a voice's normal speed
+    u.onstart = () => { if (mark === voiceToken) { seekLive(sp.start); play(); } };
+    u.onboundary = (e) => {
+      if (mark !== voiceToken || !S.playing || (e.name && e.name !== 'word')) return;
+      heard = true;
+      const w = [...(sp.words || [])].reverse().find((x) => x.c <= e.charIndex);
+      if (w) seekLive(w.f);
+    };
+    u.onend = () => { if (mark === voiceToken && !heard) setMessage('This voice does not say where each word is, so the mouth keeps its own pace. Change Speed to match it.'); };
+    speechSynthesis.speak(u);
+    setTimeout(() => { if (mark === voiceToken && !S.playing) play(); }, 1500); // a voice that is slow to start does not hold the mouth up
+  } catch { play(); }
 }
 function drawChart(canvas, id) {
   const ctx = canvas.getContext('2d'); const w = 96; const h = 64;
@@ -1368,7 +1396,7 @@ function speechSection() {
   const sp = S.speech;
   const num = (label, value, min, max, on, tid) => h('label', { class: 'field' }, h('span', null, label), h('input', { type: 'number', class: 'num', inputmode: 'numeric', min, max, value, testid: tid, onChange: (e) => on(Number(e.target.value)) }));
   const say = h('section', { class: 'group', testid: 'speech-say' }, h('h3', null, 'Say'),
-    figKey() === 'human' ? null : h('p', { class: 'hint' }, 'Mouth shapes are drawn on the human head for now. Choose Human in the Figure menu to see them.'),
+    S.p.rig === 'human' ? null : h('p', { class: 'hint' }, 'Mouth shapes are drawn on the human and rubber hose heads for now. Choose one of them in the Figure menu to see them.'),
     h('textarea', { class: 'speechtext', rows: 3, testid: 'speech-text', 'aria-label': 'What the head says', placeholder: 'Type what the head should say', onInput: (e) => { S.speechDraft = e.target.value; } }, S.speechDraft ?? sp?.text ?? ''),
     h('div', { class: 'btnrow' },
       num('Starts at frame', S.speechStart + 1, 1, 2400, (v) => { S.speechStart = Math.max(0, Math.round(v) - 1); }, 'speech-start'),
