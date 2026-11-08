@@ -94,7 +94,7 @@ export const CONTROLS = [
   b('s', 'showGizmo', 'View', 'Pivot around the figure', 'Axes gizmo', 'Small x, y, z guide: x forward, y up, z the figure right side.'),
   c('s', 'selectColor', 'View', 'Pivot around the figure', 'Selection colour', 'Highlight for the selected part.'),
   // Look
-  e('s', 'style', 'Look', 'Figure', 'Style', ['mannequin', 'stick', 'silhouette'], 'Mannequin is outlined limbs. Stick is joints and bones. Silhouette is one solid shape.'),
+  e('s', 'style', 'Look', 'Figure', 'Style', ['mannequin', 'outline', 'stick', 'silhouette'], 'Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape.'),
   n('s', 'lineWidth', 'Look', 'Figure', 'Line width', 'px', 0.5, 12, 0.25, 'At 1080 pixels tall. It scales with the canvas.'),
   c('s', 'lineColor', 'Look', 'Figure', 'Line colour', 'Outline and silhouette colour.'),
   c('s', 'fillColor', 'Look', 'Figure', 'Fill colour', 'Mannequin fill.'),
@@ -108,6 +108,7 @@ export const CONTROLS = [
   // Guides
   b('s', 'showGround', 'Guides', 'Ground', 'Ground line and ticks', 'Ticks stay on the ground, so a sliding foot shows.'),
   b('s', 'showFootprints', 'Guides', 'Ground', 'Footprints', 'Where each foot plants.'),
+  b('s', 'showFootLabels', 'Guides', 'Poses', 'Foot labels', 'Names the ankle, heel, ball and toe on the near foot.'),
   b('s', 'showArcs', 'Guides', 'Arcs', 'Motion arcs', 'Paths of the points you tick below through the cycle. Drag a dot to reshape the movement.'),
   b('s', 'arcDots', 'Guides', 'Arcs', 'Frame dots', 'One dot on the path for every frame, so the spacing shows speed and ease. Drag a dot to bend the path there.'),
   b('s', 'showLabels', 'Guides', 'Poses', 'Pose labels', 'Names CONTACT, DOWN, PASSING and UP on the frames where they fall.'),

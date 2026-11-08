@@ -97,7 +97,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 
 | Control | Figure | Unit | Range | Default | What it does |
 |---|---|---|---|---|---|
-| Style | both |  | mannequin, stick, silhouette | mannequin | Mannequin is outlined limbs. Stick is joints and bones. Silhouette is one solid shape. |
+| Style | both |  | mannequin, outline, stick, silhouette | mannequin | Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
 | Line width | both | px | 0.5 to 12 | 3 | At 1080 pixels tall. It scales with the canvas. |
 | Line colour | both |  | color | #26231f | Outline and silhouette colour. |
 | Fill colour | both |  | color | #f6f1e7 | Mannequin fill. |
@@ -115,6 +115,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 |---|---|---|---|---|---|
 | Ground line and ticks | both |  | bool | true | Ticks stay on the ground, so a sliding foot shows. |
 | Footprints | both |  | bool | true | Where each foot plants. |
+| Foot labels | both |  | bool | true | Names the ankle, heel, ball and toe on the near foot. |
 | Motion arcs | both |  | bool | false | Paths of the points you tick below through the cycle. Drag a dot to reshape the movement. |
 | Frame dots | both |  | bool | true | One dot on the path for every frame, so the spacing shows speed and ease. Drag a dot to bend the path there. |
 | Pose labels | both |  | bool | true | Names CONTACT, DOWN, PASSING and UP on the frames where they fall. |

@@ -2,7 +2,7 @@
 // World: x forward, y up, z the figure's right. Camera: yaw orbits about the vertical through the figure, pitch lifts it above (positive) or below.
 // Yaw 0 and pitch 0 is the side view, with the figure's right side toward you.
 import { cycleFrames, keyPhases } from './rig.js';
-import { pose3, footCorners, add, mul, apply } from './rig3.js';
+import { pose3, footCorners, footShape, footMarks, add, mul, apply } from './rig3.js';
 import { paramsAt, motionAt } from './automation.js';
 import { drawSampled } from './sampler.js';
 import { hull, circlePts } from './geom.js';
@@ -15,7 +15,7 @@ import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
 
 export const STYLE_DEFAULTS = Object.freeze({
-  style: 'mannequin',        // mannequin | stick | silhouette
+  style: 'mannequin',        // mannequin | outline | stick | silhouette
   lineWidth: 3,
   lineColor: '#26231f',
   fillColor: '#f6f1e7',
@@ -38,6 +38,7 @@ export const STYLE_DEFAULTS = Object.freeze({
   arcsDog: ['head', 'hip', 'paw.FR', 'paw.FL', 'paw.HR', 'paw.HL', 'tail'],
   arcDots: true,
   showLabels: true,
+  showFootLabels: true,
   showGizmo: true,
   showOnion: false,
   onionBefore: 2,
@@ -123,8 +124,12 @@ function buildShapes(pz, cam) {
     const role = side === 'R' ? 'near' : 'far';
     capsule(sd.hip, sd.knee, 0.088, 0.062, 'leg', side, role);
     capsule(sd.knee, sd.ankle, 0.058, 0.038, 'leg', side, role);
-    const fc = footCorners(pz, side).map(S);
-    shapes.push({ pts: hull(fc.map((q) => [q.x, q.y])), depth: S(sd.ankle).d, part: 'foot', side, role });
+    const fs3 = footShape(pz, side); const fa = fs3.a.map(S).map((q) => [q.x, q.y]); const fb = fs3.b.map(S).map((q) => [q.x, q.y]);
+    const area = (poly) => Math.abs(poly.reduce((t, q, i) => { const r = poly[(i + 1) % poly.length]; return t + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
+    const fh = hull([...fa, ...fb]); const big = area(fa) >= area(fb) ? fa : fb;
+    // Side on, one face is the shoe (with its dip at the instep). Turned toward the camera the faces spread apart, so the outline is their hull.
+    const shoePts = area(big) >= 0.9 * area(fh) ? big : fh;
+    shapes.push({ pts: shoePts, depth: S(sd.ankle).d, part: 'foot', side, role });
     capsule(sd.shoulder, sd.elbow, 0.05, 0.038, 'arm', side, role);
     capsule(sd.elbow, sd.wrist, 0.036, 0.028, 'forearm', side, role);
     const hc2 = add(sd.wrist, mul([sd.hand[0] - sd.wrist[0], sd.hand[1] - sd.wrist[1], sd.hand[2] - sd.wrist[2]], 0.6));
@@ -156,6 +161,8 @@ function paintShape(ctx, sh, cam, st, ghost) {
   sh.pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
   ctx.closePath();
   if (st.style === 'silhouette' && !ghost) { ctx.fillStyle = st.lineColor; ctx.fill(); return; }
+  // Outline: the whole figure's edge was already drawn in a first pass, so this fill covers every line inside it.
+  if (st.style === 'outline' && !ghost) { ctx.fillStyle = hexA(st.fillColor, 1); ctx.fill(); return; }
   if (st.style === 'mannequin') {
     ctx.fillStyle = ghost ? hexA(ghost, 0.1) : far ? hexA(st.farTint, st.farOpacity * 0.55) : hexA(st.fillColor, st.fillOpacity);
     ctx.fill();
@@ -220,11 +227,20 @@ function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
   if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (it.depth === 'behind' ? -0.0006 : 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);
+  if (st.style === 'outline' && !ghost) {
+    // First pass: every limb and the body, stroked twice as thick. The fills that follow leave only the outer edge, so arms, legs and body read as one outline with no lines crossing inside.
+    ctx.save(); ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw * 2.2; ctx.lineJoin = 'round';
+    for (const sh of shapes) {
+      if (sh.attach || sh.pts.length < 3 || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
+      ctx.beginPath(); sh.pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); ctx.stroke();
+    }
+    ctx.restore();
+  }
   for (const sh of shapes) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam); continue; }
     paintShape(ctx, sh, cam, st, ghost);
-    if ((sh.part === 'head' || sh.part === 'dog.head') && st.style === 'mannequin' && !ghost) {
+    if ((sh.part === 'head' || sh.part === 'dog.head') && (st.style === 'mannequin' || st.style === 'outline') && !ghost) {
       ctx.strokeStyle = st.lineColor; ctx.fillStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.9;
       for (const e of face.eyes) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9), 0, TAU); ctx.fill(); }
       if (face.dot) { ctx.beginPath(); ctx.arc(face.dot.x, face.dot.y, Math.max(2, cam.lw * 1.4), 0, TAU); ctx.fill(); }
@@ -449,6 +465,25 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   }
   ctx.restore();
 
+  if (layers.guides && layers.figure && st.showFootLabels && !dog && !pz.legs && st.style !== 'silhouette') {
+    // Names on the near foot: ankle, heel, ball and toe, each with a dot and a short leader line.
+    ctx.save();
+    ctx.font = `600 ${Math.round(11 * cam.k)}px system-ui, sans-serif`;
+    const marks = footMarks(pz, 'R').map((m) => ({ name: m.name, q: cam.p([m.p[0] + pz.pelvisX, m.p[1], m.p[2]]) }));
+    const by = Object.fromEntries(marks.map((m) => [m.name, m.q]));
+    const dir = by.toe.x >= by.heel.x ? 1 : -1; // which way the foot points on screen
+    const place = { ankle: [-dir * 22, -18], heel: [-dir * 20, 20], ball: [dir * 2, 26], toe: [dir * 22, 16] };
+    for (const m of marks) {
+      const [dx, dy] = place[m.name]; const k = cam.k;
+      const tx = m.q.x + dx * k, ty = m.q.y + dy * k;
+      ctx.strokeStyle = hexA(st.guideColor, 0.85); ctx.fillStyle = hexA(st.guideColor, 0.95); ctx.lineWidth = Math.max(1, cam.lw * 0.6);
+      ctx.beginPath(); ctx.moveTo(m.q.x, m.q.y); ctx.lineTo(tx, ty - (dy > 0 ? 8 : -2) * k); ctx.stroke();
+      ctx.beginPath(); ctx.arc(m.q.x, m.q.y, Math.max(2, 2.6 * k), 0, TAU); ctx.fill();
+      ctx.textAlign = dx * dir >= 0 && m.name !== 'ball' ? 'left' : m.name === 'ball' ? 'center' : 'right';
+      ctx.fillText(m.name, tx, ty + (dy > 0 ? 4 : -2) * k);
+    }
+    ctx.restore();
+  }
   const key = dog ? null : keyAt(params, ph.u, ph.step);
   if (layers.guides && st.showLabels && key) {
     ctx.save();

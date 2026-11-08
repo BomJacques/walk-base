@@ -1127,16 +1127,28 @@ function autoSection() {
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'clip-add', onClick: () => addClip(clip, S.clipStart, S.clipLen ?? clip.frames, S.clipK) }, `Add ${clip.label.toLowerCase()}`))));
 
   const targets = Object.keys(S.lanes).filter((t) => S.lanes[t].pts?.length);
-  const list = h('section', { class: 'group' }, h('h3', null, `Automation lanes (${targets.length})`));
-  if (!targets.length) list.append(h('p', { class: 'hint' }, 'Nothing is automated yet.'));
-  for (const t of targets) {
-    list.append(h('div', { class: 'laneitem', testid: `lane-${t}` },
-      h('span', { class: 'lname' }, targetLabel(t), h('small', null, ` ${S.lanes[t].pts.length} points`)),
-      h('button', { type: 'button', class: 'btn tiny', testid: `lane-edit-${t}`, onClick: () => openLaneEditor(t) }, 'Edit'),
-      h('button', { type: 'button', class: 'btn tiny', 'aria-label': `Clear ${targetLabel(t)}`, testid: `lane-clear-${t}`, onClick: () => { delete S.lanes[t]; S.ver++; if (laneEd?.target === t) closeEditor(); markCustom(); buildStrip(); renderPanel(); render(); save(); } }, 'Clear')));
+  // Lanes are sorted into groups: timing, the gait settings, then the moving parts by region of the body.
+  const LANE_ORDER = ['Speed and timing', 'Gait settings', 'Body settings', 'Body', 'Core', 'Head', 'Arms', 'Front legs', 'Legs', 'Hind legs', 'Tail', 'Other'];
+  const laneGroup = (t) => {
+    const k = parseTarget(t);
+    if (k?.kind === 'cadence') return 'Speed and timing';
+    if (k?.kind === 'param') { const c = CONTROLS.find((q) => q.scope === 'p' && q.id === k.id); return c?.group === 'Timing' ? 'Speed and timing' : c?.tab === 'Gait' ? 'Gait settings' : 'Body settings'; }
+    if (k?.kind === 'channel') { const part = CHANNEL_BY_ID[k.id]?.part ?? ''; return PARTS.find((p) => p.id === part || p.id === `dog.${part}`)?.group ?? 'Other'; }
+    return 'Other';
+  };
+  const byGroup = new Map();
+  for (const t of targets) { const g = laneGroup(t); if (!byGroup.has(g)) byGroup.set(g, []); byGroup.get(g).push(t); }
+  const laneRow = (t) => h('div', { class: 'laneitem', testid: `lane-${t}` },
+    h('span', { class: 'lname' }, targetLabel(t), h('small', null, ` ${S.lanes[t].pts.length} points`)),
+    h('button', { type: 'button', class: 'btn tiny', testid: `lane-edit-${t}`, onClick: () => openLaneEditor(t) }, 'Edit'),
+    h('button', { type: 'button', class: 'btn tiny', 'aria-label': `Clear ${targetLabel(t)}`, testid: `lane-clear-${t}`, onClick: () => { delete S.lanes[t]; S.ver++; if (laneEd?.target === t) closeEditor(); markCustom(); buildStrip(); renderPanel(); render(); save(); } }, 'Clear'));
+  if (!targets.length) host.append(h('section', { class: 'group' }, h('h3', null, 'Automation lanes (0)'), h('p', { class: 'hint' }, 'Nothing is automated yet.')));
+  for (const g of [...LANE_ORDER, ...[...byGroup.keys()].filter((x) => !LANE_ORDER.includes(x))]) {
+    const ts = byGroup.get(g); if (!ts) continue;
+    ts.sort((x, y) => targetLabel(x).localeCompare(targetLabel(y)));
+    host.append(h('section', { class: 'group', testid: `lanes-${g.toLowerCase().replace(/[^a-z]+/g, '-')}` }, h('h3', null, `Lanes: ${g} (${ts.length})`), ts.map(laneRow)));
   }
-  if (targets.length) list.append(h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'lanes-clear-all', onClick: () => { S.lanes = {}; S.ver++; closeEditor(true); renderPanel(); buildStrip(); render(); save(); } }, 'Clear all automation')));
-  host.append(list);
+  if (targets.length) host.append(h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'lanes-clear-all', onClick: () => { S.lanes = {}; S.ver++; closeEditor(true); renderPanel(); buildStrip(); render(); save(); } }, 'Clear all automation (' + targets.length + ')')));
   return host;
 }
 

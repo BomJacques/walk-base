@@ -124,6 +124,26 @@ export function pose3(params, motion, u, extra = null) {
   return { u: uw, pelvisX: extra?.worldX ?? uw * 2 * p.stepLength, params: p, hw, pelvis: P, Rp, R1, R2, R3, Rn, Rh, base0, j1, j2, j3, neckBase, neckTop, headC, headR, sides };
 }
 
+/** A foot's local frame to world: x forward along the sole, y up from the ankle, z across. */
+const footPt = (sd, x, y, z) => add(sd.ankle, add(mul(sd.foot.fx, x), add(mul(sd.foot.fy, y), mul(sd.foot.lat, z))));
+/** Outline of a shoe-shaped foot: a rounded heel, a collar at the ankle, a slope over the instep, a toe cap that tapers and a flat sole. Each profile point is [forward, up, half width]. */
+const SHOE = [ // in order round the outline: a squared heel, a high collar at the ankle, a gentle slope over the instep, a blunt toe box, a flat sole with a lifted arch
+  [-0.072, -0.075, 0.032], [-0.082, -0.03, 0.036], [-0.07, 0.025, 0.037], [-0.05, 0.056, 0.037],
+  [0.0, 0.046, 0.04], [0.07, 0.022, 0.044], [0.14, 0.0, 0.048], [0.23, -0.012, 0.05], [0.285, -0.02, 0.048],
+  [0.305, -0.04, 0.044], [0.305, -0.065, 0.044], [0.295, -0.075, 0.044], [0.2, -0.075, 0.05], [0.12, -0.067, 0.042], [0.0, -0.067, 0.034], [-0.02, -0.075, 0.032],
+];
+/** Both faces of the shoe as ordered outlines (the near side and the far side), world space. Seen from the side either one is the shoe; seen from above the two spread to its width. */
+export function footShape(pz, side) {
+  const sd = pz.sides[side];
+  const face = (sg) => SHOE.map(([x, y, hw]) => footPt(sd, x, y, sg * hw));
+  return { a: face(1), b: face(-1) };
+}
+/** Named places on the foot (world space), for labels. */
+export function footMarks(pz, side) {
+  const sd = pz.sides[side];
+  return [['ankle', footPt(sd, 0, 0, 0)], ['heel', footPt(sd, -0.078, -0.06, 0)], ['ball', footPt(sd, 0.2, -0.075, 0)], ['toe', footPt(sd, 0.3, -0.07, 0)]].map(([name, p]) => ({ name, p }));
+}
+
 /** Corners of a foot box in world space, for drawing and tests. */
 export function footCorners(pz, side) {
   const sd = pz.sides[side];
