@@ -1,7 +1,7 @@
 // 3D walk rig. Joints are in leg lengths: x forward, y up, z to the figure's right (toward the camera in the default side view).
 // The built-in motion is the planar walk from rig.js plus the 3D parts a side view hides: hip twist, hip drop, shoulder counter-rotation,
 // side sway and toe-out. Every moving part is a channel from motion.js, so any of it can be tuned or drawn by hand.
-import { BODY, DEFAULTS, foot, LEG_LENGTH } from './rig.js';
+import { BODY, DEFAULTS, foot, sideGait, LEG_LENGTH } from './rig.js';
 import { makeEvaluator } from './motion.js';
 
 const wrap = (u) => u - Math.floor(u);
@@ -96,7 +96,8 @@ export function pose3(params, motion, u, extra = null) {
     const k = (id) => c(`${id}.${side}`);
     const sw = BODY.shoulderWidth * sc('shoulderWidth');
     const shoulder = add(j3, add(apply(R3, [k('girdle.x'), -BODY.shoulderDrop, s * sw]), [0, k('girdle.y'), 0]));
-    const Ru = mm(R3, mm(Rpitch(-k('arm.pitch')), Rroll(-s * k('arm.roll'))));
+    const armScale = side === 'L' ? Math.max(0, 1 + (p.asymArm || 0)) : 1; // the far arm can swing more or less
+    const Ru = mm(R3, mm(Rpitch(-k('arm.pitch') * armScale), Rroll(-s * k('arm.roll'))));
     const aL = sc('arm');
     const elbow = add(shoulder, apply(Ru, [0, -BODY.upperArm * aL, 0]));
     const Rf = mm(Ru, Rpitch(-k('elbow.flex')));
@@ -104,8 +105,9 @@ export function pose3(params, motion, u, extra = null) {
     const Rw = mm(Rf, Rpitch(-k('wrist.flex')));
     const hand = add(wrist, apply(Rw, [0, -BODY.hand * aL, 0]));
 
-    const w = wrap(uw - (side === 'R' ? 0 : 0.5));
-    const f = foot(w, p, d);
+    const sg = sideGait(p, side);
+    const w = wrap(uw - sg.off);
+    const f = foot(w, sg.p, sg.d);
     const ankle = [f.x + k('foot.x'), f.y + k('foot.y'), s * k('foot.z')];
     const hip = add(P, apply(Rp, [0, 0, s * hw]));
     const fwdDir = norm([Rp[0], 0, Rp[2]]);
@@ -119,7 +121,7 @@ export function pose3(params, motion, u, extra = null) {
     const lat = [Math.sin(psi), 0, Math.cos(psi)];
     const fx = add(mul(fHead, Math.cos(theta)), [0, Math.sin(theta), 0]);
     const fy = add(mul(fHead, -Math.sin(theta)), [0, Math.cos(theta), 0]);
-    sides[side] = { s, shoulder, elbow, wrist, hand, hip, knee: leg.knee, ankle: leg.ankle, reached: leg.reached, stance: w < p.duty, w, foot: { fx, fy, lat, theta }, frames: { Ru, Rf, Rw } };
+    sides[side] = { s, shoulder, elbow, wrist, hand, hip, knee: leg.knee, ankle: leg.ankle, reached: leg.reached, stance: w < sg.p.duty, w, foot: { fx, fy, lat, theta }, frames: { Ru, Rf, Rw } };
   }
   return { u: uw, pelvisX: extra?.worldX ?? uw * 2 * p.stepLength, params: p, hw, pelvis: P, Rp, R1, R2, R3, Rn, Rh, base0, j1, j2, j3, neckBase, neckTop, headC, headR, sides };
 }

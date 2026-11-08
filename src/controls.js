@@ -25,6 +25,14 @@ export const CONTROLS = [
   n('p', 'heelStrike', 'Gait', 'Feet', 'Heel strike', '°', 0, 40, 1, 'Toe-up angle at contact.'),
   n('p', 'toeOff', 'Gait', 'Feet', 'Toe off', '°', 0, 60, 1, 'Heel-up angle at push-off.'),
   n('p', 'swingToe', 'Gait', 'Feet', 'Swing toe', '°', -20, 40, 1, 'Toe angle while the foot swings through.'),
+  n('p', 'heelDown', 'Gait', 'Foot roll', 'Heel comes down over', 'stance', 0.04, 0.4, 0.01, 'How much of the time on the ground the foot takes to roll from heel to flat. Small is a stamp, large is a slow roll.'),
+  n('p', 'heelUp', 'Gait', 'Foot roll', 'Heel lifts at', 'stance', 0.35, 0.85, 0.01, 'When in the time on the ground the heel starts to rise. Early is a long push off the toes, late is a flat-footed walk.'),
+  n('p', 'liftPeak', 'Gait', 'Swing', 'Foot is highest at', 'swing', 0.25, 0.7, 0.01, 'Where in the swing the foot reaches its highest point. Early is a quick pick-up, late is a high step that stamps down.'),
+  n('p', 'swingReach', 'Gait', 'Swing', 'Foot reaches forward early', '', 0, 1, 0.01, '0 swings the foot at an even pace. 1 brings it forward early and lets it hang before it lands.'),
+  n('p', 'asymTiming', 'Gait', 'Left and right', 'Far foot lands late', 'cycle', -0.12, 0.12, 0.005, 'Moves the far foot off its half-cycle: the two steps become unequal, one short and one long.'),
+  n('p', 'asymDuty', 'Gait', 'Left and right', 'Far foot time on ground', '', -0.15, 0.15, 0.005, 'Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp.'),
+  n('p', 'asymLift', 'Gait', 'Left and right', 'Far foot lift', '', -0.8, 0.8, 0.01, 'The far foot lifts more (positive) or less (negative) than the near one.'),
+  n('p', 'asymArm', 'Gait', 'Left and right', 'Far arm swing', '', -0.8, 0.8, 0.01, 'The far arm swings more or less than the near one.'),
   // Body
   n('p', 'lean', 'Body', 'Torso', 'Forward lean', '°', -15, 30, 0.5, 'Torso tilt. Negative leans back.'),
   n('p', 'torsoSway', 'Body', 'Torso', 'Torso rock', '°', 0, 10, 0.1, 'Extra tilt that rocks with each step.'),
@@ -150,6 +158,13 @@ export const PRESETS = {
   Confident: { stepLength: 0.86, bob: 0.1, armSwing: 32, lean: 0, torsoSway: 2.4, headBob: 0.6, duty: 0.58, footLift: 0.18, elbowSwing: 34 },
   Brisk: { stepLength: 0.95, bob: 0.09, duty: 0.56, armSwing: 34, lean: 6, cycleFrames: 16, footLift: 0.2, elbowBase: 40, elbowSwing: 30 },
   Heavy: { stepLength: 0.66, bob: 0.13, duty: 0.64, footLift: 0.09, lean: 6, armSwing: 14, elbowBase: 20, headNod: 3.5, cycleFrames: 32, heelStrike: 18, torsoSway: 3 },
+  Limp: { stepLength: 0.6, duty: 0.62, asymDuty: -0.1, asymTiming: 0.05, asymLift: -0.4, asymArm: -0.5, bob: 0.07, lean: 5, headNod: 3, torsoSway: 3, pelvisRoll: 6, cycleFrames: 30, footLift: 0.1 },
+  Shuffle: { stepLength: 0.42, duty: 0.68, footLift: 0.03, heelStrike: 4, toeOff: 8, armSwing: 8, lean: 9, bob: 0.03, headNod: 3, cycleFrames: 32, heelDown: 0.35, heelUp: 0.8, liftPeak: 0.5 },
+  March: { stepLength: 0.8, duty: 0.56, footLift: 0.3, armSwing: 44, elbowBase: 80, elbowSwing: 6, lean: 0, headBob: 1, bob: 0.05, heelStrike: 18, cycleFrames: 20, liftPeak: 0.5, swingReach: 0.5, torsoSway: 0.5 },
+  Stomp: { stepLength: 0.7, duty: 0.6, footLift: 0.22, bob: 0.14, heelStrike: 30, heelDown: 0.07, liftPeak: 0.3, swingReach: 0.95, legExtend: 0.995, armSwing: 22, lean: 4, cycleFrames: 22, torsoSway: 3 },
+  Sneak: { stepLength: 0.5, duty: 0.72, footLift: 0.22, bob: 0.03, lean: 12, armSwing: 6, cycleFrames: 40, heelStrike: 3, headBob: 0.9, legExtend: 0.9, liftPeak: 0.55, heelDown: 0.3, torsoSway: 0.6 },
+  Strut: { stepLength: 0.8, duty: 0.58, footLift: 0.15, bob: 0.09, lean: -2, armSwing: 30, headBob: 0.7, pelvisRoll: 7, pelvisYaw: 12, sway: 0.05, torsoSway: 3, shoulderCounter: 14, toeOut: 12, cycleFrames: 28 },
+  Waddle: { stepLength: 0.5, duty: 0.64, bob: 0.06, pelvisRoll: 9, sway: 0.07, torsoSway: 5, toeOut: 22, stepWidth: 0.12, armSwing: 10, armOut: 14, lean: 2, cycleFrames: 34, headNod: 4 },
   Tired: { stepLength: 0.5, bob: 0.05, footLift: 0.05, lean: 11, armSwing: 8, duty: 0.68, cycleFrames: 32, headNod: 4, headBob: 0, heelStrike: 6, toeOff: 20, legExtend: 0.95 },
 };
 

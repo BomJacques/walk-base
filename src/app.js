@@ -1,5 +1,5 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
-import { DEFAULTS, cycleFrames, cycleTravel, foot } from './rig.js';
+import { DEFAULTS, cycleFrames, cycleTravel, foot, sideGait, gaitSummary, supportStats } from './rig.js';
 import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, paramsAt, motionAt, integrate, Recorder, laneValue } from './automation.js';
 import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
@@ -9,7 +9,7 @@ import { CONTROLS, TABS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, show
 import { SPECIES } from './dogdefaults.js';
 import { wordsFor } from './words.js';
 import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
-import { dogPlants } from './dog3.js';
+import { dogPlants, pawPhase } from './dog3.js';
 import { PARTS, CHANNEL_BY_ID, partChannels, partLabel, makeEvaluator, sampleFinal, isEdited, allowedFrequencies } from './motion.js';
 import { CurveEditor, mirrorPoints } from './curves.js';
 import { cleanPhys, STRIP_LIMITS } from './stripdefs.js';
@@ -45,7 +45,7 @@ const rec = new Recorder();
 const REF_KEY = 'walkbase.ref';
 const REF_DEFAULTS = { on: true, opacity: 0.5, size: 1, x: 0, y: 0, ground: 0.9, flip: false, export: false };
 const REF = { ...REF_DEFAULTS, img: null, name: '', data: null };
-const contact = (p) => foot(0, p, p.stepLength * p.duty);
+const contact = (p, side = 'R') => { const g = sideGait({ ...DEFAULTS, ...p }, side); return foot(0, g.p, g.d); };
 let perfCache = null;
 /** The performance the figure follows: phase and position at every frame. Null when there is no automation and one cycle is all there is. */
 function perfData() {
@@ -1284,6 +1284,7 @@ function renderPanel() {
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
     if (S.tab === 'Speech') host.append(speechSection());
+    if (S.tab === 'Gait') host.append(gaitChartSection());
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
     for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group' }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
     if (S.tab === 'View') host.append(viewExtras());
@@ -1295,6 +1296,47 @@ function renderPanel() {
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
   document.querySelector('.tab[aria-selected="true"]')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
   setTimeout(refreshSparks, 0);
+}
+
+// ---------- the gait chart: which feet are down when ----------
+function drawGaitChart(cv, rows) {
+  const cs = getComputedStyle(document.documentElement); const tok = (n, d) => cs.getPropertyValue(n).trim() || d;
+  const acc = tok('--accent', '#2b67e8'); const line = tok('--line', '#d7d7dd'); const ink = tok('--ink-2', '#5b5c66'); const soft = tok('--accent-soft', '#e2eaff');
+  const W = 560; const rowH = 28; const H = rows.length * rowH + 24; const dpr = 2;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
+  const x0 = 100; const wBar = W - x0 - 10;
+  ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = ink; ctx.textAlign = 'center';
+  for (const [u, l] of [[0, '0'], [0.25, '¼'], [0.5, '½'], [0.75, '¾'], [1, '1']]) { ctx.fillText(l, x0 + u * wBar, 8); ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(x0 + u * wBar, 15); ctx.lineTo(x0 + u * wBar, H - 4); ctx.stroke(); }
+  rows.forEach((r, i) => {
+    const y = 20 + i * rowH;
+    ctx.fillStyle = ink; ctx.textAlign = 'left'; ctx.fillText(r.name, 4, y + 9);
+    ctx.fillStyle = soft; ctx.fillRect(x0, y, wBar, 18);
+    const span = (a, b) => { ctx.fillStyle = acc; ctx.fillRect(x0 + a * wBar, y, (b - a) * wBar, 18); };
+    const s = ((r.start % 1) + 1) % 1; const e = s + r.duty;
+    if (e <= 1) span(s, e); else { span(s, 1); span(0, e - 1); }
+    ctx.fillStyle = tok('--ink', '#1c1c20'); ctx.beginPath(); ctx.moveTo(x0 + s * wBar - 4, y - 3); ctx.lineTo(x0 + s * wBar + 4, y - 3); ctx.lineTo(x0 + s * wBar, y + 3); ctx.closePath(); ctx.fill(); // the contact
+  });
+}
+function gaitChartSection() {
+  const dog = S.p.rig === 'dog';
+  let rows; const facts = [];
+  if (dog) {
+    const names = { HR: 'Hind right', HL: 'Hind left', FR: 'Front right', FL: 'Front left' };
+    rows = ['HR', 'HL', 'FR', 'FL'].map((l) => ({ name: names[l], start: pawPhase(S.p.dogGait, l), duty: S.p.dogDuty }));
+    const st = supportStats(rows); const cps = S.p.fps / Math.max(1, S.p.cycleFrames);
+    facts.push(`${st.mean.toFixed(1)} feet down on average`, st.flight > 0.01 ? `in the air ${Math.round(st.flight * 100)}% of the cycle` : 'never in the air', `${cps.toFixed(1)} cycles a second`, `stride ${S.p.dogStride.toFixed(2)}`);
+  } else {
+    const g = gaitSummary(S.p); rows = g.rows;
+    facts.push(`both feet down ${Math.round(g.doubleSupport * 100)}% of the time`, g.flight > 0.01 ? `in the air ${Math.round(g.flight * 100)}%` : null, `${Math.round(g.stepsPerMin)} steps a minute`, `${g.speed.toFixed(2)} legs a second`, `stride ${g.stride.toFixed(2)} legs`, Math.abs(g.stepRatio - 1) > 0.03 ? `uneven steps (${g.stepRatio.toFixed(2)} to 1)` : null);
+  }
+  const cv = document.createElement('canvas'); cv.className = 'gaitchart'; cv.setAttribute('role', 'img');
+  cv.setAttribute('aria-label', `Gait chart: when each foot is on the ground over one cycle. ${facts.filter(Boolean).join(', ')}.`);
+  drawGaitChart(cv, rows);
+  return h('section', { class: 'group', testid: 'gait-chart' }, h('h3', null, 'Gait chart'), cv,
+    h('p', { class: 'hint', testid: 'gait-facts' }, facts.filter(Boolean).join('  ·  ')),
+    h('p', { class: 'hint' }, 'One cycle left to right. A filled bar is a foot on the ground; the marker is where it lands. Change the settings below and the bars follow.'));
 }
 
 // ---------- speech: text to mouth shapes ----------
@@ -1319,7 +1361,7 @@ function drawChart(canvas, id) {
   const ctx = canvas.getContext('2d'); const w = 96; const h = 64;
   canvas.width = w * 2; canvas.height = h * 2; ctx.scale(2, 2);
   ctx.fillStyle = '#f6f1e7'; ctx.fillRect(0, 0, w, h);
-  paintMouth(ctx, id, ([z, y]) => ({ x: w / 2 + z * 86, y: h * 0.56 - y * 86 }), { line: '#26231f', lw: 2 });
+  paintMouth(ctx, id, ([z, y]) => ({ x: w / 2 + z * 70, y: h * 0.5 - y * 70 }), { line: '#26231f', lw: 2 });
 }
 function speechSection() {
   const wrap = h('div', { class: 'speech' });

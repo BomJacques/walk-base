@@ -19,6 +19,14 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Heel strike | human | ° | 0 to 40 | 14 | Toe-up angle at contact. |
 | Toe off | human | ° | 0 to 60 | 32 | Heel-up angle at push-off. |
 | Swing toe | human | ° | -20 to 40 | 8 | Toe angle while the foot swings through. |
+| Heel comes down over | human | stance | 0.04 to 0.4 | 0.18 | How much of the time on the ground the foot takes to roll from heel to flat. Small is a stamp, large is a slow roll. |
+| Heel lifts at | human | stance | 0.35 to 0.85 | 0.52 | When in the time on the ground the heel starts to rise. Early is a long push off the toes, late is a flat-footed walk. |
+| Foot is highest at | human | swing | 0.25 to 0.7 | 0.42 | Where in the swing the foot reaches its highest point. Early is a quick pick-up, late is a high step that stamps down. |
+| Foot reaches forward early | human |  | 0 to 1 | 0.85 | 0 swings the foot at an even pace. 1 brings it forward early and lets it hang before it lands. |
+| Far foot lands late | human | cycle | -0.12 to 0.12 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
+| Far foot time on ground | human |  | -0.15 to 0.15 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
+| Far foot lift | human |  | -0.8 to 0.8 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
+| Far arm swing | human |  | -0.8 to 0.8 | 0 | The far arm swings more or less than the near one. |
 | Gait | dog |  | walk, trot, pace, gallop, run, hop | walk | Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between. |
 | Stride | dog | heights | 0.1 to 5 | 0.95 | Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster. |
 | Time on the ground | dog |  | 0.15 to 0.85 | 0.68 | Fraction of the cycle each paw is down. |

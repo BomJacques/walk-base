@@ -29,6 +29,15 @@ export const DEFAULTS = Object.freeze({
   heelStrike: 14,       // degrees, toe up at contact
   toeOff: 32,           // degrees, heel up at push off
   swingToe: 8,          // degrees, toe angle mid swing
+  heelDown: 0.18,       // fraction of the stance the heel takes to come down after contact
+  heelUp: 0.52,         // fraction of the stance at which the heel starts to lift
+  liftPeak: 0.42,       // fraction of the swing at which the foot is highest
+  swingReach: 0.85,     // how early the swinging foot is brought forward (0 even, 1 early)
+  // the far (left) foot against the near one: an uneven walk, a limp
+  asymTiming: 0,        // cycle fraction the far foot lands late
+  asymDuty: 0,          // far foot time on the ground, added to duty
+  asymLift: 0,          // far foot lift, as a fraction more or less
+  asymArm: 0,           // far arm swing, as a fraction more or less
   // upper body
   lean: 4,              // degrees forward
   torsoSway: 1.6,       // degrees of torso rock per step
@@ -88,8 +97,9 @@ export function foot(w, p, d) {
     const k = w / s;
     // Planted: the ankle holds one world position, so relative to a pelvis moving at constant speed it slides back linearly.
     let theta = 0;
-    if (k < 0.18) theta = hs * (1 - smooth(k / 0.18));
-    else if (k > 0.52) theta = -to * smooth((k - 0.52) / 0.48);
+    const hd = clamp(p.heelDown ?? 0.18, 0.02, 0.5); const hu = clamp(p.heelUp ?? 0.52, hd + 0.05, 0.95);
+    if (k < hd) theta = hs * (1 - smooth(k / hd));
+    else if (k > hu) theta = -to * smooth((k - hu) / (1 - hu));
     const sh = pivotShift(theta);
     return { x: d - 2 * d * k + sh.dx, y: BODY.ankleH + sh.dy, theta };
   }
@@ -101,12 +111,48 @@ export function foot(w, p, d) {
   const x1 = d + b.dx;
   const ease = smooth(k);
   // The swing foot is brought forward early so it passes the support ankle about 40% through the swing.
-  const prog = 0.85 * (1 - Math.pow(1 - k, 1.8)) + 0.15 * ease;
+  const reach = clamp(p.swingReach ?? 0.85, 0, 1);
+  const prog = reach * (1 - Math.pow(1 - k, 1.8)) + (1 - reach) * ease;
   const x = x0 + (x1 - x0) * prog;
   const base = (BODY.ankleH + a.dy) * (1 - ease) + (BODY.ankleH + b.dy) * ease;
-  const lift = p.footLift * Math.pow(Math.sin(Math.PI * Math.pow(clamp(k, 0, 1), 0.8)), 1.3);
+  const peak = clamp(p.liftPeak ?? 0.42, 0.15, 0.8); // the exponent that puts the highest point there
+  const lift = p.footLift * Math.pow(Math.sin(Math.PI * Math.pow(clamp(k, 0, 1), Math.log(0.5) / Math.log(peak))), 1.3);
   const theta = k < 0.5 ? -to + (rad(p.swingToe) + to) * smooth(k / 0.5) : rad(p.swingToe) + (hs - rad(p.swingToe)) * smooth((k - 0.5) / 0.5);
   return { x, y: base + lift, theta };
+}
+
+/**
+ * What one foot does in the cycle. The near foot (R) is the reference; the far foot (L) lands half a cycle later,
+ * shifted by asymTiming, and can stay down for a different time and lift differently. Returns the gait the foot follows,
+ * its phase offset and the stride half-length d (so a planted foot still holds one place on the ground).
+ */
+export function sideGait(params, side) {
+  const p = params;
+  if (side === 'R' || side === 'right' ) return { p, off: 0, d: p.stepLength * p.duty };
+  const duty = clamp(p.duty + (p.asymDuty || 0), 0.52, 0.88);
+  const q = { ...p, duty, footLift: p.footLift * Math.max(0, 1 + (p.asymLift || 0)) };
+  return { p: q, off: 0.5 + (p.asymTiming || 0), d: p.stepLength * duty };
+}
+
+/** Feet on the ground over the cycle, from { start, duty } rows: the average number down, the share of time with none down, with all down. */
+export function supportStats(rows, n = 400) {
+  let sum = 0; let none = 0; let all = 0;
+  for (let i = 0; i < n; i++) {
+    const u = i / n; let down = 0;
+    for (const r of rows) if (wrap(u - r.start) < r.duty) down++;
+    sum += down; if (down === 0) none++; if (down === rows.length) all++;
+  }
+  return { mean: sum / n, flight: none / n, all: all / n };
+}
+
+/** A walk in numbers: stance bars, double support, cadence, speed and stride. */
+export function gaitSummary(params) {
+  const p = { ...DEFAULTS, ...params };
+  const near = sideGait(p, 'R'); const far = sideGait(p, 'L');
+  const rows = [{ name: 'Near foot', start: 0, duty: near.p.duty }, { name: 'Far foot', start: wrap(far.off), duty: far.p.duty }];
+  const st = supportStats(rows);
+  const perSec = p.fps / Math.max(1, p.cycleFrames);
+  return { rows, doubleSupport: Math.max(0, st.mean - 1 + st.flight), flight: st.flight, stepsPerMin: 120 * perSec, speed: 2 * p.stepLength * perSec, stride: 2 * p.stepLength, stepRatio: wrap(far.off) / Math.max(1e-6, 1 - wrap(far.off)) };
 }
 
 /** Planar forward-kinematics helper: point at distance len in direction angle (from straight down, forward positive). */
@@ -138,11 +184,12 @@ export function pose(params, u) {
 
   const legs = {};
   for (const side of ['left', 'right']) {
-    const w = wrap(uw - (side === 'left' ? 0 : 0.5));
-    const f = foot(w, p, d);
+    const sg = sideGait(p, side === 'left' ? 'R' : 'L');
+    const w = wrap(uw - sg.off);
+    const f = foot(w, sg.p, sg.d);
     const ankle = { x: f.x, y: f.y };
     const r = ikLeg(hip, ankle);
-    legs[side] = { w, hip: { ...hip }, knee: r.knee, ankle: r.ankle, theta: f.theta, reached: r.reached, stance: w < p.duty };
+    legs[side] = { w, hip: { ...hip }, knee: r.knee, ankle: r.ankle, theta: f.theta, reached: r.reached, stance: w < sg.p.duty };
   }
 
   // Upper body.

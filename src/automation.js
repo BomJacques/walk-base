@@ -76,8 +76,8 @@ export function integrate(base, lanes, T, cycleFrames, footContact = null) {
     u[t + 1] = u[t] + du;
     x[t + 1] = x[t] + du * (p.rig === 'dog' ? p.dogStride : 2 * p.stepLength);
     if (footContact) {
-      for (const [side, off] of [['R', 0], ['L', 0.5]]) {
-        if (Math.floor(u[t + 1] - off + 1e-9) > Math.floor(u[t] - off + 1e-9)) plants.push({ side, t: t + 1, x: x[t + 1] + footContact(paramsAt(base, lanes, t + 1)).x });
+      for (const [side, off] of [['R', 0], ['L', 0.5 + (p.asymTiming || 0)]]) {
+        if (Math.floor(u[t + 1] - off + 1e-9) > Math.floor(u[t] - off + 1e-9)) plants.push({ side, t: t + 1, x: x[t + 1] + footContact(paramsAt(base, lanes, t + 1), side).x });
       }
     }
   }

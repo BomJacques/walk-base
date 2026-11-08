@@ -1,7 +1,7 @@
 // Draws the 3D rig with an orbit camera. One function serves the stage, the contact sheet and every export.
 // World: x forward, y up, z the figure's right. Camera: yaw orbits about the vertical through the figure, pitch lifts it above (positive) or below.
 // Yaw 0 and pitch 0 is the side view, with the figure's right side toward you.
-import { cycleFrames, keyPhases } from './rig.js';
+import { cycleFrames, keyPhases, sideGait } from './rig.js';
 import { pose3, footCorners, footShape, footMarks, add, mul, apply } from './rig3.js';
 import { paramsAt, motionAt } from './automation.js';
 import { drawSampled } from './sampler.js';
@@ -391,12 +391,12 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       }
     } else if (st.showFootprints) {
       // Where each foot plants. They stay fixed on the ground while the body passes over them.
-      const d = step * params.duty;
       ctx.fillStyle = hexA(st.guideColor, 0.38);
       const c0 = Math.floor((target[0] - 4) / (2 * step)); const c1 = Math.ceil((target[0] + 4) / (2 * step));
       for (let c = c0; c <= c1; c++) {
-        for (const [phase, zs] of [[0, 1], [0.5, -1]]) {
-          const ax = (c + phase) * 2 * step + d;
+        for (const [sd, zs] of [['R', 1], ['L', -1]]) {
+          const g = sideGait(params, sd);
+          const ax = (c + g.off) * 2 * step + g.d;
           const z = zs * (params.stepWidth ?? 0.075);
           const q = [[ax - 0.07, z - 0.045], [ax + 0.26, z - 0.045], [ax + 0.26, z + 0.045], [ax - 0.07, z + 0.045]].map(([x, zz]) => cam.p([x, 0, zz]));
           ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill();

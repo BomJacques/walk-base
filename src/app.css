@@ -358,3 +358,6 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .mouthbtn .mn { font-size: 12px; font-weight: 650; letter-spacing: .04em; }
 .mouthbtn .ms { font-size: 11px; color: var(--ink-3); text-align: center; line-height: 1.25; }
 .cell .k[data-mouth] { color: var(--accent); font-weight: 700; }
+
+/* the gait chart */
+.gaitchart { display: block; width: 100%; max-width: 640px; height: auto; margin: 6px 0 2px; }
