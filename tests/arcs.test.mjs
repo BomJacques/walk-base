@@ -79,3 +79,23 @@ test('old arc names are carried over and unknown ones dropped', () => {
   assert.deepEqual(adoptArcs('human', ['head', 'wrist', 'ankle', 'bogus']), ['head', 'wrist.R', 'ankle.R']);
   assert.deepEqual(adoptArcs('dog', ['wrist', 'tail']), ['paw.FR', 'tail']);
 });
+
+test('arcs start on both sides, and there are more points to follow: chest, toes, jaw, the middle of the tail', async () => {
+  const { DEFAULT_ARCS, arcSide } = await import('../src/arcs.js');
+  for (const rig of ['human', 'dog']) {
+    const ids = new Set(arcPoints(rig).map((d) => d.id));
+    for (const id of DEFAULT_ARCS[rig]) assert.ok(ids.has(id), `${rig} default ${id} exists`);
+    assert.ok(DEFAULT_ARCS[rig].filter((i) => arcSide(i) === 'R').length === DEFAULT_ARCS[rig].filter((i) => arcSide(i) === 'L').length, `${rig}: as many left as right`);
+  }
+  for (const id of ['chest', 'toe.R', 'toe.L']) assert.ok(arcPoint('human', id), id);
+  for (const id of ['chest', 'jaw', 'tailmid', 'toe.FR', 'toe.HL']) assert.ok(arcPoint('dog', id), id);
+  assert.equal(arcSide('paw.FL'), 'L'); assert.equal(arcSide('ankle.R'), 'R'); assert.equal(arcSide('head'), null);
+  for (const [rig, id] of [['human', 'toe.L'], ['human', 'chest'], ['dog', 'toe.HR'], ['dog', 'tailmid'], ['dog', 'jaw'], ['dog', 'chest']]) {
+    const p = rig === 'dog' ? dog() : human(); const def = arcPoint(rig, id); const frame = 4; const cur = poseFor(p, frame);
+    const at = def.pick(cur); const s0 = proj([at[0] + cur.pelvisX, at[1], at[2]]);
+    const probe = Object.fromEntries(def.chain.map((c, i) => [c, i === 0 ? 0.12 : 0]));
+    const pz = poseFor(p, frame, probe); const pt = def.pick(pz); const t0 = proj([pt[0] + cur.pelvisX, pt[1], pt[2]]);
+    const r = moveArcPoint({ params: p, def, frame, target: [t0.x, t0.y], project: proj });
+    assert.ok(r && r.err < 2.5, `${rig} ${id} err ${r?.err}`); void s0;
+  }
+});

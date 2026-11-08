@@ -89,6 +89,8 @@ The bird has a **Head hold** (it keeps its head still in space while the body mo
 
 ## Motion arcs
 
+Arcs now start on **both sides** (head, hips, both wrists, both ankles; for the dog all four paws and the tail). Under **Arc points** there are buttons for **Both sides**, **Right only**, **Left only**, **All** and **None**, and more points to follow: the chest, the toes, and for the dog the jaw tip and the middle of the tail. **Move both sides together** is on by default: when you drag a dot on one foot or hand, the other side follows half a cycle later, as it does when you edit a curve; turn it off to change one side alone.
+
 On the **Guides** tab, tick the points to trace under **Arc points** (head, hips, shoulders, elbows, wrists, knees, ankles; for the dog the head, nose, tail tip and each leg's joint and paw). Each gets a colour, a dashed path, and a dot on every frame, so you can read the speed from the spacing. **Drag a dot** to bend the movement at that frame: only the curves that move that point change, and Undo puts it back. With a performance on, the arcs show the whole thing but are read-only.
 
 ## Starting clean

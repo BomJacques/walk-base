@@ -13,7 +13,7 @@ import { dogPlants } from './dog3.js';
 import { PARTS, CHANNEL_BY_ID, partChannels, partLabel, makeEvaluator, sampleFinal, isEdited, allowedFrequencies } from './motion.js';
 import { CurveEditor, mirrorPoints } from './curves.js';
 import { cleanPhys, STRIP_LIMITS } from './stripdefs.js';
-import { arcPoints, arcPoint, arcColor, adoptArcs, moveArcPoint, DEFAULT_ARCS } from './arcs.js';
+import { arcPoints, arcPoint, arcColor, adoptArcs, moveArcPoint, arcSide, DEFAULT_ARCS } from './arcs.js';
 import { SM, loadPicture, unload, detect, sliceOf, sampledSummary, totalFrames, touch as touchSampler, setCuts } from './sampler.js';
 import { openCutWindow } from './cutwindow.js';
 import { SLICE_DEFAULTS, numberCuts } from './slicer.js';
@@ -394,7 +394,9 @@ function arcSection() {
     h('div', { class: 'btnrow' },
       h('button', { type: 'button', class: 'btn', testid: 'arc-all', onClick: () => { S.s[key] = pts.map((p) => p.id); S.s.showArcs = true; save(); renderPanel(); render(); } }, 'All'),
       h('button', { type: 'button', class: 'btn', testid: 'arc-none', onClick: () => { S.s[key] = []; save(); renderPanel(); render(); } }, 'None'),
-      h('button', { type: 'button', class: 'btn', testid: 'arc-default', onClick: () => { S.s[key] = DEFAULT_ARCS[rig].slice(); save(); renderPanel(); render(); } }, 'Usual four')),
+      h('button', { type: 'button', class: 'btn', testid: 'arc-default', onClick: () => { S.s[key] = DEFAULT_ARCS[rig].slice(); S.s.showArcs = true; save(); renderPanel(); render(); } }, 'Both sides'),
+      ...[['R', 'Right only'], ['L', 'Left only']].map(([sd, lab]) => h('button', { type: 'button', class: 'btn', testid: `arc-side-${sd}`, onClick: () => { S.s[key] = pts.map((p) => p.id).filter((i) => arcSide(i) === sd || (!arcSide(i) && DEFAULT_ARCS[rig].includes(i))); S.s.showArcs = true; save(); renderPanel(); render(); } }, lab))),
+    h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: LAYOUT.arcLink, testid: 'arc-link', onChange: (e) => { LAYOUT.arcLink = e.target.checked; layoutSave(); renderPanel(); } }), h('span', null, 'Move both sides together (the other side follows half a cycle later)')),
     groups.map((g) => h('div', { class: 'arcgroup' }, h('h4', null, g),
       pts.filter((p) => p.group === g).map((p) => h('label', { class: 'chk' },
         h('input', { type: 'checkbox', checked: on.has(p.id), testid: `arc-${p.id}`, onChange: (e) => toggle(p.id, e.target.checked) }),
@@ -425,7 +427,12 @@ function arcDragMove(d, e, toFrame) {
   const q = toFrame(e.clientX, e.clientY); if (!q) return;
   const r = moveArcPoint({ params: P(), def: d.def, frame: d.frame, curFrame: d.curFrame, target: [q.x, q.y], project: (w) => d.cam.p(w) });
   if (!r) { setMessage('This point cannot be reshaped while a channel on its path runs free.'); return; }
-  for (const [id, s] of Object.entries(r.entries)) S.motion[id] = s;
+  for (const [id, s] of Object.entries(r.entries)) {
+    S.motion[id] = s;
+    // With both sides linked the other side follows, half a cycle later, as it does when you edit a curve in the Parts tab.
+    const o = LAYOUT.arcLink && CHANNEL_BY_ID[id]?.sided ? otherSide(id) : null;
+    if (o && CHANNEL_BY_ID[o]) S.motion[o] = { ...s, pts: mirrorPoints(s.pts) };
+  }
   markCustom(); render();
 }
 /** The fix handle at the end of the selected part: dragging it adds a smooth correction round this frame and leaves the animation underneath alone. */
@@ -1487,7 +1494,7 @@ function build() {
 
 // ---------- resizable animation window ----------
 const LAYOUT_KEY = 'walkbase.layout';
-const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, collapsed: {} };
+const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcLink: true, collapsed: {} };
 /** Light or dark: follows the device unless you choose. */
 function applyTheme() { if (LAYOUT.theme === 'light' || LAYOUT.theme === 'dark') document.documentElement.dataset.theme = LAYOUT.theme; else delete document.documentElement.dataset.theme; }
 function setTheme(v) { LAYOUT.theme = v; applyTheme(); layoutSave(); render(); }

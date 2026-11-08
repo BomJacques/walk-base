@@ -1,7 +1,7 @@
 // Motion arcs: the path of any point of the figure through the cycle, one dot per frame, and dragging a dot to reshape the movement.
 // Pure logic, no DOM. The stage draws what samplePaths returns and calls moveArcPoint while a dot is dragged.
 import { cycleFrames } from './rig.js';
-import { pose3 } from './rig3.js';
+import { pose3, add, mul } from './rig3.js';
 import { poseDog } from './dog3.js';
 import { poseFor } from './keyposes.js';
 import { makeEvaluator, CHANNEL_BY_ID } from './motion.js';
@@ -14,10 +14,12 @@ const LEGS = [['FR', 'Front right'], ['FL', 'Front left'], ['HR', 'Hind right'],
 function humanPoints() {
   const out = [
     { id: 'head', label: 'Head', group: 'Head and body', pick: (z) => z.headC, chain: ['spine3.pitch', 'neck.pitch', 'head.pitch'] },
+    { id: 'chest', label: 'Chest', group: 'Head and body', pick: (z) => z.j3, chain: ['spine3.pitch', 'spine2.pitch'] },
     { id: 'hip', label: 'Hips', group: 'Head and body', pick: (z) => z.pelvis, chain: ['pelvis.y', 'pelvis.x'] },
   ];
   for (const [s, Name] of sides) {
     out.push(
+      { id: `toe.${s}`, label: `${Name} toe`, group: 'Legs', pick: (z) => add(z.sides[s].ankle, mul(z.sides[s].foot.fx, 0.16)), chain: [`foot.x.${s}`, `foot.y.${s}`, `foot.pitch.${s}`] },
       { id: `shoulder.${s}`, label: `${Name} shoulder`, group: 'Arms', pick: (z) => z.sides[s].shoulder, chain: [`girdle.x.${s}`, `girdle.y.${s}`] },
       { id: `elbow.${s}`, label: `${Name} elbow`, group: 'Arms', pick: (z) => z.sides[s].elbow, chain: [`arm.pitch.${s}`] },
       { id: `wrist.${s}`, label: `${Name} wrist`, group: 'Arms', pick: (z) => z.sides[s].wrist, chain: [`arm.pitch.${s}`, `elbow.flex.${s}`] },
@@ -32,7 +34,10 @@ function dogPoints() {
   const out = [
     { id: 'head', label: 'Head', group: 'Head and body', pick: (z) => z.headC, chain: ['dog.spine3.pitch', 'dog.neck.pitch', 'dog.head.pitch'] },
     { id: 'nose', label: 'Nose', group: 'Head and body', pick: (z) => z.noseTip, chain: ['dog.spine3.pitch', 'dog.neck.pitch', 'dog.head.pitch'] },
+    { id: 'chest', label: 'Chest', group: 'Head and body', pick: (z) => z.j3, chain: ['dog.spine3.pitch', 'dog.spine2.pitch'] },
+    { id: 'jaw', label: 'Jaw tip', group: 'Head and body', pick: (z) => z.jawEnd, chain: ['dog.jaw.open'] },
     { id: 'hip', label: 'Hips', group: 'Head and body', pick: (z) => z.pelvis, chain: ['dog.pelvis.y', 'dog.pelvis.x'] },
+    { id: 'tailmid', label: 'Tail middle', group: 'Head and body', pick: (z) => z.tail[2], chain: ['dog.tail1.pitch', 'dog.tail2.pitch'] },
     { id: 'tail', label: 'Tail tip', group: 'Head and body', pick: (z) => z.tail[3], chain: ['dog.tail1.pitch', 'dog.tail2.pitch', 'dog.tail3.pitch'] },
   ];
   for (const [k, Name] of LEGS) {
@@ -40,6 +45,7 @@ function dogPoints() {
     out.push(
       { id: `joint.${k}`, label: `${Name} ${k[0] === 'F' ? 'elbow' : 'knee'}`, group: 'Legs', pick: (z) => z.legs[k].mid, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`] },
       { id: `paw.${k}`, label: `${Name} paw`, group: 'Legs', pick: (z) => z.legs[k].paw, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`] },
+      { id: `toe.${k}`, label: `${Name} toe`, group: 'Legs', pick: (z) => z.legs[k].toe, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.pitch.${side}`] },
     );
   }
   return out;
@@ -47,7 +53,10 @@ function dogPoints() {
 const HUMAN = humanPoints(); const DOG = dogPoints();
 export const arcPoints = (rig) => (rig === 'dog' ? DOG : HUMAN);
 export const arcPoint = (rig, id) => arcPoints(rig).find((p) => p.id === id) || null;
-export const DEFAULT_ARCS = { human: ['head', 'hip', 'wrist.R', 'ankle.R'], dog: ['head', 'hip', 'paw.FR', 'paw.HR', 'tail'] };
+/** The arcs shown to start with: both sides. */
+export const DEFAULT_ARCS = { human: ['head', 'hip', 'wrist.R', 'wrist.L', 'ankle.R', 'ankle.L'], dog: ['head', 'hip', 'paw.FR', 'paw.FL', 'paw.HR', 'paw.HL', 'tail'] };
+/** Which side of the body a point is on: 'R', 'L' or null. */
+export const arcSide = (id) => (/\.(R|L)$/.test(id) ? id.slice(-1) : /\.[FH](R|L)$/.test(id) ? id.slice(-1) : null);
 
 /** A colour for each point, steady while you tick others on and off. */
 export const ARC_PALETTE = ['#d0342c', '#1f77b4', '#2a9d4b', '#c77700', '#8e44ad', '#0b8f8c', '#b5338a', '#6b6b6b'];

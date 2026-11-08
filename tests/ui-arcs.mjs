@@ -23,6 +23,15 @@ const dots = () => ev(() => window.__walkBase.S.last?.arcDots?.map((d) => ({ id:
 await ev(() => window.__walkBase.setTab('Guides'));
 await page.locator('[data-testid="arc-section"]').waitFor();
 check('the Guides tab lists points to trace', (await page.locator('[data-testid^="arc-"][type="checkbox"]').count()) >= 14);
+// both sides are shown to start with
+await ev(() => { window.__walkBase.S.s.showArcs = true; window.__walkBase.render(); }); await page.waitForTimeout(250);
+const ids0 = new Set((await dots()).map((q) => q.id));
+check('arcs start on both sides: head, hips, both wrists and both ankles', ['head', 'hip', 'wrist.R', 'wrist.L', 'ankle.R', 'ankle.L'].every((i) => ids0.has(i)), [...ids0]);
+await page.locator('[data-testid="arc-side-L"]').click(); await page.waitForTimeout(200);
+check('Left only shows the left side', (await ev(() => window.__walkBase.S.s.arcs)).every((i) => !i.endsWith('.R')) && (await ev(() => window.__walkBase.S.s.arcs)).includes('wrist.L'));
+await page.locator('[data-testid="arc-default"]').click(); await page.waitForTimeout(200);
+check('Both sides puts them back', (await ev(() => window.__walkBase.S.s.arcs)).includes('ankle.R') && (await ev(() => window.__walkBase.S.s.arcs)).includes('ankle.L'));
+await ev(() => { window.__walkBase.LAYOUT.arcLink = false; }); // the single-side checks below are with the sides unlinked
 await page.locator('[data-testid="arc-none"]').click();
 await page.locator('[data-testid="arc-ankle.R"]').check();
 await page.locator('[data-testid="arc-wrist.L"]').check();
@@ -43,6 +52,12 @@ const moved = after.find((q) => q.id === 'ankle.R' && q.frame === pick.frame);
 check('dragging a dot moves it to the finger', Math.hypot(moved.x - (pick.x + 30), moved.y - (pick.y - 40)) < 3, { want: [pick.x + 30, pick.y - 40], got: [moved.x, moved.y] });
 const edited = await ev(() => Object.keys(window.__walkBase.S.motion).sort());
 check('only the foot curves of that side changed', JSON.stringify(edited) === JSON.stringify(['foot.x.R', 'foot.y.R']), edited);
+// with the sides linked, the other side follows half a cycle later
+await ev(() => { window.__walkBase.undo?.(); window.__walkBase.LAYOUT.arcLink = true; }); await page.waitForTimeout(300);
+const pickL = (await dots()).find((q) => q.id === 'ankle.R' && q.frame === Math.floor(T / 4)); const aL = await client(pickL.x, pickL.y); const tL = await client(pickL.x + 24, pickL.y - 30);
+await page.mouse.move(aL.x, aL.y); await page.mouse.down(); await page.mouse.move((aL.x + tL.x) / 2, (aL.y + tL.y) / 2, { steps: 4 }); await page.mouse.move(tL.x, tL.y, { steps: 4 }); await page.mouse.up(); await page.waitForTimeout(400);
+const mir = await ev(() => { const m = window.__walkBase.S.motion; const r = m['foot.y.R']?.pts; const l = m['foot.y.L']?.pts; if (!r || !l) return null; return r.every((q) => { const u = (q.u + 0.5) % 1; return l.some((p) => Math.abs(p.u - u) < 1e-6 && Math.abs(p.v - q.v) < 1e-9); }); });
+check('with both sides linked the left foot follows the right, half a cycle later', mir === true, mir);
 const other = after.find((q) => q.id === 'wrist.L' && q.frame === pick.frame); const o0 = d.find((q) => q.id === 'wrist.L' && q.frame === pick.frame);
 check('the other arc stays where it was', Math.hypot(other.x - o0.x, other.y - o0.y) < 0.5);
 check('the dragged frame did not move the playhead or leave the preset', (await ev(() => window.__walkBase.S.preset)) === 'Custom');
