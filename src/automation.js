@@ -1,6 +1,7 @@
 // Automation: parameters that change over a longer performance, recorded live like a synth's controller automation.
 // Pure logic, no DOM. A lane is a list of {t, v} points (t in frames); between points the value eases from one to the next.
-// Targets: 'p:<gait parameter>', 'cadence' (how fast the cycle turns, 1 = built-in), and 'c:<channel>:amount' or 'c:<channel>:offset'.
+// Targets: 'p:<gait parameter>', 'cadence' (how fast the cycle turns, 1 = built-in), and 'c:<channel>:amount', 'c:<channel>:offset' or 'c:<channel>:fix'.
+// A 'fix' lane is a correction: it is added to the channel's offset, so it nudges a part back into line without changing the movement under it.
 
 export const CADENCE = 'cadence';
 export const targetOfParam = (id) => `p:${id}`;
@@ -8,7 +9,7 @@ export const targetOfChannel = (id, what) => `c:${id}:${what}`;
 export function parseTarget(target) {
   if (target === CADENCE) return { kind: 'cadence' };
   if (target.startsWith('p:')) return { kind: 'param', id: target.slice(2) };
-  if (target.startsWith('c:')) { const [, id, what] = target.match(/^c:(.+):(amount|offset)$/) || []; return id ? { kind: 'channel', id, what } : null; }
+  if (target.startsWith('c:')) { const [, id, what] = target.match(/^c:(.+):(amount|offset|fix)$/) || []; return id ? { kind: 'channel', id, what } : null; }
   return null;
 }
 
@@ -49,10 +50,13 @@ export function motionAt(base, lanes, t, live = null) {
   if (!hasLanes(lanes) && !live) return base;
   const out = { ...base };
   const set = (id, what, v) => { out[id] = { ...(out[id] || {}), [what]: v }; };
+  const fixes = [];
   for (const [target, lane] of Object.entries(lanes || {})) {
     const k = parseTarget(target);
-    if (k?.kind === 'channel' && lane.pts?.length && !(live && target in live)) set(k.id, k.what, laneValue(lane, t, k.what === 'amount' ? 1 : 0));
+    if (k?.kind === 'channel' && k.what === 'fix' && lane.pts?.length) fixes.push([k.id, laneValue(lane, t, 0)]);
+    else if (k?.kind === 'channel' && lane.pts?.length && !(live && target in live)) set(k.id, k.what, laneValue(lane, t, k.what === 'amount' ? 1 : 0));
   }
+  for (const [id, v] of fixes) out[id] = { ...(out[id] || {}), offset: (out[id]?.offset || 0) + v };
   if (live) for (const [target, v] of Object.entries(live)) { const k = parseTarget(target); if (k?.kind === 'channel') set(k.id, k.what, v); }
   return out;
 }

@@ -2,6 +2,7 @@
 // A clip says where each controlled value goes, as fractions of its length. Applying one at a frame writes those lanes there.
 // Angles are radians (forward is positive). `k` scales how strongly it is done.
 import { laneValue, replaceSpan, targetOfParam, targetOfChannel, CADENCE } from './automation.js';
+import { HUMAN_MOVES, DOG_MOVES } from './moves.js';
 
 const P = targetOfParam;
 const C = targetOfChannel;
@@ -151,6 +152,17 @@ export const CLIPS = {
   ],
 };
 
+// More movements (moves.js) follow the first four. Every one starts from whatever the figure is doing, so they chain.
+CLIPS.human = [...CLIPS.human, ...HUMAN_MOVES];
+CLIPS.dog = [...CLIPS.dog, ...DOG_MOVES];
+/** The movements are shown in these groups, in this order. */
+export const CLIP_GROUPS = [
+  ['Pace', ['begin', 'stop', 'run', 'slow', 'speedup', 'slowdown', 'trip']],
+  ['Posture', ['sit', 'down', 'beg', 'crouch', 'standup', 'bow', 'stretch', 'playbow']],
+  ['Action', ['jump', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff']],
+  ['Gesture', ['wave', 'cheer', 'shrug', 'nod', 'look', 'lookaround', 'wag']],
+];
+export const groupOfClip = (id) => CLIP_GROUPS.find(([, ids]) => ids.includes(id))?.[0] || 'Other';
 export const clipsFor = (rig) => CLIPS[rig] || [];
 const neutral = (target) => (target.endsWith(':amount') ? 1 : target === CADENCE ? 1 : 0);
 
@@ -166,7 +178,8 @@ export function applyClip(lanes, clip, base, start, D = clip.frames, k = 1) {
     const fallback = target.startsWith('p:') ? base[target.slice(2)] : neutral(target);
     const anchor = { t: Math.max(0, start - 1), v: laneValue(old, Math.max(0, start - 1), fallback) };
     const pts = rel.map((q) => ({ t: start + q.t, v: q.v }));
-    if (start === 0) pts[0] = { ...pts[0] };
+    // Chaining: a movement begins from what the lane held just before it, so it eases out of the one before (or out of a held pose) instead of jumping.
+    if (start > 0 && rel[0].t === 0) pts[0] = { ...pts[0], v: anchor.v };
     out[target] = replaceSpan(old, anchor.t, start + D, start > 0 ? [anchor, ...pts] : pts);
   }
   return out;

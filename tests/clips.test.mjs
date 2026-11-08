@@ -16,7 +16,7 @@ const dist = (a, b) => len(sub(a, b));
 test('every clip targets real parameters and channels, with points in order', () => {
   for (const c of clipsFor('human')) {
     const lanes = c.build(base, c.frames);
-    assert.ok(Object.keys(lanes).length >= 4, c.id);
+    assert.ok(Object.keys(lanes).length >= 2, c.id);
     for (const [target, pts] of Object.entries(lanes)) {
       const k = parseTarget(target);
       assert.ok(k, `${c.id}: ${target}`);
@@ -110,10 +110,10 @@ const dsim = (b, lanes, T) => integrate(b, lanes, T, b.cycleFrames);
 const dat = (b, lanes, s, t) => poseDog(paramsAt(b, lanes, t), motionAt({}, lanes, t), s.u[t], { worldX: s.x[t] });
 
 test('dog: every clip targets real parameters and channels', () => {
-  assert.equal(clipsFor('dog').length, 4);
+  assert.ok(clipsFor('dog').length >= 4);
   for (const c of clipsFor('dog')) {
     const lanes = c.build(dogBase, c.frames);
-    assert.ok(Object.keys(lanes).length >= 4, c.id);
+    assert.ok(Object.keys(lanes).length >= 2, c.id);
     for (const [target, pts] of Object.entries(lanes)) {
       const k = parseTarget(target);
       assert.ok(k, `${c.id}: ${target}`);

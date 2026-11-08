@@ -24,6 +24,8 @@ export const DOG_DEFAULTS = Object.freeze({
   dogWingOpen: 0,         // bird: 0 folds the wings, 1 spreads them
   dogFlap: 0,             // bird: degrees each wing beats up and down
   dogFlapRate: 1,         // bird: beats per cycle
+  dogFlight: 0,           // bird: 0 on the ground, 1 in the air (the feet tuck up under the tail and the body lifts, rising on each down-stroke)
+  dogFlightHeight: 1.1,   // bird: how high the body flies above its standing height, in shoulder heights
   dogCurl: 14,            // gallop only: degrees the back curls up when the legs gather and stretches out when they reach
 });
 export const DOG_GAITS = Object.freeze({
@@ -64,7 +66,7 @@ export const SPECIES = Object.freeze({
   },
   bird: {
     label: 'Bird', legs: 2, front: 'wing', armRest: [-0.2, -0.04, 0],
-    bones: { spine: [0.15, 0.15, 0.15], neck: 0.5, skull: 0.13, snout: 0.15, jaw: 0.13, upper: 0.24, fore: 0.24, pastern: 0.14, thigh: 0.3, shin: 0.38, meta: 0.34, paw: 0.03, pawLen: 0.14, shoulderDrop: 0.06, shoulderBack: 0.02, scapula: 0.1, tail: [0.12, 0.12, 0.1], ear: 0.02, hipWidth: 0.06, shoulderWidth: 0.07, scapulaWidth: 0.05 },
+    bones: { spine: [0.15, 0.15, 0.15], neck: 0.5, skull: 0.13, snout: 0.15, jaw: 0.13, upper: 0.34, fore: 0.34, pastern: 0.22, thigh: 0.3, shin: 0.38, meta: 0.34, paw: 0.03, pawLen: 0.14, shoulderDrop: 0.06, shoulderBack: 0.02, scapula: 0.1, tail: [0.12, 0.12, 0.1], ear: 0.02, hipWidth: 0.06, shoulderWidth: 0.07, scapulaWidth: 0.05 },
     lean: { hock: 0.55, pastern: 0.1 }, look: { body: 1.5, leg: 0.4, neck: 0.8, tail: 1.2, wing: 1.8 }, view: { zoom: 1.25, y: 0.6 },
   },
 });

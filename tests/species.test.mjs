@@ -5,8 +5,9 @@ import { poseFor } from '../src/keyposes.js';
 import { CONTROLS, PRESETS_SPECIES, presetsForFigure } from '../src/controls.js';
 import { SPECIES } from '../src/dogdefaults.js';
 import { legsOf } from '../src/dog3.js';
+import { wordsFor } from '../src/words.js';
 
-const mk = (pr, extra = {}) => ({ ...DEFAULTS, rig: 'dog', motion: {}, ...pr, ...extra });
+const mk = (pr, extra = {}) => { const { camYaw, ...p } = pr; return { ...DEFAULTS, rig: 'dog', motion: {}, ...p, ...extra }; };
 const presets = Object.entries(PRESETS_SPECIES).flatMap(([sp, set]) => Object.entries(set).map(([name, pr]) => [`${sp} ${name}`, pr]));
 
 test('every species has complete bones and the presets name their species', () => {
@@ -23,7 +24,7 @@ test('every species has complete bones and the presets name their species', () =
 test('every preset value is inside its control range', () => {
   const by = Object.fromEntries(CONTROLS.filter((c) => c.scope === 'p').map((c) => [c.id, c]));
   for (const [name, pr] of presets) for (const [k, v] of Object.entries(pr)) {
-    if (k === 'dogSpecies') continue;
+    if (k === 'dogSpecies' || k === 'camYaw') continue;
     const c = by[k]; assert.ok(c, `${name}: ${k} has no control`);
     if (c.type === 'number') assert.ok(v >= c.min && v <= c.max, `${name}: ${k}=${v} outside ${c.min}..${c.max}`);
     if (c.type === 'enum') assert.ok(c.options.includes(v), `${name}: ${k}=${v}`);
@@ -74,4 +75,39 @@ test('wings fold, spread and beat', () => {
 test('the dog is unchanged', () => {
   const p = mk({}); const z = poseFor(p, 0);
   assert.equal(Object.values(z.legs).filter((l) => l.free).length, 0); assert.equal(legsOf(p).length, 4);
+});
+
+test('a flying bird is off the ground with its feet tucked, and its wings beat with the tips trailing', () => {
+  const p = mk(PRESETS_SPECIES.bird.Flying); const T = cycleFrames(p).frames.length;
+  const walk = poseFor(mk(PRESETS_SPECIES.bird.Walk), 0);
+  let minToe = 9; let minHip = 9; let maxHip = -9; const tips = []; const wr = [];
+  for (let f = 0; f < T; f++) {
+    const z = poseFor(p, f);
+    for (const k of ['HR', 'HL']) { assert.ok(!z.legs[k].stance, 'no foot is planted in flight'); assert.ok(z.legs[k].reached, `${k} reaches at ${f}`); minToe = Math.min(minToe, z.legs[k].toe[1]); }
+    minHip = Math.min(minHip, z.pelvis[1]); maxHip = Math.max(maxHip, z.pelvis[1]); wr.push(z.legs.FR.wrist[1]); tips.push(z.legs.FR.paw[1] - z.legs.FR.wrist[1]);
+  }
+  assert.ok(minToe > 0.5, `feet stay clear of the ground: ${minToe}`);
+  assert.ok(minHip > walk.pelvis[1] + 0.6, 'the body flies above its standing height');
+  assert.ok(maxHip - minHip > 0.03, 'the body rises and sinks with the wing beat');
+  assert.ok(Math.max(...wr) - Math.min(...wr) > 0.3, 'the wing beats');
+  assert.ok(Math.max(...tips) - Math.min(...tips) > 0.1, 'the wing tip trails the beat');
+  // body is lowest when the wing is highest
+  const hi = wr.indexOf(Math.max(...wr)); const lo = Array.from({ length: T }, (_, f) => poseFor(p, f).pelvis[1]); assert.ok(lo[hi] <= Math.min(...lo) + 0.02, 'lowest with the wings up');
+  const glide = mk(PRESETS_SPECIES.bird.Gliding); const gw = Array.from({ length: 12 }, (_, f) => poseFor(glide, f * 4).legs.FR.wrist[1]);
+  assert.ok(Math.max(...gw) - Math.min(...gw) < 0.2, 'gliding barely moves the wings');
+});
+
+test('labels are rewritten for each figure and controls that do not apply are left out', () => {
+  const bird = wordsFor('bird'); const ther = wordsFor('theropod'); const dog = wordsFor('dog');
+  assert.equal(bird('Dog stride'), 'Bird stride'); assert.equal(bird('Paw lift'), 'Foot lift'); assert.equal(bird('Paws width'), 'Feet width');
+  assert.equal(bird('Front paw'), 'Wing tip'); assert.equal(bird('Front legs'), 'Wings'); assert.equal(ther('Front leg and elbow'), 'Arm and elbow'); assert.equal(ther('Dog gait'), 'Theropod gait');
+  assert.equal(wordsFor('sauropod')('Hind paw'), 'Hind foot'); assert.equal(dog('Dog stride'), 'Dog stride');
+  const by = Object.fromEntries(CONTROLS.map((c) => [c.id, c]));
+  assert.ok(dog.hides(by.dogWingOpen) && dog.hides(by.dogFlight) && !dog.hides(by.dogEar));
+  assert.ok(bird.hides(by.dogEar) && !bird.hides(by.dogFlight) && !bird.hides(by.dogHeadHold));
+  assert.ok(ther.hides(by.dogWingOpen) && !ther.hides(by.dogArmSwing) && ther.hides(by.dogCurl));
+  assert.ok(bird.hidesPart('dog.ear') && !dog.hidesPart('dog.ear'));
+  for (const c of CONTROLS.filter((x) => /\bDog\b|\bdog\b|\bpaws?\b/i.test(`${x.label} ${x.group} ${x.help}`))) for (const f of ['bird', 'theropod', 'sauropod', 'ceratopsian']) {
+    const w = wordsFor(f); assert.ok(!/\bdog\b|\bpaws?\b/i.test(`${w(c.label)} ${w(c.group)} ${w(c.help)}`), `${f}: "${w(c.label)}" still says dog or paw`);
+  }
 });

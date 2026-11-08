@@ -172,6 +172,13 @@ Requested 2026-11-08. The big rounded buttons in rows read as quickly generated.
 
 **Order against the other phases:** it could go before the attachments, arcs and physics phase or after. Before is the better order, because that phase adds many controls (anchors, handles, layers, arc editing) that would otherwise be built in the old look and rebuilt.
 
+## Added 2026-11-08 (later): flight, wording, corrections, movements
+
+- **Flying bird:** presets Flying and Gliding (body lifted, feet tucked under the tail, wings that sweep back, fold at the elbow on the up-stroke with the tip trailing the beat, the body rising on each down-stroke, the tail fanned). Controls In flight and Flight height. Wings beat sideways, so the preset turns the camera to three-quarters. **Not yet:** feathers as separate shapes, a take-off and landing, a flap cycle with its own length, and body roll in turns.
+- **Wording:** panels and part names now say Bird, Theropod, Sauropod or Ceratopsian, feet instead of paws, wing and arm instead of front leg, and leave out controls that do not apply (ears on a dinosaur, wings on a dog).
+- **Corrections** (`src/fix.js`): drag the end of a part at a frame to add a smooth correction lane that is added to the channel, leaving the animation underneath untouched. **Not yet:** drag a part's start (its anchor) as well as its end, corrections for the attachments' anchors, and showing the correction as a ghost.
+- **Movements** (`src/moves.js`): about twenty each for the human and the dog, grouped, and chaining (each begins from what the figure is doing). **Ideas not done:** turn about, kneel, lie down for the human, scratch and roll over for the dog, limp, tiptoe, climb, crawl, dance, a stumble that recovers into a run, and movements for the other animals (the bird's take-off, a theropod's roar and lunge, a sauropod's rear-up).
+
 ## Figures to add: a bird, and dinosaurs (a theropod and a quadruped) (first pass done 2026-11-08)
 
 **Built, as species of the dog's legged rig** (`SPECIES` in `src/dogdefaults.js`; the Figure menu now lists Human, Dog, Theropod, Bird, Sauropod, Ceratopsian):

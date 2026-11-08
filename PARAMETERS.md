@@ -65,6 +65,8 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Arm swing | dog | heights | 0 to 0.15 | 0.02 | Theropod: how far the small arms swing against the legs. |
 | Wings open | dog |  | 0 to 1 | 0 | Bird: 0 folds the wings against the body, 1 spreads them. |
 | Wing beat | dog | ° | 0 to 70 | 0 | Bird: how far each wing beats up and down. Open the wings first. |
+| In flight | dog |  | 0 to 1 | 0 | Bird: 0 stands on the ground, 1 flies. In flight the feet tuck up under the tail and the body rises on each down-stroke. Open the wings and set a wing beat. |
+| Flight height | dog | heights | 0 to 3 | 1.1 | Bird: how far above the ground the body flies. |
 | Beats per cycle | dog |  | 1 to 6 | 1 | Bird: wing beats in one cycle. |
 | Neck raise | dog | ° | 0 to 90 | 52 | How steeply the neck rises from the back. |
 | Head tip | dog | ° | -20 to 80 | 34 | How far the head tips down from the neck. |

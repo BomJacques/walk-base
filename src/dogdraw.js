@@ -52,7 +52,8 @@ export function buildDogShapes(pz, cam) {
   for (let k = 0; k < 3; k++) capsule(pz.tail[k], pz.tail[k + 1], (0.035 - k * 0.008) * K.tail, (0.03 - k * 0.009) * K.tail, `dog.tail${k + 1}`, null, 'body');
   if (bird) { // a tail fan: a wedge of feathers spreading out from the last joint
     const d = norm(sub(pz.tail[3], pz.tail[2])); const base = pz.tail[2]; const tip = add(pz.tail[3], mul(d, 0.12));
-    const ends = [-1, -0.5, 0, 0.5, 1].map((a) => add(tip, [0, a * 0.02, a * 0.16]));
+    const spread = 1 + 0.9 * Math.min(1, pz.params.dogFlight || 0); // the tail fans out in flight
+    const ends = [-1, -0.5, 0, 0.5, 1].map((a) => add(tip, [0, a * 0.02, a * 0.16 * spread]));
     const P = [S(base), ...ends.map(S)]; shapes.push({ pts: hull(P.map((q) => [q.x, q.y])), depth: S(pz.tail[3]).d, part: 'dog.tail3', side: null, role: 'body' });
   }
   if (cera) { // a bony frill rising behind the head, a brow horn over each eye and a horn on the nose, sized from the skull
@@ -66,6 +67,11 @@ export function buildDogShapes(pz, cam) {
     const l = pz.legs[leg4]; const role = l.side === 'R' ? 'near' : 'far';
     const pre = l.front ? 'dog.f' : 'dog.h';
     // The blade: a flat plate from the withers down to the shoulder joint, drawn first so the upper arm tucks under it.
+    if (bird && l.front && l.free) { // flight feathers: the trailing edge of the wing, behind the bones
+      const back = apply(pz.R3, [-1, 0, 0]); const edge = (pt, k) => add(pt, mul(back, k * (0.5 + 0.5 * Math.min(1, pz.params.dogWingOpen || 0))));
+      const P = [l.root, l.mid, l.wrist, l.paw, edge(l.paw, 0.1), edge(l.wrist, 0.22), edge(l.mid, 0.28), edge(l.root, 0.2)].map(S);
+      shapes.push({ pts: hull(P.map((q) => [q.x, q.y])), depth: (S(l.root).d + S(l.paw).d) / 2 - 0.0002, part: `${pre}leg`, side: l.side, role });
+    }
     const W = l.front && l.free ? (bird ? K.wing : 0.6) : K.leg; // a wing is broad, a theropod's arm is small
     if (l.front && !l.free) capsule(l.top, l.root, 0.05 * W, 0.075 * W, 'dog.fshoulder', l.side, role);
     capsule(l.root, l.mid, (l.front ? 0.07 : 0.095) * W, 0.05 * W, `${pre}leg`, l.side, role);
@@ -107,6 +113,7 @@ export const DOG_ARCS = {
 
 /** Where paws land over a stretch of ground, for the footprint guide in a plain cycle. */
 export function dogPrints(params, fromX, toX) {
+  if ((params.dogFlight || 0) > 0.5) return []; // nothing touches the ground in flight
   const stride = params.dogStride; const out = [];
   const c0 = Math.floor((fromX - 2) / stride); const c1 = Math.ceil((toX + 2) / stride);
   for (const leg of legsOf(params)) {

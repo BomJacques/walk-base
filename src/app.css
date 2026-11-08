@@ -278,3 +278,5 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 /* motion arc point picker */
 .arcgroup h4 { margin: 8px 0 2px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #6b6b6b); }
 .arcsw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; margin: 0 2px; }
+
+.cliprow h4 { margin: 8px 0 2px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #6b6b6b); }

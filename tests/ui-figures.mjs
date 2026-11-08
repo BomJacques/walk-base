@@ -61,6 +61,24 @@ const wrists = []; for (let i = 0; i < 8; i++) { await ev((k) => window.__walkBa
 check('Flapping opens the wings and beats them', Math.max(...wrists) - Math.min(...wrists) > 0.2, wrists.map((v) => +v.toFixed(2)));
 if (shots) { await ev(() => window.__walkBase.setFrame(2)); await page.waitForTimeout(150); await page.screenshot({ path: path.join(shots, `wb-fig-flap-${name}.png`) }); }
 
+// the flying bird, and wording that fits each animal
+await page.locator('#preset').selectOption('Flying'); await page.waitForTimeout(300);
+check('the Flying preset lifts the bird off the ground and turns the camera', (await ev(() => window.__walkBase.S.p.dogFlight)) === 1 && (await ev(() => window.__walkBase.S.s.camYaw)) === 35);
+const hips = []; for (const i of [0, 4, 8, 12]) { await ev((k) => window.__walkBase.setFrame(k), i); await page.waitForTimeout(80); hips.push(await ev(() => [window.__walkBase.S.last.pz.pelvis[1], window.__walkBase.S.last.pz.legs.HR.toe[1]])); }
+check('in flight the body is high, the feet are clear of the ground and the body bobs', hips.every(([h, t]) => h > 1.5 && t > 0.5) && Math.max(...hips.map((x) => x[0])) - Math.min(...hips.map((x) => x[0])) > 0.02, hips);
+if (shots) { await ev((k) => window.__walkBase.setFrame(k), 5); await page.waitForTimeout(150); await page.screenshot({ path: path.join(shots, `wb-fig-flying-${name}.png`) }); }
+await ev(() => { window.__walkBase.S.s.camYaw = 0; window.__walkBase.setTab('Gait'); }); await page.waitForTimeout(250);
+const heads = await page.locator('section.group h3').allTextContents();
+check('the bird panels say bird, not dog', heads.some((t) => /bird gait/i.test(t)) && heads.some((t) => /bird feet/i.test(t)) && !heads.some((t) => /\bdog\b/i.test(t)), heads);
+const words = await page.locator('#panel-body').innerText().catch(() => '');
+check('no dog or paw wording is left on the bird Gait tab', !/\bdog\b|\bpaws?\b/i.test(words), (words.match(/.{0,20}\b(dog|paws?)\b.{0,20}/i) || [''])[0]);
+await ev(() => window.__walkBase.setTab('Body')); await page.waitForTimeout(250);
+const bodyTxt = await page.locator('#panel-body').innerText().catch(() => '');
+check('the bird Body tab has no ear controls and no dog wording', !/ear bounce|ear length/i.test(bodyTxt) && !/\bdog\b/i.test(bodyTxt), (bodyTxt.match(/.{0,20}\b(dog|ear bounce)\b.{0,20}/i) || [''])[0]);
+await pick('dog'); await ev(() => window.__walkBase.setTab('Body')); await page.waitForTimeout(250);
+check('the dog keeps its own words, and does not show wing controls', (await page.locator('[data-testid="rng-dogWingOpen"]').count()) === 0 && (await page.locator('[data-testid="rng-dogEar"]').count()) === 1 && /dog/i.test(await page.locator('section.group h3').first().innerText()));
+await pick('bird');
+
 // parts and controls
 await ev(() => window.__walkBase.setTab('Body')); await page.waitForTimeout(200);
 check('the Body tab shows the two-legged and wing controls', (await page.locator('[data-testid="rng-dogHeadHold"]').count()) === 1 && (await page.locator('[data-testid="rng-dogWingOpen"]').count()) === 1);

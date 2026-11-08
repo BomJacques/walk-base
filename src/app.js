@@ -1,12 +1,14 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
 import { DEFAULTS, cycleFrames, cycleTravel, foot } from './rig.js';
 import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, paramsAt, motionAt, integrate, Recorder, laneValue } from './automation.js';
-import { clipsFor, applyClip } from './clips.js';
+import { clipsFor, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
 import { EXPORT_DEFAULTS, exportPngZip, exportKeyFrames, exportMp4, videoSupport, contactSheet, deliver, summary, renderFrame, exportTimeline, manifest } from './export.js';
 import { CONTROLS, TABS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor } from './controls.js';
 import { SPECIES } from './dogdefaults.js';
+import { wordsFor } from './words.js';
+import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
 import { dogPlants } from './dog3.js';
 import { PARTS, CHANNEL_BY_ID, partChannels, partLabel, makeEvaluator, sampleFinal, isEdited, allowedFrequencies } from './motion.js';
 import { CurveEditor, mirrorPoints } from './curves.js';
@@ -32,7 +34,7 @@ const S = {
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, stageOnly: false,
   source: 'walk', tool: 'orbit', sel: null, link: true, edit: null, busy: null, message: '', video: null, last: null, map: null,
   // Automation: lanes change a value over a longer performance. perfLen 0 means the performance is just one cycle.
-  lanes: {}, perfLen: 0, bank: { human: null, dog: null }, perfs: { human: {}, dog: {} }, perfName: '', attach: { human: [], dog: [] }, attachSel: null, ver: 0, recMode: 'touch', armed: false, recording: false, laneEdit: null, clip: 'stop', clipStart: 0, clipLen: null, clipK: 1,
+  fixMode: false, fixSpread: 10, lanes: {}, perfLen: 0, bank: { human: null, dog: null }, perfs: { human: {}, dog: {} }, perfName: '', attach: { human: [], dog: [] }, attachSel: null, ver: 0, recMode: 'touch', armed: false, recording: false, laneEdit: null, clip: 'stop', clipStart: 0, clipLen: null, clipK: 1,
 };
 const rec = new Recorder();
 // A picture to compare against, shown under the figure. It is a view aid, so it is kept out of undo and the settings file.
@@ -194,6 +196,7 @@ function load() {
 // ---------- attachments ----------
 const ATT_IMG_KEY = 'walkbase.attachimgs';
 const figKey = (p = S.p) => (p.rig === 'dog' ? (SPECIES[p.dogSpecies] ? p.dogSpecies : 'dog') : 'human');
+const wd = (s) => wordsFor(figKey())(s);
 const attachList = () => S.attach[figKey()] || (S.attach[figKey()] = []);
 const attachItem = (id = S.attachSel) => (id ? attachList().find((a) => a.id === id) || null : null);
 /** Every picture some attachment uses, for saving. */
@@ -278,7 +281,7 @@ async function pickAttachImage(file) {
     saveAttachImages(); setMessage('Picture added. Drag its ring onto the part it belongs to, then size and turn it.');
   } catch (e) { setMessage(e.message); } finally { URL.revokeObjectURL(url); }
 }
-const partName = (it) => { const t = attachTargets(S.p.rig).find((q) => q.key === targetKey(it)); return t ? t.label : it.part; };
+const partName = (it) => { const t = attachTargets(S.p.rig).find((q) => q.key === targetKey(it)); return t ? wd(t.label) : it.part; };
 
 function attachSection() {
   const rig = S.p.rig; const list = attachList(); const sel = attachItem();
@@ -318,7 +321,7 @@ function attachSection() {
   const partSel = h('select', { class: 'select', 'aria-label': 'Attached to', testid: 'attach-part', onChange: (e) => {
     const t = targets.find((q) => q.key === e.target.value); if (!t) return;
     patchAttach(sel.id, { part: t.part, seg: t.seg, side: t.side, anchor: { mode: 'boundary', t: sel.anchor.t, off: 0 } }, { panel: true });
-  } }, targets.map((t) => h('option', { value: t.key, selected: t.key === targetKey(sel) }, t.label)));
+  } }, targets.map((t) => h('option', { value: t.key, selected: t.key === targetKey(sel) }, wd(t.label))));
   const nameIn = h('input', { type: 'text', class: 'num', maxlength: 40, value: sel.name, 'aria-label': 'Name', testid: 'attach-name', onChange: (e) => { sel.name = e.target.value.trim().slice(0, 40) || sel.name; renderPanel(); save(); } });
 
   host.append(h('section', { class: 'group', testid: 'attach-props' }, h('h3', null, `${sel.name}`),
@@ -395,7 +398,7 @@ function arcSection() {
     groups.map((g) => h('div', { class: 'arcgroup' }, h('h4', null, g),
       pts.filter((p) => p.group === g).map((p) => h('label', { class: 'chk' },
         h('input', { type: 'checkbox', checked: on.has(p.id), testid: `arc-${p.id}`, onChange: (e) => toggle(p.id, e.target.checked) }),
-        h('span', { class: 'arcsw', style: `background:${arcColor(rig, p.id)}` }), h('span', null, p.label))))));
+        h('span', { class: 'arcsw', style: `background:${arcColor(rig, p.id)}` }), h('span', null, wd(p.label)))))));
 }
 /** The attachment under a canvas point. Front ones win over the body; behind ones only where no body part is. */
 function pickAttachment(q, which) {
@@ -424,6 +427,23 @@ function arcDragMove(d, e, toFrame) {
   if (!r) { setMessage('This point cannot be reshaped while a channel on its path runs free.'); return; }
   for (const [id, s] of Object.entries(r.entries)) S.motion[id] = s;
   markCustom(); render();
+}
+/** The fix handle at the end of the selected part: dragging it adds a smooth correction round this frame and leaves the animation underneath alone. */
+function fixDragStart(e, toFrame) {
+  const hnd = S.last?.fixHandle; const q = toFrame(e.clientX, e.clientY);
+  if (!S.fixMode || !S.sel || !hnd || !q || !S.map || S.source === 'sampled') return null;
+  const m = S.map; const radius = 20 * m.d * (m.fcw / m.zw);
+  if (Math.hypot(hnd.x - q.x, hnd.y - q.y) > radius) return null;
+  pause();
+  const params0 = P(); const T = params0.perf ? params0.perf.T : cycleFrames(params0).frames.length; const ex = Math.max(1, params0.exposure ?? 1);
+  return { fix: true, params0, lanes0: S.lanes, T, frame: Math.min(T - 1, Math.floor(S.frame / ex) * ex), part: S.sel.part, side: S.sel.side ?? null, cam: S.last.cam };
+}
+function fixDragMove(d, e, toFrame) {
+  const q = toFrame(e.clientX, e.clientY); if (!q) return;
+  const r = solveFix({ params: d.params0, frame: d.frame, part: d.part, side: d.side, target: [q.x, q.y], project: (w) => d.cam.p(w) });
+  if (!r) return;
+  S.lanes = writeFix(d.lanes0, r.delta, d.frame, S.fixSpread, d.T); S.ver++;
+  render();
 }
 function attachDragStart(e, toFrame) {
   const hs = S.last?.handles; const id = S.attachSel;
@@ -573,7 +593,7 @@ function paint() {
   const zw = fw * S.zoom; const zh = fh * S.zoom;
   const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
   if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
-  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.sel, under: refPaint, handles: S.attachSel });
+  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.sel, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false });
   const x0 = (cw - zw) / 2 + S.panX * d; const y0 = (ch - zh) / 2 + S.panY * d;
   ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = '#fff'; ctx.fillRect(x0, y0, zw, zh);
@@ -626,7 +646,9 @@ function applyPreset(name) {
   const rig = S.p.rig; const fig = figKey();
   const mine = rig === 'dog' ? DOG_KEYS : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig');
   const reset = Object.fromEntries(mine.map((k) => [k, DEFAULTS[k]]));
-  S.p = { ...S.p, ...reset, ...(presetsForFigure(fig)[name] || {}), rig };
+  const { camYaw, ...presetP } = presetsForFigure(fig)[name] || {}; // a preset may also turn the camera, to show its movement best
+  S.p = { ...S.p, ...reset, ...presetP, rig };
+  if (camYaw != null) S.s.camYaw = camYaw;
   for (const k of SHARED_KEYS) if (!(k in (presetsForFigure(fig)[name] || {})) && k !== 'rig') S.p[k] = DEFAULTS[k];
   for (const id of Object.keys(S.motion)) if (rig === 'dog' ? id.startsWith('dog.') : !id.startsWith('dog.')) delete S.motion[id];
   S.preset = name; S.frame = 0;
@@ -789,7 +811,7 @@ const targetLabel = (target) => {
   const k = parseTarget(target);
   if (k?.kind === 'cadence') return 'Speed of the cycle';
   if (k?.kind === 'param') return CONTROLS.find((q) => q.scope === 'p' && q.id === k.id)?.label ?? k.id;
-  if (k?.kind === 'channel') return `${CHANNEL_BY_ID[k.id]?.label ?? k.id}, ${k.what === 'amount' ? 'amount' : 'offset'}`;
+  if (k?.kind === 'channel') return `${CHANNEL_BY_ID[k.id]?.label ?? k.id}, ${k.what === 'amount' ? 'amount' : k.what === 'fix' ? 'correction' : 'offset'}`;
   return target;
 };
 /** Controls that a lane drives follow it during playback and show a dot. Controls you are holding are left alone. */
@@ -863,7 +885,7 @@ function scrubLabel(b) {
 function row(c) {
   const val = S[c.scope][c.id] ?? DEFAULT_OF(c);
   const reset = h('button', { type: 'button', class: 'btn tiny', 'aria-label': `Reset ${c.label}`, title: 'Reset', testid: `reset-${c.id}`, onClick: () => { if (c.scope === 'r') delete S.r[c.id]; else setParam(c, DEFAULT_OF(c)); renderPanel(); render(); save(); } }, icon('reset'), h('span', { class: 'sr' }, 'Reset'));
-  const label = labBtn(c.label, c.unit);
+  const label = labBtn(wd(c.label), c.unit);
   let control;
   if (c.type === 'number') {
     const target = c.scope === 'p' && c.id in DEFAULTS && !['cycleFrames', 'exposure', 'fps'].includes(c.id) ? targetOfParam(c.id) : null;
@@ -884,7 +906,7 @@ function row(c) {
   } else {
     control = h('input', { type: 'color', class: 'color', value: val, 'aria-label': c.label, testid: `clr-${c.id}`, onInput: (e) => setParam(c, e.target.value) });
   }
-  return h('div', { class: `row row-${c.type}` }, label, control, reset, h('p', { class: 'help' }, c.help));
+  return h('div', { class: `row row-${c.type}` }, label, control, reset, h('p', { class: 'help' }, wd(c.help)));
 }
 
 const fmtUnit = (c, v) => `${c.to(v).toFixed(c.unit === '°' ? 1 : 3)}${c.unit === '°' ? '°' : ''}`;
@@ -939,7 +961,7 @@ function channelCard(c) {
   const id = (v) => v;
   const span = Math.max(Math.abs(c.min), Math.abs(c.max));
   return h('div', { class: `chan${edited ? ' edited' : ''}`, testid: `chan-${c.id}` },
-    h('div', { class: 'chan-head' }, h('span', { class: 'name' }, c.label), h('span', { class: 'read', 'data-readout': c.id }, fmtUnit(c, liveValue(c.id))), edited ? h('span', { class: 'badge' }, 'changed') : null),
+    h('div', { class: 'chan-head' }, h('span', { class: 'name' }, wd(c.label)), h('span', { class: 'read', 'data-readout': c.id }, fmtUnit(c, liveValue(c.id))), edited ? h('span', { class: 'badge' }, 'changed') : null),
     sparkline(c.id),
     mk('amount', 'Amount ×', 0, 3, 0.05, id, id),
     h('div', { class: 'chan-more', id: `more-${c.id}`, hidden: !(s.offset || s.phase || s.free || (s.freq ?? 1) !== 1) },
@@ -960,18 +982,18 @@ function channelCard(c) {
 function partsSection() {
   const host = h('div', { class: 'parts' });
   host.append(h('p', { class: 'hint' }, 'Tap a part on the figure, or pick one here.'));
-  const mine = PARTS.filter((p) => (p.rig || 'human') === S.p.rig);
+  const mine = PARTS.filter((p) => (p.rig || 'human') === S.p.rig && !wordsFor(figKey()).hidesPart(p.id));
   const groups = [...new Set(mine.map((p) => p.group))];
   for (const g of groups) {
-    const box = h('section', { class: 'group' }, h('h3', null, g));
-    const chips = h('div', { class: 'chips', role: 'group', 'aria-label': g });
+    const box = h('section', { class: 'group' }, h('h3', null, wd(g)));
+    const chips = h('div', { class: 'chips', role: 'group', 'aria-label': wd(g) });
     const short = (l) => l.replace('Hips and pelvis', 'Hips').replace(' and elbow', '').replace(' and wrist', '').replace(' and knee', '');
     for (const part of mine.filter((p) => p.group === g)) {
       for (const sd of part.sided ? ['R', 'L'] : [null]) {
         chips.append(h('button', {
           type: 'button', class: 'pchip', testid: `part-${part.id}${sd ? `-${sd}` : ''}`, 'aria-pressed': String(S.sel?.part === part.id && (S.sel.side ?? null) === sd),
-          'aria-label': partLabel(part.id, sd), onClick: () => selectPart({ part: part.id, side: sd }, { openTab: false }),
-        }, sd ? `${short(part.label)} ${sd}` : short(part.label)));
+          'aria-label': wd(partLabel(part.id, sd)), onClick: () => selectPart({ part: part.id, side: sd }, { openTab: false }),
+        }, sd ? `${short(wd(part.label))} ${sd}` : short(wd(part.label))));
       }
     }
     box.append(chips);
@@ -980,9 +1002,19 @@ function partsSection() {
   if (S.sel) {
     const chans = partChannels(S.sel.part, S.sel.side);
     const sided = PARTS.find((p) => p.id === S.sel.part)?.sided;
-    const head = h('div', { class: 'selhead' }, h('h2', null, partLabel(S.sel.part, S.sel.side)),
+    const head = h('div', { class: 'selhead' }, h('h2', null, wd(partLabel(S.sel.part, S.sel.side))),
       h('button', { type: 'button', class: 'btn tiny', testid: 'clear-sel', onClick: () => { closeEditor(); selectPart(null); } }, 'Clear'));
     const link = sided ? h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: S.link, testid: 'chk-link', onChange: (e) => { S.link = e.target.checked; } }), h('span', null, 'Left and right move together (left runs half a cycle later)')) : null;
+    const nfix = fixPoints(S.lanes, S.sel.part, S.sel.side ?? null);
+    host.append(h('section', { class: 'group', testid: 'fix-section' }, h('h3', null, 'Fix alignment'),
+      h('p', { class: 'hint' }, 'If this part drifts out of line at some frame, turn this on, go to that frame, and drag the orange handle at the end of the part back where it belongs. It adds a smooth correction on top of the animation; the animation underneath is not changed.'),
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: S.fixMode, testid: 'fix-on', onChange: (e) => { S.fixMode = e.target.checked; render(); } }), h('span', null, 'Show the fix handle on the stage')),
+      h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Spread'), h('small', null, ' frames')),
+        h('div', { class: 'ctl' }, h('input', { type: 'range', class: 'rng', min: 0, max: 60, step: 1, value: S.fixSpread, 'aria-label': 'Spread slider', testid: 'fix-spread', onInput: (e) => { S.fixSpread = Number(e.target.value); const n = e.target.parentElement.querySelector('.num'); if (n) n.value = e.target.value; } }),
+          h('input', { type: 'number', class: 'num', min: 0, max: 60, step: 1, value: S.fixSpread, 'aria-label': 'Spread', testid: 'fix-spread-num', onChange: (e) => { S.fixSpread = Math.min(60, Math.max(0, Math.round(Number(e.target.value) || 0))); renderPanel(); } })),
+        h('p', { class: 'help' }, 'How many frames either side the correction eases back out over. 0 changes one frame only; a large number moves the whole stretch.')),
+      h('div', { class: 'btnrow' }, h('span', { class: 'hint', testid: 'fix-count' }, nfix ? `${nfix} correction point${nfix === 1 ? '' : 's'} on this part` : 'No corrections on this part'),
+        h('button', { type: 'button', class: 'btn', testid: 'fix-clear', disabled: !nfix, onClick: () => { S.lanes = clearFix(S.lanes, S.sel.part, S.sel.side ?? null); S.ver++; renderPanel(); render(); save(); setMessage('Corrections removed. The animation is as it was.'); } }, 'Clear corrections'))));
     host.append(h('section', { class: 'group selected' }, head, link, S.sel.part === 'pelvis' ? h('p', { class: 'hint' }, 'The legs are planted by IK, so hip height and turn are set here. Foot placement is under Foot. Pose labels follow the built-in timing.') : null, chans.map(channelCard)));
   }
   return host;
@@ -1043,7 +1075,8 @@ function autoSection() {
   const D = S.clipLen ?? clip.frames;
   host.append(h('section', { class: 'group' }, h('h3', null, 'Movements'),
     h('p', { class: 'hint' }, 'A movement is written as ordinary automation, so you can edit or redraw it afterwards. Pick one, say where it starts, and add it.'),
-    h('div', { class: 'chips', role: 'group', 'aria-label': 'Movements' }, clips.map((c) => h('button', { type: 'button', class: 'pchip', testid: `clip-${c.id}`, 'aria-pressed': String(c.id === clip.id), onClick: () => { S.clip = c.id; S.clipLen = null; renderPanel(); } }, c.label))),
+    h('p', { class: 'hint' }, 'Each movement starts from whatever the figure is doing, so they chain: Walk to stop, Sit, Stand up, Start walking.'),
+    [...CLIP_GROUPS.map(([g]) => g), 'Other'].map((g) => { const list = clips.filter((c) => groupOfClip(c.id) === g); return list.length ? h('div', { class: 'cliprow' }, h('h4', null, g), h('div', { class: 'chips', role: 'group', 'aria-label': g }, list.map((c) => h('button', { type: 'button', class: 'pchip', testid: `clip-${c.id}`, 'aria-pressed': String(c.id === clip.id), onClick: () => { S.clip = c.id; S.clipLen = null; renderPanel(); } }, c.label)))) : null; }),
     h('p', { class: 'hint' }, clip.help),
     h('div', { class: 'btnrow' },
       numField('Starts at frame', S.clipStart + 1, 1, 2400, (v) => { S.clipStart = Math.max(0, Math.round(v) - 1); }, 'clip-start'),
@@ -1104,7 +1137,8 @@ function openLaneEditor(target) {
   else if (k.kind === 'cadence') view = { lo: 0, hi: 2, to: (v) => v, from: (v) => v, unit: '×', base: () => 1 };
   else {
     const c = CHANNEL_BY_ID[k.id];
-    if (k.what === 'amount') view = { lo: 0, hi: 3, to: (v) => v, from: (v) => v, unit: '×', base: () => S.motion[k.id]?.amount ?? 1 };
+    if (k.what === 'fix') { const span = Math.max(Math.abs(c.min), Math.abs(c.max)); view = { lo: -span, hi: span, to: (v) => c.to(v), from: (v) => c.from(v), unit: c.unit, base: () => 0 }; }
+    else if (k.what === 'amount') view = { lo: 0, hi: 3, to: (v) => v, from: (v) => v, unit: '×', base: () => S.motion[k.id]?.amount ?? 1 };
     else { const span = Math.max(Math.abs(c.min), Math.abs(c.max)); view = { lo: -span, hi: span, to: (v) => c.to(v), from: (v) => c.from(v), unit: c.unit, base: () => S.motion[k.id]?.offset ?? 0 }; }
   }
   const mode = (m, label) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(m === 'handles'), testid: `lane-mode-${m}`, onClick: (e) => { laneEd.setMode(m); dock.querySelectorAll('.segmode .segbtn').forEach((b) => b.setAttribute('aria-pressed', String(b === e.currentTarget))); } }, label);
@@ -1178,8 +1212,8 @@ function renderPanel() {
   else if (S.tab === 'Attach') host.append(attachSection());
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
-    const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig));
-    for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group' }, h('h3', null, g), items.filter((c) => c.group === g).map(row)));
+    const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
+    for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group' }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
     if (S.tab === 'View') host.append(viewExtras());
     if (S.tab === 'Guides') host.append(arcSection(), refSection());
     if (S.tab === 'Export') host.append(exportSection());
@@ -1527,14 +1561,14 @@ function gestures() {
   };
   stage.addEventListener('pointerdown', (e) => {
     stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (ptrs.size === 1) { drag = attachDragStart(e, toFrame) || arcDragStart(e, toFrame); if (drag) { down = null; start = null; return; } }
+    if (ptrs.size === 1) { drag = attachDragStart(e, toFrame) || fixDragStart(e, toFrame) || arcDragStart(e, toFrame); if (drag) { down = null; start = null; return; } }
     start = snap();
     down = ptrs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false, yaw: S.s.camYaw, pitch: S.s.camPitch } : null;
   });
   stage.addEventListener('pointermove', (e) => {
     if (!ptrs.has(e.pointerId)) return;
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (drag) { (drag.arc ? arcDragMove : attachDragMove)(drag, e, toFrame); return; }
+    if (drag) { (drag.arc ? arcDragMove : drag.fix ? fixDragMove : attachDragMove)(drag, e, toFrame); return; }
     const pts = [...ptrs.values()];
     if (!start) return;
     if (pts.length >= 2) {
@@ -1554,7 +1588,7 @@ function gestures() {
     render();
   });
   const up = (e) => {
-    if (drag) { if (drag.arc) { renderPanel(); save(); } else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
+    if (drag) { if (drag.arc || drag.fix) { renderPanel(); save(); } else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     const was = down; const had = ptrs.has(e.pointerId);
     ptrs.delete(e.pointerId);
     if (had && was && !was.moved && performance.now() - was.t < 500) {
@@ -1705,7 +1739,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
 });
 window.__walkBase = {
-  setFigure, figKey, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
+  setFigure, figKey, clipsFor, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
   setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),

@@ -11,6 +11,7 @@ import { speciesOf } from './dogdefaults.js';
 import { buildDogShapes, dogSticks, dogPivot, DOG_ARCS, dogPrints } from './dogdraw.js';
 import { arcPoint, samplePaths, arcColor, arcOffsetX } from './arcs.js';
 import { stripSims } from './physics.js';
+import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
 
 export const STYLE_DEFAULTS = Object.freeze({
@@ -293,8 +294,8 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   const pz = poseAt(t0);
   const sp = perf ? valuesAt(t0).p : params;
   const step = dog ? sp.dogStride / 2 : sp.stepLength;
-  const target = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? 0.45 : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? 0.45 : 0)), dog ? speciesOf(params).view.y : 0.9, 0];
-  const cam = makeCam(st, w, h, target, opts.yawOffset || 0, dog ? speciesOf(params).view.zoom : 1);
+  const target = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? 0.45 : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? 0.45 : 0)), dog ? speciesOf(params).view.y + Math.min(1, params.dogFlight || 0) * (params.dogFlightHeight ?? 0) * 0.6 : 0.9, 0];
+  const cam = makeCam(st, w, h, target, opts.yawOffset || 0, dog ? speciesOf(params).view.zoom / (1 + 0.15 * Math.min(1, params.dogFlight || 0)) : 1);
   const transparent = opts.transparent ?? st.transparent;
   const layers = opts.layers || { guides: true, figure: true };
   // Swinging strips are simulated over the whole cycle ahead of time; this frame's shape is passed on with the item.
@@ -393,7 +394,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
   }
 
-  let shapes = []; let placedAttach = []; let handles = null;
+  let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null;
   if (layers.figure) {
     if (st.showOnion && opts.onion !== false) {
       const ghostStyle = { ...st, style: st.style === 'silhouette' ? 'stick' : st.style };
@@ -418,6 +419,16 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     if (opts.handles) {
       const hit = placedAttach.find((p) => p.it.id === opts.handles);
       if (hit) { const hs = itemHandles(hit.it, hit.f, cam, hit.it.kind === 'image' ? imageInfo(hit.it.img)?.aspect : null); paintHandles(ctx, hs, cam, st.selectColor); handles = { id: hit.it.id, ...hs }; }
+    }
+    if (opts.fix && sel) { // the fix handle: the end of the selected part, to drag back into line
+      const bone = partBone(pz, sel.part, sel.seg ?? null, sel.side ?? null);
+      if (bone) {
+        const e = cam.p([bone[1][0] + pz.pelvisX, bone[1][1], bone[1][2]]); const r = 11 * cam.k;
+        ctx.save(); ctx.lineWidth = cam.lw * 1.8; ctx.strokeStyle = '#e0662e'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(e.x, e.y, r * 0.35, 0, TAU); ctx.fillStyle = '#e0662e'; ctx.fill();
+        ctx.restore(); fixHandle = { x: e.x, y: e.y };
+      }
     }
     if (sel) {
       const pv = pivotOf(pz, cam, sel.part, sel.side);
@@ -458,5 +469,5 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
     ctx.restore();
   }
-  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam, pz, attach: placedAttach, handles, arcDots };
+  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam, pz, attach: placedAttach, handles, arcDots, fixHandle };
 }

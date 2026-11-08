@@ -6,19 +6,20 @@ import { poseDog } from './dog3.js';
 import { paramsAt, motionAt, parseTarget, laneValue, CADENCE } from './automation.js';
 
 /** The pose the figure has at timeline frame `frame`, the same one the stage draws. */
-export function poseFor(params, frame) {
+const withDelta = (m, d) => { const o = { ...m }; for (const [id, v] of Object.entries(d)) o[id] = { ...(o[id] || {}), offset: (o[id]?.offset || 0) + v }; return o; };
+export function poseFor(params, frame, delta = null) {
   const dog = params.rig === 'dog';
   const poser = dog ? poseDog : pose3;
   const perf = params.perf || null;
   if (perf) {
     const ex = Math.max(1, params.exposure ?? 1);
     const t = Math.min(perf.T - 1, Math.floor(frame / ex) * ex);
-    const p = paramsAt(params, perf.lanes, t, perf.live); const m = motionAt(params.motion || {}, perf.lanes, t, perf.live);
+    const p = paramsAt(params, perf.lanes, t, perf.live); let m = motionAt(params.motion || {}, perf.lanes, t, perf.live); if (delta) m = withDelta(m, delta);
     return poser(p, m, perf.u[t], { worldX: perf.x[t], freeU: t / Math.max(2, Math.round(params.cycleFrames)) });
   }
   const { frames } = cycleFrames(params);
   const f = frames[((frame % frames.length) + frames.length) % frames.length];
-  return poser(params, params.motion || {}, f.u, null);
+  return poser(params, delta ? withDelta(params.motion || {}, delta) : params.motion || {}, f.u, null);
 }
 
 /** The points whose paths define a pose, with a name for each. Positions are relative to the pelvis except for the vertical ones that show the bounce. */

@@ -59,6 +59,18 @@ The **Auto** tab turns anything into a movement over time.
 
 The figure travels as the performance says: it slows, stops, or stumbles, and its feet stay planted.
 
+## Corrections: fix a part without losing the animation
+
+On the **Parts** tab, pick a part (the neck, say), turn on **Show the fix handle on the stage**, go to the frame where it has drifted out of line, and drag the orange handle at the end of the part back to where it belongs. The app finds the small change in that part's channels that puts the end where you dropped it, and adds it as a smooth **correction** on top of the animation, easing back out over **Spread** frames either side. The animation underneath is not changed: **Clear corrections** puts the part back exactly as it was, and Undo works. A part turns about its base, so its end can only go round an arc; drop it near the arc.
+
+Corrections are lanes named "correction" (Auto tab), so they can be edited, copied or removed like any other automation.
+
+## Movements
+
+The **Auto** tab has about twenty movements for each of the human and the dog, in four groups (Pace, Posture, Action, Gesture). Human: start walking, walk to stop, break into a run, slow to a walk, sit, stand up, crouch, bow, stretch, jump, kick, throw, pick up, reach, point, wave, cheer, shrug, nod, shake head, look around, trip. Dog: start, stop, speed up, slow down, sit, lie down, sit up and beg, stand up, play bow, leap, chase tail, shake off, sniff the ground, bark, howl, pick up, reach, look around, excited tail wag, trip.
+
+Every movement starts from whatever the figure is doing when it begins, and the lanes ease from one value to the next, so they chain: **Walk to stop, Sit, Stand up, Start walking** runs as one smooth performance. Sit, lie down, beg and crouch hold their pose until you **Stand up**, which returns every part they changed to neutral. A movement is ordinary automation, so you can edit it afterwards, and strength (the K setting) and length can be changed before applying.
+
 ## More figures
 
 The **Figure** menu has a human, a dog and four more that share the dog's legged rig: a **theropod** (T. rex, raptor), a **bird**, a **sauropod** and a **ceratopsian**. Each has its own presets, attachments and saved performances. Choosing one starts from its first preset.

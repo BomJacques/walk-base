@@ -10,6 +10,7 @@ const TAU = Math.PI * 2;
 const wrap = (u) => u - Math.floor(u);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (x) => x * x * (3 - 2 * x);
+const mixv = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const rad = (d) => (d * Math.PI) / 180;
 
 /** Bone lengths in shoulder heights. */
@@ -94,6 +95,7 @@ export function poseDog(params, motion, u, extra = null) {
   const c = (id) => ev.value(`dog.${id}`, uw);
   const sc = (k) => (p.proportions || {})[k] ?? 1;
   const L = bonesOf(p); const sp = speciesOf(p); const biped = sp.legs === 2;
+  const fl = clamp(p.dogFlight ?? 0, 0, 1); // in the air: the body lifts and the feet tuck up
   const HOCK_LEAN = sp.lean.hock; const PASTERN_LEAN = sp.lean.pastern;
   const body = sc('dBody'); const leg = sc('dLeg');
   const D = stanceTravel(p, sc);
@@ -104,7 +106,9 @@ export function poseDog(params, motion, u, extra = null) {
   const spineLen = lens[0] + lens[1] + lens[2];
   const rise = heights.shoulder + L.shoulderDrop - heights.hip;
   const baseTilt = biped ? -rad(p.dogTilt) : -Math.asin(clamp(rise / spineLen, -0.6, 0.6));
-  const P = [c('pelvis.x'), heights.hip + c('pelvis.y'), c('pelvis.z')];
+  // In flight the body rises on each down-stroke of the wings and sinks on each up-stroke.
+  const flightLift = fl * (p.dogFlightHeight - Math.min(1, clamp(p.dogFlap / 40, 0, 1.5)) * 0.07 * Math.sin(TAU * p.dogFlapRate * uw));
+  const P = [c('pelvis.x'), heights.hip + c('pelvis.y') + flightLift, c('pelvis.z')];
   const Rp = seg(c('pelvis.yaw'), c('pelvis.pitch') + baseTilt, c('pelvis.roll'));
   const R1 = mm(Rp, seg(c('spine1.yaw'), c('spine1.pitch'), c('spine1.roll')));
   const R2 = mm(R1, seg(c('spine2.yaw'), c('spine2.pitch'), c('spine2.roll')));
@@ -159,7 +163,8 @@ export function poseDog(params, motion, u, extra = null) {
     const pitch = f.theta + k('paw.pitch');
     const lean = ang - 0.6 * pitch;
     const pawC = [(front ? shoulderRestX : 0) + f.x + k('paw.x'), L.paw + f.y + k('paw.y'), s * k('paw.z')];
-    const target = add(pawC, [-bone * Math.sin(lean), bone * Math.cos(lean), 0]);
+    const targetWalk = add(pawC, [-bone * Math.sin(lean), bone * Math.cos(lean), 0]);
+    const target = !front && fl > 0 ? mixv(targetWalk, add(P, apply(Rp, [-0.32 * leg, -0.2 * leg, s * 0.05])), fl) : targetWalk;
     // Front leg: the shoulder blade is a bone of its own. Its top rides on the ribs by the withers (it slides and drops there),
     // it swings about that point, and the shoulder joint hangs from its lower end. The upper arm starts at that joint.
     let top = null; let root;
@@ -177,22 +182,30 @@ export function poseDog(params, motion, u, extra = null) {
     const l1 = (front ? L.upper : L.thigh) * leg; const l2 = (front ? L.fore : L.shin) * leg;
     if (front && sp.front !== 'leg') {
       // An arm or a wing hangs free: it is placed, not planted. Arms swing a little against the legs; a wing folds or spreads and beats.
-      const ar = sp.armRest; const reach = (l1 + l2) * 0.93;
-      let loc;
+      const ar = sp.armRest; let reach = (l1 + l2) * 0.93;
+      let loc; let lag = 0; let handScale = 1;
       if (sp.front === 'wing') {
-        const open = clamp(p.dogWingOpen, 0, 1); const beat = rad(p.dogFlap) * Math.sin(TAU * p.dogFlapRate * uw);
-        loc = [ar[0] * (1 - open), ar[1] * (1 - open) + reach * Math.sin(beat) * open, s * (ar[2] * (1 - open) + reach * Math.cos(beat) * open)];
+        // The wing sweeps back a little, folds at the elbow on the up-stroke, and the tip trails behind the beat (it lags below going up, above going down).
+        const open = clamp(p.dogWingOpen, 0, 1); const ph = TAU * p.dogFlapRate * uw; const beat = rad(p.dogFlap) * Math.sin(ph); const amp = clamp(p.dogFlap / 30, 0, 1);
+        reach *= 1 - 0.28 * Math.max(0, Math.sin(ph)) * amp;
+        const ext = mul(norm([-0.3, Math.sin(beat), Math.cos(beat)]), reach);
+        loc = [ar[0] * (1 - open) + ext[0] * open, ar[1] * (1 - open) + ext[1] * open, s * (ar[2] * (1 - open) + ext[2] * open)];
+        lag = open * amp * 0.9 * Math.cos(ph); handScale = 1 + 0.8 * open;
       } else loc = [ar[0] + p.dogArmSwing * Math.sin(TAU * (uw - (side === 'R' ? 0 : 0.5))), ar[1], s * ar[2]];
       const goal = add(add(root, apply(R3, loc)), [k('paw.x'), k('paw.y'), s * k('paw.z')]);
       const arm = ik3(root, goal, l1, l2, pole);
-      const dir = norm(sub(arm.ankle, arm.knee));
-      const hand = add(arm.ankle, mul(dir, L.pastern * leg));
+      const dir0 = norm(sub(arm.ankle, arm.knee)); const dir = lag ? norm([dir0[0], dir0[1] - lag, dir0[2]]) : dir0;
+      const hand = add(arm.ankle, mul(dir, L.pastern * leg * handScale));
       legs[leg4] = { front, side, s, top, root, mid: arm.knee, wrist: arm.ankle, paw: hand, toe: add(hand, mul(dir, L.pawLen * 0.6)), reached: arm.reached, stance: false, w: 0, theta: 0, free: true };
       continue;
     }
     const ik = ik3(root, target, l1, l2, pole);
-    const toe = add(pawC, [Math.cos(pitch) * L.pawLen, Math.sin(pitch) * L.pawLen, 0]);
-    legs[leg4] = { front, side, s, top, root, mid: ik.knee, wrist: ik.ankle, paw: pawC, toe, reached: ik.reached, stance: f.stance, w, theta: pitch };
+    let pawF = pawC; let toe = add(pawC, [Math.cos(pitch) * L.pawLen, Math.sin(pitch) * L.pawLen, 0]);
+    if (!front && fl > 0) { // tucked: the foot trails back under the tail
+      pawF = mixv(pawC, add(ik.ankle, apply(Rp, [-0.09 * leg, -0.09 * leg, 0])), fl);
+      toe = mixv(toe, add(pawF, apply(Rp, [-0.1 * leg, -0.03 * leg, 0])), fl);
+    }
+    legs[leg4] = { front, side, s, top, root, mid: ik.knee, wrist: ik.ankle, paw: pawF, toe, reached: ik.reached, stance: f.stance && fl < 0.5, w, theta: pitch };
   }
   return { u: uw, pelvisX: extra?.worldX ?? uw * p.dogStride, params: p, pelvis: P, Rp, R1, R2, R3, Rn, Rh, Rj, j1, j2, j3, neckBase, neckTop, headC, noseTip, hinge, jawEnd, ears, tail, legs, heights, baseTilt };
 }
@@ -200,6 +213,7 @@ export function poseDog(params, motion, u, extra = null) {
 /** Where each paw lands during a performance, for the footprint guide. s is the result of integrate(). */
 export function dogPlants(base, lanes, T, s) {
   const out = [];
+  if ((base.dogFlight || 0) > 0.5) return out;
   for (let t = 0; t < T; t++) {
     for (const leg of legsOf(base)) {
       const ph = pawPhase(base.dogGait, leg);

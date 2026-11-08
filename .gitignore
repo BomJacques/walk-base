@@ -1,0 +1,5 @@
+node_modules/
+site/
+tmp/
+gallop-check-sheet.png
+*.log
