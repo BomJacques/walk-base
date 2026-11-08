@@ -59,6 +59,10 @@ The **Auto** tab turns anything into a movement over time.
 
 The figure travels as the performance says: it slows, stops, or stumbles, and its feet stay planted.
 
+## A less crowded panel
+
+After a review of the interface on iPad and iPhone sizes: the rarely used groups start **folded** (Body: Hips and shoulders and Proportions; Guides: Onion skin and Colours; Export: Names and Target app; Auto: Saved performances, Length and Record by hand), and a choice you make is remembered. The ten tabs **wrap onto two rows** instead of scrolling sideways. **Arc points** are tap-sized chips with the right and left side by side, a single row to show Both sides, Right, Left, All or None, and the symmetry choices folded under one button. **Movements** show one kind at a time (Pace, Posture, Action, Gesture). A menu opened on one tab no longer floats over the next. `tests/ui-layout.mjs` checks all of this at iPad landscape and portrait sizes.
+
 ## Gaits
 
 Each figure offers only the gaits it can do: the dog walk, trot, pace and gallop; the theropod **walk and run**; the bird walk, run and hop; the sauropod walk; the ceratopsian walk and trot. The theropod and bird **run** is a two-legged run in the manner of a running chicken or a Deinonychus drawing: the feet alternate with a flight phase between steps, the swing foot tucks up high under the body, the back squashes (legs gathered, hips low, back arched) at mid-stance and stretches (legs reaching, hips high, back long) in flight once every step, the body leans forward with the neck in an S, and the tail is held out level and never drags. The Run preset is a twelve frame cycle; **Squash and stretch** on the Body tab sets how much.

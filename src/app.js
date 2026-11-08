@@ -383,19 +383,24 @@ function attachSection() {
 }
 
 /** Which points get a motion arc. Ticking one draws its path; its dots can be dragged. */
+/** Points that are a left and right pair share a key, so the pair sits side by side. */
+const pairKey = (id) => id.replace(/\.(R|L)$/, '').replace(/(\.[FH])[RL]$/, '$1');
 function arcSection() {
   const rig = S.p.rig === 'dog' ? 'dog' : 'human'; const key = rig === 'dog' ? 'arcsDog' : 'arcs';
   const on = new Set(S.s[key]);
+  const symOpen = LAYOUT.expandAll || S.arcSymOpen; // the symmetry choices fold away until you want them
   const toggle = (id, v) => { const s = new Set(S.s[key]); if (v) s.add(id); else s.delete(id); S.s[key] = arcPoints(rig).map((p) => p.id).filter((i) => s.has(i)); if (v && !S.s.showArcs) S.s.showArcs = true; save(); renderPanel(); render(); };
   const pts = arcPoints(rig); const groups = [...new Set(pts.map((p) => p.group))];
   const edit = !P().perf && !P().sampled;
   return h('section', { class: 'group', testid: 'arc-section' }, h('h3', null, 'Arc points'),
-    h('p', { class: 'hint' }, edit ? 'Tick the points to trace. With Motion arcs on, drag any dot on a path to bend the movement there; only the curves that move that point change.' : 'These arcs follow the whole performance. To reshape a movement, switch the performance off and drag the dots on the plain cycle.'),
-    h('div', { class: 'btnrow' },
-      h('button', { type: 'button', class: 'btn', testid: 'arc-all', onClick: () => { S.s[key] = pts.map((p) => p.id); S.s.showArcs = true; save(); renderPanel(); render(); } }, 'All'),
-      h('button', { type: 'button', class: 'btn', testid: 'arc-none', onClick: () => { S.s[key] = []; save(); renderPanel(); render(); } }, 'None'),
-      h('button', { type: 'button', class: 'btn', testid: 'arc-default', onClick: () => { S.s[key] = DEFAULT_ARCS[rig].slice(); S.s.showArcs = true; save(); renderPanel(); render(); } }, 'Both sides'),
-      ...[['R', 'Right only'], ['L', 'Left only']].map(([sd, lab]) => h('button', { type: 'button', class: 'btn', testid: `arc-side-${sd}`, onClick: () => { S.s[key] = pts.map((p) => p.id).filter((i) => arcSide(i) === sd || (!arcSide(i) && DEFAULT_ARCS[rig].includes(i))); S.s.showArcs = true; save(); renderPanel(); render(); } }, lab))),
+    h('p', { class: 'hint' }, edit ? 'Tap points to trace. With Motion arcs on, drag a dot on a path to bend the movement there.' : 'These arcs follow the whole performance. To reshape a movement, switch the performance off and drag the dots on the plain cycle.'),
+    h('div', { class: 'seg arcshow', role: 'group', 'aria-label': 'Which arcs to show' },
+      h('button', { type: 'button', class: 'segbtn', testid: 'arc-default', 'aria-pressed': 'false', onClick: () => { S.s[key] = DEFAULT_ARCS[rig].slice(); S.s.showArcs = true; save(); renderPanel(); render(); } }, 'Both sides'),
+      ...[['R', 'Right'], ['L', 'Left']].map(([sd, lab]) => h('button', { type: 'button', class: 'segbtn', testid: `arc-side-${sd}`, 'aria-pressed': 'false', onClick: () => { S.s[key] = pts.map((p) => p.id).filter((i) => arcSide(i) === sd || (!arcSide(i) && DEFAULT_ARCS[rig].includes(i))); S.s.showArcs = true; save(); renderPanel(); render(); } }, lab)),
+      h('button', { type: 'button', class: 'segbtn', testid: 'arc-all', 'aria-pressed': 'false', onClick: () => { S.s[key] = pts.map((p) => p.id); S.s.showArcs = true; save(); renderPanel(); render(); } }, 'All'),
+      h('button', { type: 'button', class: 'segbtn', testid: 'arc-none', 'aria-pressed': 'false', onClick: () => { S.s[key] = []; save(); renderPanel(); render(); } }, 'None')),
+    h('button', { type: 'button', class: 'btn arcsym-toggle', testid: 'arc-sym-toggle', 'aria-expanded': String(symOpen), onClick: () => { S.arcSymOpen = !S.arcSymOpen; renderPanel(); } }, `Symmetry: ${(SYMMETRY.find(([v]) => v === LAYOUT.arcSym) || SYMMETRY[1])[1]} ${symOpen ? '▴' : '▾'}`),
+    symOpen ? h('div', { class: 'arcsym' },
     h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Symmetry')),
       h('div', { class: 'seg', role: 'group', 'aria-label': 'Symmetry between the two sides' }, SYMMETRY.map(([v, t]) => h('button', { type: 'button', class: 'segbtn', testid: `arc-sym-${v}`, 'aria-pressed': String(LAYOUT.arcSym === v), onClick: () => { LAYOUT.arcSym = v; layoutSave(); renderPanel(); } }, t))),
       h('p', { class: 'help' }, 'What the other side does when you drag a dot. Alternate: the same movement half a cycle later, as a walk has it. Mirror: the same movement at the same moment, mirrored left to right, so both hands lift or spread together. Independent: only the side you drag.')),
@@ -406,11 +411,11 @@ function arcSection() {
         if (!Object.keys(entries).length) { setMessage('Nothing to copy: tick a point on that side first.'); return; }
         for (const [id, st] of Object.entries(entries)) S.motion[id] = st;
         markCustom(); renderPanel(); render(); save(); setMessage(`The ${to === 'L' ? 'left' : 'right'} side now matches the ${from === 'L' ? 'left' : 'right'}${LAYOUT.arcSym === 'mirror' ? '' : ', half a cycle later'}.`);
-      } }, lab))),
+      } }, lab)))) : null,
     groups.map((g) => h('div', { class: 'arcgroup' }, h('h4', null, g),
-      pts.filter((p) => p.group === g).map((p) => h('label', { class: 'chk' },
-        h('input', { type: 'checkbox', checked: on.has(p.id), testid: `arc-${p.id}`, onChange: (e) => toggle(p.id, e.target.checked) }),
-        h('span', { class: 'arcsw', style: `background:${arcColor(rig, p.id)}` }), h('span', null, wd(p.label)))))));
+      h('div', { class: 'arcchips' }, pts.filter((p) => p.group === g).sort((a, b) => pairKey(a.id).localeCompare(pairKey(b.id)) || (arcSide(a.id) === 'L' ? 1 : 0) - (arcSide(b.id) === 'L' ? 1 : 0))
+        .map((p) => h('button', { type: 'button', class: `pchip arcchip${arcSide(p.id) ? '' : ' solo'}`, testid: `arc-${p.id}`, 'aria-pressed': String(on.has(p.id)), onClick: () => toggle(p.id, !on.has(p.id)) },
+          h('span', { class: 'arcsw', style: `background:${arcColor(rig, p.id)}` }), h('span', null, wd(p.label))))))));
 }
 /** The attachment under a canvas point. Front ones win over the body; behind ones only where no body part is. */
 function pickAttachment(q, which) {
@@ -1096,7 +1101,12 @@ function autoSection() {
   host.append(h('section', { class: 'group' }, h('h3', null, 'Movements'),
     h('p', { class: 'hint' }, 'A movement is written as ordinary automation, so you can edit or redraw it afterwards. Pick one, say where it starts, and add it.'),
     h('p', { class: 'hint' }, 'Each movement starts from whatever the figure is doing, so they chain: Walk to stop, Sit, Stand up, Start walking.'),
-    [...CLIP_GROUPS.map(([g]) => g), 'Other'].map((g) => { const list = clips.filter((c) => groupOfClip(c.id) === g); return list.length ? h('div', { class: 'cliprow' }, h('h4', null, g), h('div', { class: 'chips', role: 'group', 'aria-label': g }, list.map((c) => h('button', { type: 'button', class: 'pchip', testid: `clip-${c.id}`, 'aria-pressed': String(c.id === clip.id), onClick: () => { S.clip = c.id; S.clipLen = null; renderPanel(); } }, wd(c.label))))) : null; }),
+    (() => {
+      const groups = [...CLIP_GROUPS.map(([g]) => g), 'Other'].filter((g) => clips.some((c) => groupOfClip(c.id) === g));
+      const shown = LAYOUT.expandAll ? null : (groups.includes(S.clipGroup) ? S.clipGroup : groupOfClip(clip.id)); // one group of movements at a time
+      return h('div', { class: 'cliprows' }, h('div', { class: 'seg', role: 'group', 'aria-label': 'Kind of movement' }, groups.map((g) => h('button', { type: 'button', class: 'segbtn', testid: `clip-group-${g}`, 'aria-pressed': String(shown === g || (shown == null && g === groupOfClip(clip.id))), onClick: () => { S.clipGroup = g; renderPanel(); } }, g))),
+        groups.map((g) => { const list = clips.filter((c) => groupOfClip(c.id) === g); return h('div', { class: 'cliprow', hidden: shown != null && shown !== g }, h('div', { class: 'chips', role: 'group', 'aria-label': g }, list.map((c) => h('button', { type: 'button', class: 'pchip', testid: `clip-${c.id}`, 'aria-pressed': String(c.id === clip.id), onClick: () => { S.clip = c.id; S.clipLen = null; S.clipGroup = g; renderPanel(); } }, wd(c.label))))); }));
+    })(),
     h('p', { class: 'hint' }, wd(clip.help)),
     h('div', { class: 'btnrow' },
       numField('Starts at frame', S.clipStart + 1, 1, 2400, (v) => { S.clipStart = Math.max(0, Math.round(v) - 1); }, 'clip-start'),
@@ -1212,7 +1222,8 @@ function collapsible(host) {
     const hd = sec.firstElementChild;
     if (!hd || hd.tagName !== 'H3') return;
     const title = hd.textContent; const key = `${S.tab}:${title}`;
-    const folded = LAYOUT.collapsed?.[key] === true;
+    // The rarely used groups start folded (proportions, hips and shoulders, onion skin, colours, names, target app); a choice you make is remembered.
+    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and shoulders$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
     const body = h('div', { class: 'group-body' });
     while (hd.nextSibling) body.append(hd.nextSibling);
     sec.append(body); body.hidden = folded;
@@ -1223,7 +1234,9 @@ function collapsible(host) {
   });
 }
 
+let lastTab = null;
 function renderPanel() {
+  if (S.tab !== lastTab) { closeMenus(); lastTab = S.tab; } // a menu opened on one tab must not float over the next
   const host = document.getElementById('panel-body');
   const top = host.scrollTop;
   host.textContent = '';
@@ -1504,7 +1517,7 @@ function build() {
 
 // ---------- resizable animation window ----------
 const LAYOUT_KEY = 'walkbase.layout';
-const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcSym: 'alt', collapsed: {} };
+const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcSym: 'alt', expandAll: false, collapsed: {} };
 /** Light or dark: follows the device unless you choose. */
 function applyTheme() { if (LAYOUT.theme === 'light' || LAYOUT.theme === 'dark') document.documentElement.dataset.theme = LAYOUT.theme; else delete document.documentElement.dataset.theme; }
 function setTheme(v) { LAYOUT.theme = v; applyTheme(); layoutSave(); render(); }

@@ -14,7 +14,7 @@ const browser = await pw[name].launch();
 const errors = [];
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await context.newPage();
-await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true })); });
+await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true, expandAll: true })); });
 page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(url); await page.waitForFunction(() => window.__walkBase);
 const ev = (fn, arg) => page.evaluate(fn, arg);
@@ -24,7 +24,7 @@ const wait = (ms) => page.waitForTimeout(ms);
 
 // ---- the movement list
 await ev(() => window.__walkBase.setTab('Auto')); await wait(300);
-const heads = await page.locator('.cliprow h4').allTextContents();
+const heads = await page.locator('[data-testid^="clip-group-"]').allTextContents();
 check('human movements are in groups', ['Pace', 'Posture', 'Action', 'Gesture'].every((g) => heads.includes(g)), heads);
 const chips = await page.locator('[data-testid^="clip-"].pchip').count();
 check('the human has well over a dozen movements', chips >= 18, chips);

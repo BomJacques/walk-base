@@ -19,7 +19,7 @@ async function open(opts) {
   const context = await browser.newContext({ acceptDownloads: true, ...opts });
   const page = await context.newPage();
 // these tests reload on purpose and expect the session back, so they opt in to File > Reopen with last session
-await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true })); });
+await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true, expandAll: true })); });
   page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(url); await page.waitForFunction(() => window.__walkBase);
   await page.evaluate(() => { try { localStorage.clear(); } catch { /* none */ } });

@@ -14,6 +14,7 @@ const browser = await pw[name].launch();
 const errors = [];
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const page = await context.newPage();
+await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true, expandAll: true })); });
 page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(url); await page.waitForFunction(() => window.__walkBase);
 const ev = (fn, arg) => page.evaluate(fn, arg);
@@ -22,7 +23,7 @@ const dots = () => ev(() => window.__walkBase.S.last?.arcDots?.map((d) => ({ id:
 
 await ev(() => window.__walkBase.setTab('Guides'));
 await page.locator('[data-testid="arc-section"]').waitFor();
-check('the Guides tab lists points to trace', (await page.locator('[data-testid^="arc-"][type="checkbox"]').count()) >= 14);
+check('the Guides tab lists points to trace', (await page.locator('.arcchip').count()) >= 14);
 // both sides are shown to start with
 await ev(() => { window.__walkBase.S.s.showArcs = true; window.__walkBase.render(); }); await page.waitForTimeout(250);
 const ids0 = new Set((await dots()).map((q) => q.id));
@@ -33,8 +34,8 @@ await page.locator('[data-testid="arc-default"]').click(); await page.waitForTim
 check('Both sides puts them back', (await ev(() => window.__walkBase.S.s.arcs)).includes('ankle.R') && (await ev(() => window.__walkBase.S.s.arcs)).includes('ankle.L'));
 await ev(() => { window.__walkBase.LAYOUT.arcSym = 'none'; }); // the single-side checks below are with the sides unlinked
 await page.locator('[data-testid="arc-none"]').click();
-await page.locator('[data-testid="arc-ankle.R"]').check();
-await page.locator('[data-testid="arc-wrist.L"]').check();
+await page.locator('[data-testid="arc-ankle.R"]').click();
+await page.locator('[data-testid="arc-wrist.L"]').click();
 await page.waitForTimeout(300);
 const T = await ev(() => window.__walkBase.S.p.cycleFrames);
 let d = await dots();
@@ -69,7 +70,7 @@ check('undo puts the movement back', (await ev(() => JSON.stringify(window.__wal
 await ev(() => window.__walkBase.setRig?.('dog'));
 await page.waitForTimeout(400);
 await ev(() => window.__walkBase.setTab('Guides'));
-const names = await page.locator('[data-testid^="arc-"][type="checkbox"]').evaluateAll((els) => els.map((e) => e.dataset.testid));
+const names = await page.locator('.arcchip').evaluateAll((els) => els.map((e) => e.dataset.testid));
 check('the dog offers its paws and tail', names.includes('arc-paw.FR') && names.includes('arc-tail') && !names.includes('arc-wrist.R'), names.join(' '));
 const dd = await dots();
 check('the dog has dots', dd.length > 20, String(dd.length));

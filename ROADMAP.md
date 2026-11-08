@@ -172,6 +172,12 @@ Requested 2026-11-08. The big rounded buttons in rows read as quickly generated.
 
 **Order against the other phases:** it could go before the attachments, arcs and physics phase or after. Before is the better order, because that phase adds many controls (anchors, handles, layers, arc editing) that would otherwise be built in the old look and rebuilt.
 
+## Interface review (an agent audited the app at iPad and iPhone sizes)
+
+**Done:** folded advanced groups; tabs that wrap; arc points as chips with one Show row and folded symmetry; one group of movements at a time; pop-ups close when the tab changes; Auto's long explanations folded; a layout test.
+
+**Recommended and not yet done:** on the phone the panel gets only about 214px (a bottom sheet that snaps between peek and half-height, with Figure and Walk in its header); slider rows that stack the label over a full-width track on phone and portrait, and a two-column grid of paired sliders on landscape; the top bar's four selects as compact pop-up pills (native pickers on touch); Parts as a body-region picker instead of 33 buttons; Attach's Place and Look groups behind Advanced; help text behind an info toggle per section; merging rarely used tabs (Look, Guides, Sampler, Export) into one More menu or into the top menus; phone tap targets still under 44px in Guides and Body.
+
 ## Added 2026-11-08 (later): flight, wording, corrections, movements
 
 - **Arcs in three directions and symmetry:** every point's chain now includes its sideways channels (width, turn, out), so a drag from the front or top moves it sideways; arm points can also use a shrug of the shoulder when the arm is straight. Symmetry choices Independent, Alternate and Mirror, and Copy right to left / left to right. **Still limited:** a joint with one channel (an elbow or knee) can only go round its arc; a fully straight arm or leg cannot be pushed further out; the chest cannot move along the body.
