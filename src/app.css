@@ -337,3 +337,13 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 :root[data-rows="roomy"] .row.row-number .num, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number .num { min-height: var(--h); }
 :root[data-rows="roomy"] .row.row-number .rng, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number .rng { min-height: var(--h); margin-top: -8px; }
 :root[data-rows="roomy"] .row.row-number, :root[data-rows="auto"] .panel-body[data-wide="1"] .row.row-number { padding-bottom: 0; }
+
+/* colour-coded sections: six muted hues (blue, amber, teal, coral, sage, violet), neighbours roughly complementary; a stripe down the side and a faint tint on the heading */
+:root { --sec-bg-s: 34%; --sec-bg-l: 93%; --sec-st-s: 38%; --sec-st-l: 58%; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sec-bg-s: 18%; --sec-bg-l: 25%; --sec-st-s: 32%; --sec-st-l: 52%; } }
+:root[data-theme="dark"] { --sec-bg-s: 18%; --sec-bg-l: 25%; --sec-st-s: 32%; --sec-st-l: 52%; }
+.group[data-hue="0"] { --hue: 214; } .group[data-hue="1"] { --hue: 38; } .group[data-hue="2"] { --hue: 172; }
+.group[data-hue="3"] { --hue: 10; } .group[data-hue="4"] { --hue: 140; } .group[data-hue="5"] { --hue: 268; }
+.group[data-hue] { border-left: 4px solid hsl(var(--hue) var(--sec-st-s) var(--sec-st-l)); }
+.group[data-hue] > h3 { background: hsl(var(--hue) var(--sec-bg-s) var(--sec-bg-l)); }
+.group[data-hue] .sec-toggle:hover { background: hsl(var(--hue) var(--sec-bg-s) calc(var(--sec-bg-l) - 4%)); }

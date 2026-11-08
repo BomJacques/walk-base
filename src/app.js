@@ -1229,9 +1229,11 @@ function laneTools(target, getBase) {
 
 /** Every group with a heading becomes a section you can fold away; which ones are folded is remembered. */
 function collapsible(host) {
+  let hueIx = 0;
   host.querySelectorAll('section.group').forEach((sec) => {
     const hd = sec.firstElementChild;
     if (!hd || hd.tagName !== 'H3') return;
+    sec.dataset.hue = String(hueIx++ % 6); // each section gets its own muted colour, neighbours roughly complementary
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and shoulders, onion skin, colours, names, target app); a choice you make is remembered.
     const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and shoulders$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));

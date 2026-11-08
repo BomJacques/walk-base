@@ -6,10 +6,10 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 
 | Control | Figure | Unit | Range | Default | What it does |
 |---|---|---|---|---|---|
-| Cycle length | both | frames | 4 to 96 | 24 | Frames for two steps. 24 at 24 fps is one step every half second. |
-| Frame rate | both | fps | 6 to 60 | 24 | Frames per second. Changing it changes the walking speed. |
 | Exposure | both |  | 1, 2, 3 | 1 | Frames each drawing is held. 2 is "on twos". |
 | Camera | both |  | follow, across | follow | Follow keeps the figure in place while the ground scrolls. Across lets it cross the frame. |
+| Cycle length | both | frames | 4 to 96 | 24 | Frames for two steps. 24 at 24 fps is one step every half second. |
+| Frame rate | both | fps | 6 to 60 | 24 | Frames per second. Changing it changes the walking speed. |
 | Step length | human | legs | 0.3 to 1.4 | 0.78 | Contact to contact, in leg lengths. Longer steps at the same timing walk faster. |
 | Time on the ground | human |  | 0.52 to 0.85 | 0.6 | Fraction of the cycle each foot is down. Under 0.5 would be a run, so it stops at 0.52. |
 | Leg straightness | human |  | 0.85 to 0.999 | 0.985 | How straight the leg is at contact. Lower crouches the whole walk. |

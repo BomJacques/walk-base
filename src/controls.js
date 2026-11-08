@@ -12,10 +12,10 @@ export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Body', 'View', 'Look', 
 
 export const CONTROLS = [
   // Gait
-  n('p', 'cycleFrames', 'Gait', 'Timing', 'Cycle length', 'frames', 4, 96, 1, 'Frames for two steps. 24 at 24 fps is one step every half second.'),
-  n('p', 'fps', 'Gait', 'Timing', 'Frame rate', 'fps', 6, 60, 1, 'Frames per second. Changing it changes the walking speed.'),
   e('p', 'exposure', 'Gait', 'Timing', 'Exposure', [1, 2, 3], 'Frames each drawing is held. 2 is "on twos".'),
   e('p', 'travel', 'Gait', 'Timing', 'Camera', ['follow', 'across'], 'Follow keeps the figure in place while the ground scrolls. Across lets it cross the frame.'),
+  n('p', 'cycleFrames', 'Gait', 'Timing', 'Cycle length', 'frames', 4, 96, 1, 'Frames for two steps. 24 at 24 fps is one step every half second.'),
+  n('p', 'fps', 'Gait', 'Timing', 'Frame rate', 'fps', 6, 60, 1, 'Frames per second. Changing it changes the walking speed.'),
   n('p', 'stepLength', 'Gait', 'Stride', 'Step length', 'legs', 0.3, 1.4, 0.01, 'Contact to contact, in leg lengths. Longer steps at the same timing walk faster.'),
   n('p', 'duty', 'Gait', 'Stride', 'Time on the ground', '', 0.52, 0.85, 0.01, 'Fraction of the cycle each foot is down. Under 0.5 would be a run, so it stops at 0.52.'),
   n('p', 'legExtend', 'Gait', 'Stride', 'Leg straightness', '', 0.85, 0.999, 0.001, 'How straight the leg is at contact. Lower crouches the whole walk.'),
