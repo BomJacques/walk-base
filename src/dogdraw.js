@@ -67,10 +67,13 @@ export function buildDogShapes(pz, cam) {
     const l = pz.legs[leg4]; const role = l.side === 'R' ? 'near' : 'far';
     const pre = l.front ? 'dog.f' : 'dog.h';
     // The blade: a flat plate from the withers down to the shoulder joint, drawn first so the upper arm tucks under it.
-    if (bird && l.front && l.free) { // flight feathers: the trailing edge of the wing, behind the bones
-      const back = apply(pz.R3, [-1, 0, 0]); const edge = (pt, k) => add(pt, mul(back, k * (0.5 + 0.5 * Math.min(1, pz.params.dogWingOpen || 0))));
-      const P = [l.root, l.mid, l.wrist, l.paw, edge(l.paw, 0.1), edge(l.wrist, 0.22), edge(l.mid, 0.28), edge(l.root, 0.2)].map(S);
-      shapes.push({ pts: hull(P.map((q) => [q.x, q.y])), depth: (S(l.root).d + S(l.paw).d) / 2 - 0.0002, part: `${pre}leg`, side: l.side, role });
+    if (bird && l.front && l.free) { // flight feathers, drawn as separate quills behind the wing bones
+      const open = Math.min(1, pz.params.dogWingOpen || 0); const back = apply(pz.R3, [-1, 0, 0]);
+      const mix = (a, b, t) => norm([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+      const hand = norm(sub(l.paw, l.wrist)); const fore = norm(sub(l.wrist, l.mid)); const lerp3 = (a, b, t) => add(a, mul(sub(b, a), t));
+      const quill = (base, dir, len, r0) => { const q = (a, b, c, e) => capsule(a, b, c, e, `${pre}leg`, l.side, role); q(base, add(base, mul(dir, len)), r0, r0 * 0.3); };
+      const n2 = 6; for (let i = 0; i < n2; i++) { const t = 0.12 + (0.88 * i) / (n2 - 1); quill(lerp3(l.mid, l.wrist, t), mix(fore, back, 0.8 - 0.3 * open), (0.11 + 0.09 * t) * (0.55 + 0.45 * open) * K.wing, 0.02); } // secondaries
+      const n1 = 7; for (let i = 0; i < n1; i++) { const t = (i + 0.5) / n1; quill(lerp3(l.wrist, l.paw, t), mix(hand, back, 0.12 + 0.5 * (1 - open) + 0.08 * i), (0.2 - 0.012 * i) * (0.5 + 0.5 * open) * K.wing, 0.018); } // primaries, fanning out toward the tip
     }
     const W = l.front && l.free ? (bird ? K.wing : 0.6) : K.leg; // a wing is broad, a theropod's arm is small
     if (l.front && !l.free) capsule(l.top, l.root, 0.05 * W, 0.075 * W, 'dog.fshoulder', l.side, role);

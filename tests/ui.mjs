@@ -293,14 +293,14 @@ const exp = await ev(async () => {
   const buf = new Uint8Array(await r.blob.arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 32768) s += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
   return { b64: btoa(s), frames: r.summary.frames, manifest: r.manifest.frames.length };
 });
-fs.mkdirSync(path.join(root, 'walkbase/tmp'), { recursive: true });
-const zipPath = path.join(root, 'walkbase/tmp/orbit.zip');
+fs.mkdirSync(path.join(root, 'tmp'), { recursive: true });
+const zipPath = path.join(root, 'tmp/orbit.zip');
 fs.writeFileSync(zipPath, Buffer.from(exp.b64, 'base64'));
 check('export builds', exp.frames === 24 && exp.manifest === 24, exp);
 
 await browser.close();
 const failed = results.filter((r) => !r.ok);
-fs.writeFileSync(path.join(root, `walkbase/tests/ui-${name}.json`), JSON.stringify({ browser: name, at: new Date().toISOString(), note: 'Emulated touch, not a physical iPad.', results, errors }, null, 1));
+fs.writeFileSync(path.join(root, `tests/ui-${name}.json`), JSON.stringify({ browser: name, at: new Date().toISOString(), note: 'Emulated touch, not a physical iPad.', results, errors }, null, 1));
 console.log(`page errors: ${errors.length} ${errors.slice(0, 3).join(' | ')}`);
 console.log(`\n${name}: ${results.length - failed.length} passed, ${failed.length} failed`);
 process.exit(0);

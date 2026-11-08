@@ -24,6 +24,7 @@ export const DOG_DEFAULTS = Object.freeze({
   dogWingOpen: 0,         // bird: 0 folds the wings, 1 spreads them
   dogFlap: 0,             // bird: degrees each wing beats up and down
   dogFlapRate: 1,         // bird: beats per cycle
+  dogFlapFrames: 0,       // bird: frames per wing beat on its own clock, so the wings keep beating when the walk slows or stops. 0 ties the beat to the walk cycle (Beats per cycle)
   dogFlight: 0,           // bird: 0 on the ground, 1 in the air (the feet tuck up under the tail and the body lifts, rising on each down-stroke)
   dogFlightHeight: 1.1,   // bird: how high the body flies above its standing height, in shoulder heights
   dogCurl: 14,            // gallop only: degrees the back curls up when the legs gather and stretches out when they reach

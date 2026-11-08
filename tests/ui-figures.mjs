@@ -64,7 +64,7 @@ if (shots) { await ev(() => window.__walkBase.setFrame(2)); await page.waitForTi
 // the flying bird, and wording that fits each animal
 await page.locator('#preset').selectOption('Flying'); await page.waitForTimeout(300);
 check('the Flying preset lifts the bird off the ground and turns the camera', (await ev(() => window.__walkBase.S.p.dogFlight)) === 1 && (await ev(() => window.__walkBase.S.s.camYaw)) === 35);
-const hips = []; for (const i of [0, 4, 8, 12]) { await ev((k) => window.__walkBase.setFrame(k), i); await page.waitForTimeout(80); hips.push(await ev(() => [window.__walkBase.S.last.pz.pelvis[1], window.__walkBase.S.last.pz.legs.HR.toe[1]])); }
+const hips = []; for (const i of [0, 2, 4, 6]) { await ev((k) => window.__walkBase.setFrame(k), i); await page.waitForTimeout(80); hips.push(await ev(() => [window.__walkBase.S.last.pz.pelvis[1], window.__walkBase.S.last.pz.legs.HR.toe[1]])); }
 check('in flight the body is high, the feet are clear of the ground and the body bobs', hips.every(([h, t]) => h > 1.5 && t > 0.5) && Math.max(...hips.map((x) => x[0])) - Math.min(...hips.map((x) => x[0])) > 0.02, hips);
 if (shots) { await ev((k) => window.__walkBase.setFrame(k), 5); await page.waitForTimeout(150); await page.screenshot({ path: path.join(shots, `wb-fig-flying-${name}.png`) }); }
 await ev(() => { window.__walkBase.S.s.camYaw = 0; window.__walkBase.setTab('Gait'); }); await page.waitForTimeout(250);
@@ -96,6 +96,23 @@ check('a performance on a theropod draws', (await ev(() => window.__walkBase.S.l
 // the human still works
 await pick('human');
 check('the human is still there', (await fig()) === 'human' && (await ev(() => window.__walkBase.S.last.shapes.length)) > 10);
+// no dog or paw wording on any tab of any of the new figures
+for (const f of ['theropod', 'bird', 'sauropod', 'ceratopsian']) {
+  await pick(f); const left = [];
+  for (const t of ['Gait', 'Parts', 'Attach', 'Auto', 'Body', 'View', 'Look', 'Guides', 'Export']) {
+    await ev((x) => window.__walkBase.setTab(x), t); await page.waitForTimeout(120);
+    const txt = await page.locator('#panel-body').innerText(); const m = txt.match(/.{0,20}\b(dog|dogs|paws?)\b.{0,20}/i); if (m) left.push(`${t}: ${m[0].replace(/\n/g, ' ')}`);
+  }
+  check(`${f}: no dog or paw wording on any tab`, left.length === 0, left);
+}
+// the frame counter on the stage is off unless asked for
+await pick('human');
+check('the frame counter on the stage is hidden by default', await page.locator('[data-testid="hud"]').isHidden());
+const { press } = await import('./helpers.mjs');
+await press(page, 'view-hud'); await page.waitForTimeout(200);
+check('View, Frame information on the stage shows it', await page.locator('[data-testid="hud"]').isVisible());
+await press(page, 'view-hud'); await page.waitForTimeout(200);
+check('and hides it again', await page.locator('[data-testid="hud"]').isHidden());
 check('no page errors', errors.length === 0, errors.slice(0, 3));
 await browser.close();
 process.exit(fails ? 1 : 0);

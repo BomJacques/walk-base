@@ -54,7 +54,12 @@ self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) =
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  // Cache first, so it opens with no network; fall back to the network and keep what it returns.
+  // The page itself: network first (checked with the server, not the browser's ten minute cache), so an update shows on the first open. The cache is for when there is no connection.
+  if (req.mode === 'navigate') {
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put('index.html', copy)); } return res; }).catch(() => caches.match('index.html')));
+    return;
+  }
+  // Everything else: cache first, so it opens with no network; fall back to the network and keep what it returns.
   e.respondWith(caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
     if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }
     return res;

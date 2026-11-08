@@ -95,7 +95,7 @@ for (const [density, touch] of [['comfortable', true], ['compact', false]]) {
   const context = await browser.newContext({ viewport: { width: 1180, height: 820 } });
   const page = await context.newPage();
   await page.goto(url); await page.waitForFunction(() => window.__walkBase); await page.waitForTimeout(300);
-  await page.addStyleTag({ content: '.hud { top: 8px !important; left: 8px !important; bottom: auto !important; } .tab { margin-right: -30px; }' });
+  await page.evaluate(() => { window.__walkBase.LAYOUT.hud = true; window.__walkBase.render(); }); await page.addStyleTag({ content: '.hud { top: 8px !important; left: 8px !important; bottom: auto !important; } .tab { margin-right: -30px; }' });
   const found = await page.evaluate(`(${overlaps.toString()})()`);
   check('the audit notices an overlap when one is made on purpose', found.some((x) => x.startsWith('camera bar x readout')) && found.some((x) => x.startsWith('tabs:')), found.slice(0, 3));
   await context.close();

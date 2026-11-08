@@ -428,6 +428,11 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
         ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, TAU); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.arc(e.x, e.y, r * 0.35, 0, TAU); ctx.fillStyle = '#e0662e'; ctx.fill();
         ctx.restore(); fixHandle = { x: e.x, y: e.y };
+        // and one at the base of the part: it moves the part before it, since that is where this one starts
+        const b0 = cam.p([bone[0][0] + pz.pelvisX, bone[0][1], bone[0][2]]); const q = 8 * cam.k;
+        ctx.save(); ctx.lineWidth = cam.lw * 1.6; ctx.strokeStyle = '#e0662e'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.rect(b0.x - q, b0.y - q, q * 2, q * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+        fixHandle.base = { x: b0.x, y: b0.y };
       }
     }
     if (sel) {

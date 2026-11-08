@@ -58,3 +58,24 @@ test('it works for the dog and for a limb', () => {
   }
   assert.ok(fixChain('arm', 'R').every((id) => !id.includes('roll')));
 });
+
+test('the base of a part moves the part before it; a part with nothing before it moves its own start', async () => {
+  const { fixPlan, FIX_PARENT } = await import('../src/fix.js');
+  assert.deepEqual(fixPlan('neck', null, 'start'), { part: 'spine.upper', side: null, point: 'end' });
+  assert.deepEqual(fixPlan('forearm', 'R', 'start'), { part: 'arm', side: 'R', point: 'end' });
+  assert.deepEqual(fixPlan('pelvis', null, 'start'), { part: 'pelvis', side: null, point: 'start' });
+  assert.equal(fixPlan('neck', null, 'end').part, 'neck');
+  for (const [child, parent] of Object.entries(FIX_PARENT)) assert.ok(fixChain(parent, null).length >= 1 || fixChain(parent, 'R').length >= 1, `${child}: ${parent} has channels`);
+  const T = cycleFrames(base).frames.length; const frame = 6;
+  // drag the base of the neck: only the spine channels change, and the neck's base lands where it was dropped
+  const t0 = proj(fixEnd(poseFor(base, frame, { 'spine3.pitch': 0.12 }), 'neck', null, null, 'start'));
+  const r = solveFix({ params: base, frame, part: 'neck', which: 'start', target: [t0.x, t0.y], project: proj });
+  assert.ok(r.err < 1 && Object.keys(r.delta).every((id) => id.startsWith('spine3')), `err ${r.err} ${Object.keys(r.delta)}`);
+  const after = poseFor(base, frame, r.delta); const landed = proj(fixEnd(after, 'neck', null, null, 'start'));
+  assert.ok(Math.hypot(landed.x - t0.x, landed.y - t0.y) < 1.5);
+  // the hips: their own start, by the pelvis channels
+  const h0 = proj(fixEnd(poseFor(base, frame, { 'pelvis.y': -0.06 }), 'pelvis', null, null, 'start'));
+  const rh = solveFix({ params: base, frame, part: 'pelvis', which: 'start', target: [h0.x, h0.y], project: proj });
+  assert.ok(rh.err < 1 && Object.keys(rh.delta).some((id) => id === 'pelvis.y'));
+  void T;
+});

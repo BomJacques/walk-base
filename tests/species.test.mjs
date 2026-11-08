@@ -6,6 +6,7 @@ import { CONTROLS, PRESETS_SPECIES, presetsForFigure } from '../src/controls.js'
 import { SPECIES } from '../src/dogdefaults.js';
 import { legsOf } from '../src/dog3.js';
 import { wordsFor } from '../src/words.js';
+import { integrate } from '../src/automation.js';
 
 const mk = (pr, extra = {}) => { const { camYaw, ...p } = pr; return { ...DEFAULTS, rig: 'dog', motion: {}, ...p, ...extra }; };
 const presets = Object.entries(PRESETS_SPECIES).flatMap(([sp, set]) => Object.entries(set).map(([name, pr]) => [`${sp} ${name}`, pr]));
@@ -110,4 +111,26 @@ test('labels are rewritten for each figure and controls that do not apply are le
   for (const c of CONTROLS.filter((x) => /\bDog\b|\bdog\b|\bpaws?\b/i.test(`${x.label} ${x.group} ${x.help}`))) for (const f of ['bird', 'theropod', 'sauropod', 'ceratopsian']) {
     const w = wordsFor(f); assert.ok(!/\bdog\b|\bpaws?\b/i.test(`${w(c.label)} ${w(c.group)} ${w(c.help)}`), `${f}: "${w(c.label)}" still says dog or paw`);
   }
+});
+
+test('the wing beat has a clock of its own: it carries on when the walk has stopped, if Frames per wing beat is set', () => {
+  const still = { cadence: { pts: [{ t: 0, v: 0 }] } };
+  const run = (frames) => {
+    const base = mk(PRESETS_SPECIES.bird.Flying, { dogFlapFrames: frames }); const T = 40;
+    const s = integrate(base, still, T, Math.round(base.cycleFrames), null);
+    const p = { ...base, perf: { T, u: s.u, x: s.x, plants: [], lanes: still, live: null } };
+    return Array.from({ length: T }, (_, f) => poseFor(p, f).legs.FR.wrist[1]);
+  };
+  const free = run(8); const tied = run(0);
+  assert.ok(Math.max(...free) - Math.min(...free) > 0.3, 'beats on its own clock with the walk stopped');
+  assert.ok(Math.max(...tied) - Math.min(...tied) < 1e-6, 'tied to the walk cycle it stands still with the walk');
+  const period = free.findIndex((v, i) => i > 2 && Math.abs(v - free[0]) < 1e-6 && Math.abs(free[i + 1] - free[1]) < 1e-6);
+  assert.equal(period, 8, 'one beat takes 8 frames');
+});
+
+test('a flying bird has feathers: its wing shapes include separate quills', async () => {
+  const { buildDogShapes } = await import('../src/dogdraw.js');
+  const cam = { scale: 100, p: (pt) => ({ x: pt[0] * 100, y: -pt[1] * 100, d: pt[2] }), k: 1, lw: 1 };
+  const count = (pr) => buildDogShapes(poseFor(mk(pr), 3), cam).shapes.filter((q) => q.part === 'dog.fleg' && q.side === 'R').length;
+  assert.ok(count(PRESETS_SPECIES.bird.Flying) > count(PRESETS_SPECIES.theropod.Walk) + 10, 'many quills on the wing');
 });

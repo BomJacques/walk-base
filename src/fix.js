@@ -5,7 +5,7 @@
 import { cycleFrames } from './rig.js';
 import { poseFor } from './keyposes.js';
 import { partBone } from './attach.js';
-import { partChannels, CHANNEL_BY_ID } from './motion.js';
+import { partChannels, CHANNEL_BY_ID, PARTS } from './motion.js';
 import { laneValue, addPoint, targetOfChannel } from './automation.js';
 import { solveMove } from './arcs.js';
 
@@ -18,22 +18,39 @@ export function fixChain(part, side) {
   return (noRoll.length ? noRoll : all).map((c) => c.id);
 }
 
-/** The end of a part's bone in the world (with the walk's travel), for the handle. */
-export function fixEnd(pz, part, seg, side) {
+/** The end (or the start) of a part's bone in the world (with the walk's travel), for the handle. */
+export function fixEnd(pz, part, seg, side, which = 'end') {
   const bone = partBone(pz, part, seg ?? null, side ?? null);
-  return bone ? [bone[1][0] + pz.pelvisX, bone[1][1], bone[1][2]] : null;
+  const pt = bone ? bone[which === 'start' ? 0 : 1] : null;
+  return pt ? [pt[0] + pz.pelvisX, pt[1], pt[2]] : null;
+}
+
+/**
+ * The start of a part is where the part before it ends, so moving it means moving that part's end: the base of the neck is the end of the upper spine.
+ * A part that starts the chain (the hips) or is placed by its own channels (a foot) moves its own start.
+ */
+export const FIX_PARENT = {
+  neck: 'spine.upper', head: 'neck', 'spine.upper': 'spine.mid', 'spine.mid': 'spine.lower', 'spine.lower': 'pelvis', arm: 'girdle', forearm: 'arm', hand: 'forearm', leg: 'pelvis',
+  'dog.neck': 'dog.spine3', 'dog.head': 'dog.neck', 'dog.jaw': 'dog.head', 'dog.ear': 'dog.head', 'dog.spine3': 'dog.spine2', 'dog.spine2': 'dog.spine1', 'dog.spine1': 'dog.pelvis',
+  'dog.tail1': 'dog.pelvis', 'dog.tail2': 'dog.tail1', 'dog.tail3': 'dog.tail2', 'dog.fshoulder': 'dog.spine3', 'dog.fleg': 'dog.fshoulder', 'dog.hleg': 'dog.pelvis',
+};
+/** Which part's channels move the point you drag, and which point of that part it is. which: 'end' (the tip) or 'start' (the base). */
+export function fixPlan(part, side, which = 'end') {
+  if (which === 'start' && FIX_PARENT[part]) { const p = FIX_PARENT[part]; return { part: p, side: PARTS.find((q) => q.id === p)?.sided ? side : null, point: 'end' }; }
+  return { part, side, point: which === 'start' ? 'start' : 'end' };
 }
 
 /**
  * Finds the change in the part's channels (added to whatever the animation gives at `frame`) that puts the end of the part on `target`.
  * `project` turns a world point into the screen point the handle is drawn at. Returns { delta: {channel: change}, err } or null.
  */
-export function solveFix({ params, frame, part, seg = null, side = null, target, project }) {
-  const ids = fixChain(part, side);
+export function solveFix({ params, frame, part, seg = null, side = null, target, project, which = 'end' }) {
+  const plan = fixPlan(part, side, which);
+  const ids = fixChain(plan.part, plan.side);
   if (!ids.length || params.sampled) return null;
   const at = (vals) => {
     const delta = {}; ids.forEach((id, i) => { delta[id] = vals[i]; });
-    const pz = poseFor(params, frame, delta); const w = fixEnd(pz, part, seg, side);
+    const pz = poseFor(params, frame, delta); const w = fixEnd(pz, plan.part, plan.part === part ? seg : null, plan.side, plan.point);
     if (!w) return [0, 0];
     const s = project(w); return [s.x, s.y];
   };

@@ -297,7 +297,7 @@ function attachSection() {
     h('p', { class: 'hint' }, `Build out the character with shapes and pictures. Each one is fixed to a part of the body and moves with it, including every curve and automation on that part. New ones go on: ${S.sel ? partLabel(S.sel.part, S.sel.side) : (where?.label ?? 'the body')}. Select a part first to choose.`),
     h('div', { class: 'btnrow' }, addMenu, fileIn)));
 
-  const rows = h('section', { class: 'group' }, h('h3', null, `On this ${rig === 'dog' ? 'dog' : 'figure'} (${list.length})`));
+  const rows = h('section', { class: 'group' }, h('h3', null, `On this ${rig === 'dog' ? wd('dog') : 'figure'} (${list.length})`));
   if (!list.length) rows.append(h('p', { class: 'hint' }, 'Nothing attached yet. Tap Add.'));
   for (const it of list) {
     rows.append(h('div', { class: `att-item${it.visible ? '' : ' hidden'}`, testid: `attach-item-${it.id}` },
@@ -433,14 +433,16 @@ function fixDragStart(e, toFrame) {
   const hnd = S.last?.fixHandle; const q = toFrame(e.clientX, e.clientY);
   if (!S.fixMode || !S.sel || !hnd || !q || !S.map || S.source === 'sampled') return null;
   const m = S.map; const radius = 20 * m.d * (m.fcw / m.zw);
-  if (Math.hypot(hnd.x - q.x, hnd.y - q.y) > radius) return null;
+  const dEnd = Math.hypot(hnd.x - q.x, hnd.y - q.y); const dBase = hnd.base ? Math.hypot(hnd.base.x - q.x, hnd.base.y - q.y) : Infinity;
+  if (Math.min(dEnd, dBase) > radius) return null;
+  const which = dBase < dEnd ? 'start' : 'end';
   pause();
   const params0 = P(); const T = params0.perf ? params0.perf.T : cycleFrames(params0).frames.length; const ex = Math.max(1, params0.exposure ?? 1);
-  return { fix: true, params0, lanes0: S.lanes, T, frame: Math.min(T - 1, Math.floor(S.frame / ex) * ex), part: S.sel.part, side: S.sel.side ?? null, cam: S.last.cam };
+  return { fix: true, params0, lanes0: S.lanes, T, frame: Math.min(T - 1, Math.floor(S.frame / ex) * ex), part: S.sel.part, side: S.sel.side ?? null, which, cam: S.last.cam };
 }
 function fixDragMove(d, e, toFrame) {
   const q = toFrame(e.clientX, e.clientY); if (!q) return;
-  const r = solveFix({ params: d.params0, frame: d.frame, part: d.part, side: d.side, target: [q.x, q.y], project: (w) => d.cam.p(w) });
+  const r = solveFix({ params: d.params0, frame: d.frame, part: d.part, side: d.side, which: d.which, target: [q.x, q.y], project: (w) => d.cam.p(w) });
   if (!r) return;
   S.lanes = writeFix(d.lanes0, r.delta, d.frame, S.fixSpread, d.T); S.ver++;
   render();
@@ -602,6 +604,7 @@ function paint() {
   updateHud(info);
 }
 function updateHud(info) {
+  hud.hidden = !LAYOUT.hud; // the frame counter is off by default: the frame number and time are already in the transport bar
   const { frames } = cycleFrames(P());
   const key = info.key ? ` · ${info.key.name} (${info.key.side})` : '';
   const pf = P().perf;
@@ -1007,7 +1010,7 @@ function partsSection() {
     const link = sided ? h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: S.link, testid: 'chk-link', onChange: (e) => { S.link = e.target.checked; } }), h('span', null, 'Left and right move together (left runs half a cycle later)')) : null;
     const nfix = fixPoints(S.lanes, S.sel.part, S.sel.side ?? null);
     host.append(h('section', { class: 'group', testid: 'fix-section' }, h('h3', null, 'Fix alignment'),
-      h('p', { class: 'hint' }, 'If this part drifts out of line at some frame, turn this on, go to that frame, and drag the orange handle at the end of the part back where it belongs. It adds a smooth correction on top of the animation; the animation underneath is not changed.'),
+      h('p', { class: 'hint' }, 'If this part drifts out of line at some frame, turn this on, go to that frame, and drag the orange ring at the end of the part, or the square at its base, back where it belongs. The base moves the part before it, since that is where this one starts. It adds a smooth correction on top of the animation; the animation underneath is not changed.'),
       h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: S.fixMode, testid: 'fix-on', onChange: (e) => { S.fixMode = e.target.checked; render(); } }), h('span', null, 'Show the fix handle on the stage')),
       h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Spread'), h('small', null, ' frames')),
         h('div', { class: 'ctl' }, h('input', { type: 'range', class: 'rng', min: 0, max: 60, step: 1, value: S.fixSpread, 'aria-label': 'Spread slider', testid: 'fix-spread', onInput: (e) => { S.fixSpread = Number(e.target.value); const n = e.target.parentElement.querySelector('.num'); if (n) n.value = e.target.value; } }),
@@ -1076,8 +1079,8 @@ function autoSection() {
   host.append(h('section', { class: 'group' }, h('h3', null, 'Movements'),
     h('p', { class: 'hint' }, 'A movement is written as ordinary automation, so you can edit or redraw it afterwards. Pick one, say where it starts, and add it.'),
     h('p', { class: 'hint' }, 'Each movement starts from whatever the figure is doing, so they chain: Walk to stop, Sit, Stand up, Start walking.'),
-    [...CLIP_GROUPS.map(([g]) => g), 'Other'].map((g) => { const list = clips.filter((c) => groupOfClip(c.id) === g); return list.length ? h('div', { class: 'cliprow' }, h('h4', null, g), h('div', { class: 'chips', role: 'group', 'aria-label': g }, list.map((c) => h('button', { type: 'button', class: 'pchip', testid: `clip-${c.id}`, 'aria-pressed': String(c.id === clip.id), onClick: () => { S.clip = c.id; S.clipLen = null; renderPanel(); } }, c.label)))) : null; }),
-    h('p', { class: 'hint' }, clip.help),
+    [...CLIP_GROUPS.map(([g]) => g), 'Other'].map((g) => { const list = clips.filter((c) => groupOfClip(c.id) === g); return list.length ? h('div', { class: 'cliprow' }, h('h4', null, g), h('div', { class: 'chips', role: 'group', 'aria-label': g }, list.map((c) => h('button', { type: 'button', class: 'pchip', testid: `clip-${c.id}`, 'aria-pressed': String(c.id === clip.id), onClick: () => { S.clip = c.id; S.clipLen = null; renderPanel(); } }, wd(c.label))))) : null; }),
+    h('p', { class: 'hint' }, wd(clip.help)),
     h('div', { class: 'btnrow' },
       numField('Starts at frame', S.clipStart + 1, 1, 2400, (v) => { S.clipStart = Math.max(0, Math.round(v) - 1); }, 'clip-start'),
       h('button', { type: 'button', class: 'btn', testid: 'clip-playhead', onClick: () => { S.clipStart = S.frame; renderPanel(); } }, 'Use playhead'),
@@ -1398,6 +1401,7 @@ function menuBar() {
     ]),
     mb('View', 'menu-view', () => [
       { label: 'Stage only', testid: 'stage-only', checked: S.stageOnly, onClick: () => { S.stageOnly = !S.stageOnly; document.body.classList.toggle('stage-only', S.stageOnly); render(); } },
+      { label: 'Frame information on the stage', testid: 'view-hud', checked: LAYOUT.hud, onClick: () => { LAYOUT.hud = !LAYOUT.hud; layoutSave(); render(); } },
       { label: 'Fit figure to window', testid: 'menu-fit', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } },
       { separator: true },
       { heading: 'Theme' },
@@ -1483,7 +1487,7 @@ function build() {
 
 // ---------- resizable animation window ----------
 const LAYOUT_KEY = 'walkbase.layout';
-const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, collapsed: {} };
+const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, collapsed: {} };
 /** Light or dark: follows the device unless you choose. */
 function applyTheme() { if (LAYOUT.theme === 'light' || LAYOUT.theme === 'dark') document.documentElement.dataset.theme = LAYOUT.theme; else delete document.documentElement.dataset.theme; }
 function setTheme(v) { LAYOUT.theme = v; applyTheme(); layoutSave(); render(); }

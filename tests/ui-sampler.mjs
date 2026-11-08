@@ -220,10 +220,10 @@ const exp = await ev(async () => {
   const enc = async (blob) => { const buf = new Uint8Array(await blob.arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 32768) s += String.fromCharCode.apply(null, buf.subarray(i, i + 32768)); return btoa(s); };
   return { e: await enc(r.blob), u: await enc(u.blob), frames: r.summary.frames, holds: w.SM.cuts.map((c) => c.exposure ?? w.SM.exposure), labels: w.SM.cuts.map((c) => c.label) };
 });
-fs.mkdirSync(path.join(root, 'walkbase/tmp'), { recursive: true });
-fs.writeFileSync(path.join(root, 'walkbase/tmp/sampled-expanded.zip'), Buffer.from(exp.e, 'base64'));
-fs.writeFileSync(path.join(root, 'walkbase/tmp/sampled-unique.zip'), Buffer.from(exp.u, 'base64'));
-fs.writeFileSync(path.join(root, 'walkbase/tmp/sampled-expect.json'), JSON.stringify({ frames: exp.frames, holds: exp.holds, labels: exp.labels }));
+fs.mkdirSync(path.join(root, 'tmp'), { recursive: true });
+fs.writeFileSync(path.join(root, 'tmp/sampled-expanded.zip'), Buffer.from(exp.e, 'base64'));
+fs.writeFileSync(path.join(root, 'tmp/sampled-unique.zip'), Buffer.from(exp.u, 'base64'));
+fs.writeFileSync(path.join(root, 'tmp/sampled-expect.json'), JSON.stringify({ frames: exp.frames, holds: exp.holds, labels: exp.labels }));
 check('sampled frames export', exp.frames === total.frames, exp.frames);
 
 // ---- settings survive a reload; the picture does not ----
@@ -275,7 +275,7 @@ check('the Sampler tab\'s controls are at least 44 px', badTab.length === 0, bad
 
 await browser.close();
 const failed = results.filter((r) => !r.ok);
-fs.writeFileSync(path.join(root, `walkbase/tests/ui-sampler-${mode}-${name}.json`), JSON.stringify({ browser: name, mode, at: new Date().toISOString(), results, errors }, null, 1));
+fs.writeFileSync(path.join(root, `tests/ui-sampler-${mode}-${name}.json`), JSON.stringify({ browser: name, mode, at: new Date().toISOString(), results, errors }, null, 1));
 console.log(`page errors: ${errors.length} ${errors.slice(0, 3).join(' | ')}`);
 console.log(`\n${name} ${mode}: ${results.length - failed.length} passed, ${failed.length} failed`);
 process.exit(0);

@@ -6,7 +6,7 @@ const SPECIAL = {
   bird: [['Front legs', 'Wings'], ['Hind legs', 'Legs'], ['Front leg and elbow', 'Wing and elbow'], ['Front paw', 'Wing tip'], ['Hind leg and knee', 'Leg and knee'], ['Hind paw', 'Foot']],
 };
 const BIPED_ONLY = ['dogTilt', 'dogArmSwing'];
-const BIRD_ONLY = ['dogHeadHold', 'dogWingOpen', 'dogFlap', 'dogFlapRate', 'dogFlight', 'dogFlightHeight'];
+const BIRD_ONLY = ['dogHeadHold', 'dogWingOpen', 'dogFlap', 'dogFlapRate', 'dogFlapFrames', 'dogFlight', 'dogFlightHeight'];
 const EARS = ['dogEar', 'dEar'];
 const QUAD_ONLY = ['dogShoulder', 'dogCurl'];
 /** Controls to leave out, by figure. */

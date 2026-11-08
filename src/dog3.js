@@ -96,6 +96,8 @@ export function poseDog(params, motion, u, extra = null) {
   const sc = (k) => (p.proportions || {})[k] ?? 1;
   const L = bonesOf(p); const sp = speciesOf(p); const biped = sp.legs === 2;
   const fl = clamp(p.dogFlight ?? 0, 0, 1); // in the air: the body lifts and the feet tuck up
+  // The wing beat has a clock of its own when Frames per wing beat is set: in a performance it is the timeline frame, so it carries on whatever the walk does.
+  const flapPhase = p.dogFlapFrames > 0 ? (extra?.freeU != null ? (TAU * extra.freeU * Math.max(2, Math.round(p.cycleFrames))) / p.dogFlapFrames : TAU * Math.max(1, Math.round(p.cycleFrames / p.dogFlapFrames)) * uw) : TAU * p.dogFlapRate * uw;
   const HOCK_LEAN = sp.lean.hock; const PASTERN_LEAN = sp.lean.pastern;
   const body = sc('dBody'); const leg = sc('dLeg');
   const D = stanceTravel(p, sc);
@@ -107,7 +109,7 @@ export function poseDog(params, motion, u, extra = null) {
   const rise = heights.shoulder + L.shoulderDrop - heights.hip;
   const baseTilt = biped ? -rad(p.dogTilt) : -Math.asin(clamp(rise / spineLen, -0.6, 0.6));
   // In flight the body rises on each down-stroke of the wings and sinks on each up-stroke.
-  const flightLift = fl * (p.dogFlightHeight - Math.min(1, clamp(p.dogFlap / 40, 0, 1.5)) * 0.07 * Math.sin(TAU * p.dogFlapRate * uw));
+  const flightLift = fl * (p.dogFlightHeight - Math.min(1, clamp(p.dogFlap / 40, 0, 1.5)) * 0.07 * Math.sin(flapPhase));
   const P = [c('pelvis.x'), heights.hip + c('pelvis.y') + flightLift, c('pelvis.z')];
   const Rp = seg(c('pelvis.yaw'), c('pelvis.pitch') + baseTilt, c('pelvis.roll'));
   const R1 = mm(Rp, seg(c('spine1.yaw'), c('spine1.pitch'), c('spine1.roll')));
@@ -186,7 +188,7 @@ export function poseDog(params, motion, u, extra = null) {
       let loc; let lag = 0; let handScale = 1;
       if (sp.front === 'wing') {
         // The wing sweeps back a little, folds at the elbow on the up-stroke, and the tip trails behind the beat (it lags below going up, above going down).
-        const open = clamp(p.dogWingOpen, 0, 1); const ph = TAU * p.dogFlapRate * uw; const beat = rad(p.dogFlap) * Math.sin(ph); const amp = clamp(p.dogFlap / 30, 0, 1);
+        const open = clamp(p.dogWingOpen, 0, 1); const ph = flapPhase; const beat = rad(p.dogFlap) * Math.sin(ph); const amp = clamp(p.dogFlap / 30, 0, 1);
         reach *= 1 - 0.28 * Math.max(0, Math.sin(ph)) * amp;
         const ext = mul(norm([-0.3, Math.sin(beat), Math.cos(beat)]), reach);
         loc = [ar[0] * (1 - open) + ext[0] * open, ar[1] * (1 - open) + ext[1] * open, s * (ar[2] * (1 - open) + ext[2] * open)];
