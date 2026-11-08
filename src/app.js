@@ -903,7 +903,7 @@ function row(c) {
     }
     control = h('div', { class: 'ctl' }, rng, num);
   } else if (c.type === 'enum') {
-    control = h('div', { class: 'seg', role: 'group', 'aria-label': c.label }, c.options.map((o) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(String(o) === String(val)), testid: `opt-${c.id}-${o}`, onClick: () => { setParam(c, o); renderPanel(); } }, String(o))));
+    control = h('div', { class: 'seg', role: 'group', 'aria-label': c.label }, wordsFor(figKey()).options(c).map((o) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(String(o) === String(val)), testid: `opt-${c.id}-${o}`, onClick: () => { setParam(c, o); renderPanel(); } }, String(o))));
   } else if (c.type === 'bool') {
     control = h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: val, testid: `chk-${c.id}`, onChange: (e) => { setParam(c, e.target.checked); e.target.nextSibling.textContent = e.target.checked ? 'On' : 'Off'; } }), h('span', null, val ? 'On' : 'Off'));
   } else {

@@ -19,7 +19,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Heel strike | human | ° | 0 to 40 | 14 | Toe-up angle at contact. |
 | Toe off | human | ° | 0 to 60 | 32 | Heel-up angle at push-off. |
 | Swing toe | human | ° | -20 to 40 | 8 | Toe angle while the foot swings through. |
-| Gait | dog |  | walk, trot, pace, gallop, hop | walk | Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between. |
+| Gait | dog |  | walk, trot, pace, gallop, run, hop | walk | Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between. |
 | Stride | dog | heights | 0.1 to 5 | 0.95 | Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster. |
 | Time on the ground | dog |  | 0.15 to 0.85 | 0.68 | Fraction of the cycle each paw is down. |
 | Paw lift | dog | heights | 0 to 0.5 | 0.13 | How high the swinging paw clears the ground. |
@@ -57,7 +57,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Body bounce | dog | heights | 0 to 0.3 | 0.03 | Up and down travel of the hips. |
 | Spine bend | dog | ° | 0 to 25 | 6 | Side to side bend of the spine as the dog walks. |
 | Back arch | dog | ° | 0 to 12 | 2 | How much the back arches and dips with each footfall. |
-| Gallop spine curl | dog | ° | 0 to 30 | 14 | Gallop only: the back humps up when the legs gather under the body and stretches out when they reach. |
+| Squash and stretch | dog | ° | 0 to 30 | 14 | Gallop and run only: the back humps up when the legs gather under the body and stretches out when they reach. A run does it once every step. |
 | Torso twist | dog | ° | 0 to 20 | 6 | How far the shoulders and hips roll against each other along the spine. The shoulder on the side whose paw lands drops. |
 | Shoulder blade | dog | heights | 0 to 0.15 | 0.05 | How far each shoulder blade drops and slides forward as its front paw lands. |
 | Chest raise | dog | ° | -10 to 70 | 0 | Two-legged figures only: how far the chest is raised above level. A theropod is nearly level, a bird is tipped up. |
@@ -67,6 +67,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Wing beat | dog | ° | 0 to 70 | 0 | Bird: how far each wing beats up and down. Open the wings first. |
 | In flight | dog |  | 0 to 1 | 0 | Bird: 0 stands on the ground, 1 flies. In flight the feet tuck up under the tail and the body rises on each down-stroke. Open the wings and set a wing beat. |
 | Flight height | dog | heights | 0 to 3 | 1.1 | Bird: how far above the ground the body flies. |
+| Frames per wing beat | dog | frames | 0 to 60 | 0 | Bird: how many frames one wing beat takes, on its own clock, so the wings keep beating when the walk slows or stops. 0 ties the beat to the walk cycle (Beats per cycle). |
 | Beats per cycle | dog |  | 1 to 6 | 1 | Bird: wing beats in one cycle. |
 | Neck raise | dog | ° | 0 to 90 | 52 | How steeply the neck rises from the back. |
 | Head tip | dog | ° | -20 to 80 | 34 | How far the head tips down from the neck. |

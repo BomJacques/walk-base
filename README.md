@@ -59,9 +59,13 @@ The **Auto** tab turns anything into a movement over time.
 
 The figure travels as the performance says: it slows, stops, or stumbles, and its feet stay planted.
 
+## Gaits
+
+Each figure offers only the gaits it can do: the dog walk, trot, pace and gallop; the theropod **walk and run**; the bird walk, run and hop; the sauropod walk; the ceratopsian walk and trot. The theropod and bird **run** is a two-legged run in the manner of a running chicken or a Deinonychus drawing: the feet alternate with a flight phase between steps, the swing foot tucks up high under the body, the back squashes (legs gathered, hips low, back arched) at mid-stance and stretches (legs reaching, hips high, back long) in flight once every step, the body leans forward with the neck in an S, and the tail is held out level and never drags. The Run preset is a twelve frame cycle; **Squash and stretch** on the Body tab sets how much.
+
 ## Corrections: fix a part without losing the animation
 
-On the **Parts** tab, pick a part (the neck, say), turn on **Show the fix handle on the stage**, go to the frame where it has drifted out of line, and drag the orange handle at the end of the part back to where it belongs. The app finds the small change in that part's channels that puts the end where you dropped it, and adds it as a smooth **correction** on top of the animation, easing back out over **Spread** frames either side. The animation underneath is not changed: **Clear corrections** puts the part back exactly as it was, and Undo works. A part turns about its base, so its end can only go round an arc; drop it near the arc.
+On the **Parts** tab, pick a part (the neck, say), turn on **Show the fix handle on the stage**, go to the frame where it has drifted out of line, and drag the orange ring at the end of the part, or the square at its base, back where it belongs. The base moves the part before it, since that is where this one starts. The app finds the small change in that part's channels that puts the end where you dropped it, and adds it as a smooth **correction** on top of the animation, easing back out over **Spread** frames either side. The animation underneath is not changed: **Clear corrections** puts the part back exactly as it was, and Undo works. A part turns about its base, so its end can only go round an arc; drop it near the arc.
 
 Corrections are lanes named "correction" (Auto tab), so they can be edited, copied or removed like any other automation.
 

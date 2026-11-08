@@ -102,8 +102,8 @@ const dch = (id, part, label, kind, def, extra = {}) => ch(`dog.${id}`, `dog.${p
 const dsided = (id, part, label, kind, def, extra = {}) => sided(`dog.${id}`, `dog.${part}`, label, kind, def, extra);
 /** The body's up and down rhythm: four beats a cycle in a walk, two in a trot or pace. */
 const dbob = (u, p) => Math.cos(TAU * (DOG_GAITS[p.dogGait]?.bobRate ?? 2) * (u - (DOG_GAITS[p.dogGait]?.bobPhase ?? 0.1)));
-/** The gallop's spine curl: +1 with the legs gathered (back arched up), -1 with them stretched out. Zero in the other gaits. */
-const dCurl = (u, p) => (DOG_GAITS[p.dogGait]?.curlPhase == null ? 0 : rad(p.dogCurl) * Math.cos(TAU * (u - DOG_GAITS[p.dogGait].curlPhase)));
+/** The spine curl (squash and stretch) of a gallop or a run: +1 with the legs gathered (back arched up), -1 with them stretched out. Zero in the other gaits. A run does it once per step. */
+const dCurl = (u, p) => (DOG_GAITS[p.dogGait]?.curlPhase == null ? 0 : rad(p.dogCurl) * Math.cos(TAU * (DOG_GAITS[p.dogGait].curlRate ?? 1) * (u - DOG_GAITS[p.dogGait].curlPhase)));
 /** How the curl is shared out along the back, pelvis first. The tail end tips one way and the chest the other, so the back arches as a whole. */
 const CURL = [-1, 0, 1, 1];
 /** Phase at which the front right paw lands: its shoulder is lowest then. */

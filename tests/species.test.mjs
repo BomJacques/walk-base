@@ -106,7 +106,7 @@ test('labels are rewritten for each figure and controls that do not apply are le
   const by = Object.fromEntries(CONTROLS.map((c) => [c.id, c]));
   assert.ok(dog.hides(by.dogWingOpen) && dog.hides(by.dogFlight) && !dog.hides(by.dogEar));
   assert.ok(bird.hides(by.dogEar) && !bird.hides(by.dogFlight) && !bird.hides(by.dogHeadHold));
-  assert.ok(ther.hides(by.dogWingOpen) && !ther.hides(by.dogArmSwing) && ther.hides(by.dogCurl));
+  assert.ok(ther.hides(by.dogWingOpen) && !ther.hides(by.dogArmSwing) && !ther.hides(by.dogCurl) && ther.hides(by.dogShoulder));
   assert.ok(bird.hidesPart('dog.ear') && !dog.hidesPart('dog.ear'));
   for (const c of CONTROLS.filter((x) => /\bDog\b|\bdog\b|\bpaws?\b/i.test(`${x.label} ${x.group} ${x.help}`))) for (const f of ['bird', 'theropod', 'sauropod', 'ceratopsian']) {
     const w = wordsFor(f); assert.ok(!/\bdog\b|\bpaws?\b/i.test(`${w(c.label)} ${w(c.group)} ${w(c.help)}`), `${f}: "${w(c.label)}" still says dog or paw`);
@@ -133,4 +133,23 @@ test('a flying bird has feathers: its wing shapes include separate quills', asyn
   const cam = { scale: 100, p: (pt) => ({ x: pt[0] * 100, y: -pt[1] * 100, d: pt[2] }), k: 1, lw: 1 };
   const count = (pr) => buildDogShapes(poseFor(mk(pr), 3), cam).shapes.filter((q) => q.part === 'dog.fleg' && q.side === 'R').length;
   assert.ok(count(PRESETS_SPECIES.bird.Flying) > count(PRESETS_SPECIES.theropod.Walk) + 10, 'many quills on the wing');
+});
+
+test('the theropod has walk and run only, and the run is a real run: flight, squash and stretch, a tail held out clear of the ground', () => {
+  const ther = wordsFor('theropod'); const gait = CONTROLS.find((c) => c.id === 'dogGait');
+  assert.deepEqual(ther.options(gait), ['walk', 'run']);
+  assert.deepEqual(wordsFor('bird').options(gait), ['walk', 'run', 'hop']);
+  assert.deepEqual(wordsFor('dog').options(gait), ['walk', 'trot', 'pace', 'gallop']);
+  assert.deepEqual(wordsFor('sauropod').options(gait), ['walk']);
+  for (const name of ['Walk', 'Stalk', 'Run', 'Small fast runner']) assert.ok(['walk', 'run'].includes(PRESETS_SPECIES.theropod[name].dogGait), name);
+  const p = mk(PRESETS_SPECIES.theropod.Run); const T = cycleFrames(p).frames.length; assert.equal(T, 12, 'a twelve frame cycle');
+  const zs = Array.from({ length: T }, (_, f) => poseFor(p, f));
+  const air = zs.filter((z) => !z.legs.HR.stance && !z.legs.HL.stance).length; assert.ok(air >= 2 && air <= 6, `flight in ${air} of ${T} frames`);
+  const hip = zs.map((z) => z.pelvis[1]); assert.ok(Math.max(...hip) - Math.min(...hip) > 0.1, 'the body rises and falls');
+  const peaks = hip.filter((v, i) => v > hip[(i + T - 1) % T] && v >= hip[(i + 1) % T]).length; assert.equal(peaks, 2, 'one rise and fall every step');
+  // squash and stretch: the distance from the pelvis to the head changes as the back arches and straightens
+  const span = zs.map((z) => Math.hypot(z.headC[0] - z.pelvis[0], z.headC[1] - z.pelvis[1])); assert.ok(Math.max(...span) - Math.min(...span) > 0.05, 'the body compresses and stretches');
+  assert.ok(zs.every((z) => z.tail[3][1] > 0.4), 'the tail never drags on the ground'); assert.ok(zs.every((z) => z.tail[3][1] > z.pelvis[1] - 0.45), 'and is held out level with the body');
+  const lift = zs.map((z) => Math.max(z.legs.HR.paw[1], z.legs.HL.paw[1])); assert.ok(Math.max(...lift) > 0.3, 'the swing foot tucks up high under the body');
+  const walk = mk(PRESETS_SPECIES.theropod.Walk); const w0 = Array.from({ length: 30 }, (_, f) => poseFor(walk, f)); assert.ok(w0.every((z) => z.legs.HR.stance || z.legs.HL.stance), 'a walk always has a foot down');
 });

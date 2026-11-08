@@ -65,6 +65,20 @@ export function gallopPawPath(w, duty, D, lift, front) {
   return { x: knots(ks, xs, sx, sx, k), y: Math.max(0, knots(ks, ys, 0, 0, k)), theta: -0.5 * Math.sin(Math.PI * k), stance: false };
 }
 
+/**
+ * A foot in a two-legged run. The foot pushes off and trails behind, then comes up fast and tucks high under the body (the knee drives forward, as a running
+ * chicken's does), then reaches out ahead and comes down to meet the ground, so the swing is long, high and quick, with the toe pitched down as it lands.
+ */
+export function runPawPath(w, duty, D, lift) {
+  if (w < duty) return { x: D / 2 - (D * w) / duty, y: 0, theta: 0, stance: true };
+  const k = (w - duty) / (1 - duty);
+  const ks = [0, 0.22, 0.55, 0.85, 1];
+  const xs = [-D / 2, -D / 2 - 0.04 * D, 0.05 * D, D / 2 + 0.04 * D, D / 2];
+  const ys = [0, 0.8, 1, 0.5, 0].map((v) => v * lift);
+  const sx = -0.4 * D * (1 - duty) / Math.max(duty, 0.05);
+  return { x: knots(ks, xs, sx, sx, k), y: Math.max(0, knots(ks, ys, 0, 0, k)), theta: -0.6 * Math.sin(Math.PI * k), stance: false };
+}
+
 /** Ground a planted paw covers. Limited to what the legs can span, so a very long stride on short legs shortens its steps instead of tearing the leg off. */
 export function stanceTravel(p, sc) {
   const L = bonesOf(p); const leg = sc('dLeg'); const { hock, pastern } = speciesOf(p).lean;
@@ -159,7 +173,7 @@ export function poseDog(params, motion, u, extra = null) {
     const front = leg4[0] === 'F'; const side = leg4[1]; const s = side === 'R' ? 1 : -1;
     const k = (id) => c(`${front ? 'f' : 'h'}${id}.${side}`);
     const w = wrap(uw - pawPhase(p.dogGait, leg4));
-    const f = p.dogGait === 'gallop' ? gallopPawPath(w, p.dogDuty, D, p.dogLift, front) : pawPath(w, p.dogDuty, D, p.dogLift);
+    const f = p.dogGait === 'gallop' ? gallopPawPath(w, p.dogDuty, D, p.dogLift, front) : p.dogGait === 'run' ? runPawPath(w, p.dogDuty, D, p.dogLift) : pawPath(w, p.dogDuty, D, p.dogLift);
     const ang = front ? PASTERN_LEAN : HOCK_LEAN;
     const bone = (front ? L.pastern : L.meta) * leg;
     const pitch = f.theta + k('paw.pitch');

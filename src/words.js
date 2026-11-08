@@ -8,7 +8,7 @@ const SPECIAL = {
 const BIPED_ONLY = ['dogTilt', 'dogArmSwing'];
 const BIRD_ONLY = ['dogHeadHold', 'dogWingOpen', 'dogFlap', 'dogFlapRate', 'dogFlapFrames', 'dogFlight', 'dogFlightHeight'];
 const EARS = ['dogEar', 'dEar'];
-const QUAD_ONLY = ['dogShoulder', 'dogCurl'];
+const QUAD_ONLY = ['dogShoulder'];
 /** Controls to leave out, by figure. */
 const HIDE = {
   dog: new Set([...BIPED_ONLY, ...BIRD_ONLY]),
@@ -17,6 +17,9 @@ const HIDE = {
   theropod: new Set([...BIRD_ONLY, ...EARS, ...QUAD_ONLY]),
   bird: new Set([...EARS, ...QUAD_ONLY, 'dogArmSwing']),
 };
+
+/** The gaits each figure can do. */
+const GAITS = { dog: ['walk', 'trot', 'pace', 'gallop'], sauropod: ['walk'], ceratopsian: ['walk', 'trot'], theropod: ['walk', 'run'], bird: ['walk', 'run', 'hop'] };
 
 /** A function that rewrites a label for this figure, with .hides(control) and .hidesPart(id). The human and the dog are left as they are. */
 export function wordsFor(fig) {
@@ -33,6 +36,8 @@ export function wordsFor(fig) {
     };
   }
   f.hides = (c) => hide.has(c.id);
+  /** The choices a control offers this figure (a theropod has no hop or gallop). */
+  f.options = (c) => (c.id === 'dogGait' && GAITS[fig] ? c.options.filter((o) => GAITS[fig].includes(o)) : c.options);
   f.hidesPart = (id) => Boolean(sp && fig !== 'dog' && id === 'dog.ear');
   return f;
 }

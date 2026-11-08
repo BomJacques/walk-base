@@ -174,6 +174,11 @@ Requested 2026-11-08. The big rounded buttons in rows read as quickly generated.
 
 ## Added 2026-11-08 (later): flight, wording, corrections, movements
 
+- **Theropod run (requested with a Deinonychus run-cycle drawing):** the gait list per figure (theropod: walk, run; no hop or gallop), and a two-legged run gait with flight, high foot tuck, squash and stretch once per step, forward lean and a level tail (`runPawPath` in `src/dog3.js`, `run` in `src/dogdefaults.js`). **Not yet:** the stretch pose in the drawing has the whole body arching over a single planted foot; the reach and tuck could be tuned further against the drawing, with a body roll and a head that stays steadier than the hips. Feathered raptor tail and arms.
+- **Corrections at the base of a part:** a square handle at the start of the selected part moves the part before it (the base of the neck is the end of the upper spine).
+- **Bird feathers and flap clock:** quills drawn as separate feathers (secondaries along the forearm, primaries fanning from the wrist); Frames per wing beat gives the wings a clock of their own in a performance.
+- **Counter:** the frame counter on the stage is off by default (View, Frame information on the stage).
+
 - **Flying bird:** presets Flying and Gliding (body lifted, feet tucked under the tail, wings that sweep back, fold at the elbow on the up-stroke with the tip trailing the beat, the body rising on each down-stroke, the tail fanned). Controls In flight and Flight height. Wings beat sideways, so the preset turns the camera to three-quarters. **Not yet:** feathers as separate shapes, a take-off and landing, a flap cycle with its own length, and body roll in turns.
 - **Wording:** panels and part names now say Bird, Theropod, Sauropod or Ceratopsian, feet instead of paws, wing and arm instead of front leg, and leave out controls that do not apply (ears on a dinosaur, wings on a dog).
 - **Corrections** (`src/fix.js`): drag the end of a part at a frame to add a smooth correction lane that is added to the channel, leaving the animation underneath untouched. **Not yet:** drag a part's start (its anchor) as well as its end, corrections for the attachments' anchors, and showing the correction as a ghost.

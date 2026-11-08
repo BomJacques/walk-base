@@ -96,6 +96,15 @@ check('a performance on a theropod draws', (await ev(() => window.__walkBase.S.l
 // the human still works
 await pick('human');
 check('the human is still there', (await fig()) === 'human' && (await ev(() => window.__walkBase.S.last.shapes.length)) > 10);
+// each figure offers only the gaits it can do
+for (const [f, want] of [['theropod', ['walk', 'run']], ['bird', ['walk', 'run', 'hop']], ['dog', ['walk', 'trot', 'pace', 'gallop']]]) {
+  await pick(f); await ev(() => window.__walkBase.setTab('Gait')); await page.waitForTimeout(200);
+  const gaits = await page.locator('[data-testid="row-dogGait"] .segbtn, .row-enum .segbtn').evaluateAll((els) => els.map((e) => e.textContent.trim()));
+  check(`${f}: the Gait choices are ${want.join(', ')}`, JSON.stringify(gaits.filter((g) => ['walk', 'trot', 'pace', 'gallop', 'run', 'hop'].includes(g))) === JSON.stringify(want), gaits);
+}
+await pick('theropod'); await page.locator('#preset').selectOption('Run'); await page.waitForTimeout(300);
+check('the theropod Run preset uses the run gait on a twelve frame cycle', (await ev(() => window.__walkBase.S.p.dogGait)) === 'run' && (await ev(() => window.__walkBase.S.p.cycleFrames)) === 12);
+if (shots) { await ev(() => window.__walkBase.setFrame(5)); await page.waitForTimeout(150); await page.screenshot({ path: path.join(shots, `wb-fig-run-${name}.png`) }); }
 // no dog or paw wording on any tab of any of the new figures
 for (const f of ['theropod', 'bird', 'sauropod', 'ceratopsian']) {
   await pick(f); const left = [];
