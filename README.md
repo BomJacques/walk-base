@@ -89,6 +89,10 @@ The bird has a **Head hold** (it keeps its head still in space while the body mo
 
 ## Motion arcs
 
+Dragging a dot now moves a point in all three directions: along the body, up and down, and **sideways** (the arcs include the width and turn channels, so from the front or from above a horizontal drag changes how far apart the feet or hands are, or swings the head, hips or tail side to side). Turn the camera to the front or the top to move things sideways.
+
+**Symmetry** (Guides tab, Arc points) says what the other side does when you drag a dot: **Alternate** (the same movement half a cycle later, as a walk has it), **Mirror** (the same movement at the same moment, mirrored left to right, so both hands lift or spread together), or **Independent**. **Copy right to left** and **Copy left to right** make the two sides match, using the chosen mode.
+
 Arcs now start on **both sides** (head, hips, both wrists, both ankles; for the dog all four paws and the tail). Under **Arc points** there are buttons for **Both sides**, **Right only**, **Left only**, **All** and **None**, and more points to follow: the chest, the toes, and for the dog the jaw tip and the middle of the tail. **Move both sides together** is on by default: when you drag a dot on one foot or hand, the other side follows half a cycle later, as it does when you edit a curve; turn it off to change one side alone.
 
 On the **Guides** tab, tick the points to trace under **Arc points** (head, hips, shoulders, elbows, wrists, knees, ankles; for the dog the head, nose, tail tip and each leg's joint and paw). Each gets a colour, a dashed path, and a dot on every frame, so you can read the speed from the spacing. **Drag a dot** to bend the movement at that frame: only the curves that move that point change, and Undo puts it back. With a performance on, the arcs show the whole thing but are read-only.

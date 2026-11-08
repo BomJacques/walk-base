@@ -174,6 +174,8 @@ Requested 2026-11-08. The big rounded buttons in rows read as quickly generated.
 
 ## Added 2026-11-08 (later): flight, wording, corrections, movements
 
+- **Arcs in three directions and symmetry:** every point's chain now includes its sideways channels (width, turn, out), so a drag from the front or top moves it sideways; arm points can also use a shrug of the shoulder when the arm is straight. Symmetry choices Independent, Alternate and Mirror, and Copy right to left / left to right. **Still limited:** a joint with one channel (an elbow or knee) can only go round its arc; a fully straight arm or leg cannot be pushed further out; the chest cannot move along the body.
+
 - **Arcs on both sides:** they start with both sides shown, with buttons for right only and left only, and dragging a dot moves the other side too (half a cycle later) unless Move both sides together is turned off. More points: chest, toes, jaw tip, middle of the tail. **Not yet:** arcs for the ears, the attachments' points and the strips' joints in the picker (the strips already show their tip and middle).
 
 - **More movements (`src/moves2.js`):** kneel, limp and walk normally, scratch head (human); scratch, roll over (dog); take off, land, peck (bird); roar, lunge (theropod); rear up, swing the neck (sauropod); lower the head, toss the head (ceratopsian). The animals' movement lists are built by `clipsForFigure`. **Not yet:** a human lie-down and get-up, crawl, climb, dance; a bird's flap-glide-flap, a hop-up, preening; a theropod's feeding head-shake; a ceratopsian's charge with the head lowered all the way through the run. A limp is approximated with hip drop, lean and a slower pace; a true limp needs left and right gait settings.

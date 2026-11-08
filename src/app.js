@@ -13,7 +13,7 @@ import { dogPlants } from './dog3.js';
 import { PARTS, CHANNEL_BY_ID, partChannels, partLabel, makeEvaluator, sampleFinal, isEdited, allowedFrequencies } from './motion.js';
 import { CurveEditor, mirrorPoints } from './curves.js';
 import { cleanPhys, STRIP_LIMITS } from './stripdefs.js';
-import { arcPoints, arcPoint, arcColor, adoptArcs, moveArcPoint, arcSide, DEFAULT_ARCS } from './arcs.js';
+import { arcPoints, arcPoint, arcColor, adoptArcs, moveArcPoint, arcSide, symmetrize, otherSideCurve, SYMMETRY, DEFAULT_ARCS } from './arcs.js';
 import { SM, loadPicture, unload, detect, sliceOf, sampledSummary, totalFrames, touch as touchSampler, setCuts } from './sampler.js';
 import { openCutWindow } from './cutwindow.js';
 import { SLICE_DEFAULTS, numberCuts } from './slicer.js';
@@ -396,7 +396,17 @@ function arcSection() {
       h('button', { type: 'button', class: 'btn', testid: 'arc-none', onClick: () => { S.s[key] = []; save(); renderPanel(); render(); } }, 'None'),
       h('button', { type: 'button', class: 'btn', testid: 'arc-default', onClick: () => { S.s[key] = DEFAULT_ARCS[rig].slice(); S.s.showArcs = true; save(); renderPanel(); render(); } }, 'Both sides'),
       ...[['R', 'Right only'], ['L', 'Left only']].map(([sd, lab]) => h('button', { type: 'button', class: 'btn', testid: `arc-side-${sd}`, onClick: () => { S.s[key] = pts.map((p) => p.id).filter((i) => arcSide(i) === sd || (!arcSide(i) && DEFAULT_ARCS[rig].includes(i))); S.s.showArcs = true; save(); renderPanel(); render(); } }, lab))),
-    h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: LAYOUT.arcLink, testid: 'arc-link', onChange: (e) => { LAYOUT.arcLink = e.target.checked; layoutSave(); renderPanel(); } }), h('span', null, 'Move both sides together (the other side follows half a cycle later)')),
+    h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Symmetry')),
+      h('div', { class: 'seg', role: 'group', 'aria-label': 'Symmetry between the two sides' }, SYMMETRY.map(([v, t]) => h('button', { type: 'button', class: 'segbtn', testid: `arc-sym-${v}`, 'aria-pressed': String(LAYOUT.arcSym === v), onClick: () => { LAYOUT.arcSym = v; layoutSave(); renderPanel(); } }, t))),
+      h('p', { class: 'help' }, 'What the other side does when you drag a dot. Alternate: the same movement half a cycle later, as a walk has it. Mirror: the same movement at the same moment, mirrored left to right, so both hands lift or spread together. Independent: only the side you drag.')),
+    h('div', { class: 'btnrow' },
+      ...[['R', 'L', 'Copy right to left'], ['L', 'R', 'Copy left to right']].map(([from, to, lab]) => h('button', { type: 'button', class: 'btn', testid: `arc-copy-${from}${to}`, onClick: () => {
+        const defs = (S.s[key] || []).map((i) => arcPoint(rig, i)).filter((d) => d && arcSide(d.id) === from);
+        const entries = symmetrize({ params: P(), defs: defs.length ? defs : arcPoints(rig).filter((d) => arcSide(d.id) === from), from, mode: LAYOUT.arcSym === 'none' ? 'alt' : LAYOUT.arcSym });
+        if (!Object.keys(entries).length) { setMessage('Nothing to copy: tick a point on that side first.'); return; }
+        for (const [id, st] of Object.entries(entries)) S.motion[id] = st;
+        markCustom(); renderPanel(); render(); save(); setMessage(`The ${to === 'L' ? 'left' : 'right'} side now matches the ${from === 'L' ? 'left' : 'right'}${LAYOUT.arcSym === 'mirror' ? '' : ', half a cycle later'}.`);
+      } }, lab))),
     groups.map((g) => h('div', { class: 'arcgroup' }, h('h4', null, g),
       pts.filter((p) => p.group === g).map((p) => h('label', { class: 'chk' },
         h('input', { type: 'checkbox', checked: on.has(p.id), testid: `arc-${p.id}`, onChange: (e) => toggle(p.id, e.target.checked) }),
@@ -430,8 +440,8 @@ function arcDragMove(d, e, toFrame) {
   for (const [id, s] of Object.entries(r.entries)) {
     S.motion[id] = s;
     // With both sides linked the other side follows, half a cycle later, as it does when you edit a curve in the Parts tab.
-    const o = LAYOUT.arcLink && CHANNEL_BY_ID[id]?.sided ? otherSide(id) : null;
-    if (o && CHANNEL_BY_ID[o]) S.motion[o] = { ...s, pts: mirrorPoints(s.pts) };
+    const o = LAYOUT.arcSym !== 'none' && CHANNEL_BY_ID[id]?.sided ? otherSide(id) : null;
+    if (o && CHANNEL_BY_ID[o]) S.motion[o] = { ...s, pts: otherSideCurve(s.pts, LAYOUT.arcSym) };
   }
   markCustom(); render();
 }
@@ -1494,7 +1504,7 @@ function build() {
 
 // ---------- resizable animation window ----------
 const LAYOUT_KEY = 'walkbase.layout';
-const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcLink: true, collapsed: {} };
+const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcSym: 'alt', collapsed: {} };
 /** Light or dark: follows the device unless you choose. */
 function applyTheme() { if (LAYOUT.theme === 'light' || LAYOUT.theme === 'dark') document.documentElement.dataset.theme = LAYOUT.theme; else delete document.documentElement.dataset.theme; }
 function setTheme(v) { LAYOUT.theme = v; applyTheme(); layoutSave(); render(); }

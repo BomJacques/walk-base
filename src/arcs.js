@@ -5,7 +5,7 @@ import { pose3, add, mul } from './rig3.js';
 import { poseDog } from './dog3.js';
 import { poseFor } from './keyposes.js';
 import { makeEvaluator, CHANNEL_BY_ID } from './motion.js';
-import { bakePoints, addHandle } from './curves.js';
+import { bakePoints, addHandle, mirrorPoints } from './curves.js';
 
 const sides = [['R', 'Right', 'right'], ['L', 'Left', 'left']];
 const LEGS = [['FR', 'Front right'], ['FL', 'Front left'], ['HR', 'Hind right'], ['HL', 'Hind left']];
@@ -13,39 +13,39 @@ const LEGS = [['FR', 'Front right'], ['FL', 'Front left'], ['HR', 'Hind right'],
 /** Every point an arc can follow. `chain` lists the channels that move the point: dragging a dot reshapes just those curves. */
 function humanPoints() {
   const out = [
-    { id: 'head', label: 'Head', group: 'Head and body', pick: (z) => z.headC, chain: ['spine3.pitch', 'neck.pitch', 'head.pitch'] },
-    { id: 'chest', label: 'Chest', group: 'Head and body', pick: (z) => z.j3, chain: ['spine3.pitch', 'spine2.pitch'] },
-    { id: 'hip', label: 'Hips', group: 'Head and body', pick: (z) => z.pelvis, chain: ['pelvis.y', 'pelvis.x'] },
+    { id: 'head', label: 'Head', group: 'Head and body', pick: (z) => z.headC, chain: ['spine3.pitch', 'neck.pitch', 'head.pitch', 'neck.yaw', 'spine3.yaw'] },
+    { id: 'chest', label: 'Chest', group: 'Head and body', pick: (z) => z.j3, chain: ['spine3.pitch', 'spine2.pitch', 'spine3.yaw', 'spine2.yaw'] },
+    { id: 'hip', label: 'Hips', group: 'Head and body', pick: (z) => z.pelvis, chain: ['pelvis.y', 'pelvis.x', 'pelvis.z'] },
   ];
   for (const [s, Name] of sides) {
     out.push(
-      { id: `toe.${s}`, label: `${Name} toe`, group: 'Legs', pick: (z) => add(z.sides[s].ankle, mul(z.sides[s].foot.fx, 0.16)), chain: [`foot.x.${s}`, `foot.y.${s}`, `foot.pitch.${s}`] },
+      { id: `toe.${s}`, label: `${Name} toe`, group: 'Legs', pick: (z) => add(z.sides[s].ankle, mul(z.sides[s].foot.fx, 0.16)), chain: [`foot.x.${s}`, `foot.y.${s}`, `foot.z.${s}`, `foot.pitch.${s}`] },
       { id: `shoulder.${s}`, label: `${Name} shoulder`, group: 'Arms', pick: (z) => z.sides[s].shoulder, chain: [`girdle.x.${s}`, `girdle.y.${s}`] },
-      { id: `elbow.${s}`, label: `${Name} elbow`, group: 'Arms', pick: (z) => z.sides[s].elbow, chain: [`arm.pitch.${s}`] },
-      { id: `wrist.${s}`, label: `${Name} wrist`, group: 'Arms', pick: (z) => z.sides[s].wrist, chain: [`arm.pitch.${s}`, `elbow.flex.${s}`] },
-      { id: `hand.${s}`, label: `${Name} fingertips`, group: 'Arms', pick: (z) => z.sides[s].hand, chain: [`arm.pitch.${s}`, `elbow.flex.${s}`, `wrist.flex.${s}`] },
-      { id: `knee.${s}`, label: `${Name} knee`, group: 'Legs', pick: (z) => z.sides[s].knee, chain: [`foot.x.${s}`, `foot.y.${s}`] },
-      { id: `ankle.${s}`, label: `${Name} ankle`, group: 'Legs', pick: (z) => z.sides[s].ankle, chain: [`foot.x.${s}`, `foot.y.${s}`] },
+      { id: `elbow.${s}`, label: `${Name} elbow`, group: 'Arms', pick: (z) => z.sides[s].elbow, chain: [`arm.pitch.${s}`, `arm.roll.${s}`, `girdle.y.${s}`, `girdle.x.${s}`] },
+      { id: `wrist.${s}`, label: `${Name} wrist`, group: 'Arms', pick: (z) => z.sides[s].wrist, chain: [`arm.pitch.${s}`, `elbow.flex.${s}`, `arm.roll.${s}`, `girdle.y.${s}`, `girdle.x.${s}`] },
+      { id: `hand.${s}`, label: `${Name} fingertips`, group: 'Arms', pick: (z) => z.sides[s].hand, chain: [`arm.pitch.${s}`, `elbow.flex.${s}`, `wrist.flex.${s}`, `arm.roll.${s}`, `girdle.y.${s}`, `girdle.x.${s}`] },
+      { id: `knee.${s}`, label: `${Name} knee`, group: 'Legs', pick: (z) => z.sides[s].knee, chain: [`foot.x.${s}`, `foot.y.${s}`, `foot.z.${s}`, `knee.out.${s}`] },
+      { id: `ankle.${s}`, label: `${Name} ankle`, group: 'Legs', pick: (z) => z.sides[s].ankle, chain: [`foot.x.${s}`, `foot.y.${s}`, `foot.z.${s}`] },
     );
   }
   return out;
 }
 function dogPoints() {
   const out = [
-    { id: 'head', label: 'Head', group: 'Head and body', pick: (z) => z.headC, chain: ['dog.spine3.pitch', 'dog.neck.pitch', 'dog.head.pitch'] },
-    { id: 'nose', label: 'Nose', group: 'Head and body', pick: (z) => z.noseTip, chain: ['dog.spine3.pitch', 'dog.neck.pitch', 'dog.head.pitch'] },
-    { id: 'chest', label: 'Chest', group: 'Head and body', pick: (z) => z.j3, chain: ['dog.spine3.pitch', 'dog.spine2.pitch'] },
+    { id: 'head', label: 'Head', group: 'Head and body', pick: (z) => z.headC, chain: ['dog.spine3.pitch', 'dog.neck.pitch', 'dog.head.pitch', 'dog.neck.yaw', 'dog.spine3.yaw'] },
+    { id: 'nose', label: 'Nose', group: 'Head and body', pick: (z) => z.noseTip, chain: ['dog.spine3.pitch', 'dog.neck.pitch', 'dog.head.pitch', 'dog.neck.yaw', 'dog.head.yaw'] },
+    { id: 'chest', label: 'Chest', group: 'Head and body', pick: (z) => z.j3, chain: ['dog.spine3.pitch', 'dog.spine2.pitch', 'dog.spine3.yaw', 'dog.spine2.yaw'] },
     { id: 'jaw', label: 'Jaw tip', group: 'Head and body', pick: (z) => z.jawEnd, chain: ['dog.jaw.open'] },
-    { id: 'hip', label: 'Hips', group: 'Head and body', pick: (z) => z.pelvis, chain: ['dog.pelvis.y', 'dog.pelvis.x'] },
-    { id: 'tailmid', label: 'Tail middle', group: 'Head and body', pick: (z) => z.tail[2], chain: ['dog.tail1.pitch', 'dog.tail2.pitch'] },
-    { id: 'tail', label: 'Tail tip', group: 'Head and body', pick: (z) => z.tail[3], chain: ['dog.tail1.pitch', 'dog.tail2.pitch', 'dog.tail3.pitch'] },
+    { id: 'hip', label: 'Hips', group: 'Head and body', pick: (z) => z.pelvis, chain: ['dog.pelvis.y', 'dog.pelvis.x', 'dog.pelvis.z'] },
+    { id: 'tailmid', label: 'Tail middle', group: 'Head and body', pick: (z) => z.tail[2], chain: ['dog.tail1.pitch', 'dog.tail2.pitch', 'dog.tail1.yaw', 'dog.tail2.yaw'] },
+    { id: 'tail', label: 'Tail tip', group: 'Head and body', pick: (z) => z.tail[3], chain: ['dog.tail1.pitch', 'dog.tail2.pitch', 'dog.tail3.pitch', 'dog.tail1.yaw', 'dog.tail2.yaw', 'dog.tail3.yaw'] },
   ];
   for (const [k, Name] of LEGS) {
     const side = k[1]; const pre = k[0] === 'F' ? 'dog.fpaw' : 'dog.hpaw';
     out.push(
-      { id: `joint.${k}`, label: `${Name} ${k[0] === 'F' ? 'elbow' : 'knee'}`, group: 'Legs', pick: (z) => z.legs[k].mid, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`] },
-      { id: `paw.${k}`, label: `${Name} paw`, group: 'Legs', pick: (z) => z.legs[k].paw, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`] },
-      { id: `toe.${k}`, label: `${Name} toe`, group: 'Legs', pick: (z) => z.legs[k].toe, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.pitch.${side}`] },
+      { id: `joint.${k}`, label: `${Name} ${k[0] === 'F' ? 'elbow' : 'knee'}`, group: 'Legs', pick: (z) => z.legs[k].mid, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`, `${k[0] === 'F' ? 'dog.fleg' : 'dog.hleg'}.out.${side}`] },
+      { id: `paw.${k}`, label: `${Name} paw`, group: 'Legs', pick: (z) => z.legs[k].paw, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`] },
+      { id: `toe.${k}`, label: `${Name} toe`, group: 'Legs', pick: (z) => z.legs[k].toe, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`, `${pre}.pitch.${side}`] },
     );
   }
   return out;
@@ -116,6 +116,27 @@ export function solveMove(f, v0, target, scales, { iters = 10, damp = 0.04, tol 
   return { v, err: err(p) };
 }
 
+/** How the two sides are tied together when you reshape an arc: not at all, the other side half a cycle later (a gait), or the other side doing the same at the same moment, mirrored left to right. */
+export const SYMMETRY = [['none', 'Independent'], ['alt', 'Alternate'], ['mirror', 'Mirror']];
+/** The other side's curve for a curve on this side, in a symmetry mode: half a cycle later for Alternate, the same moment for Mirror. */
+export const otherSideCurve = (pts, mode) => (mode === 'mirror' ? pts.map((q) => ({ ...q })) : mirrorPoints(pts));
+const flip = (id) => (id.endsWith('.R') ? `${id.slice(0, -1)}L` : id.endsWith('.L') ? `${id.slice(0, -1)}R` : null);
+/**
+ * Makes the two sides of the figure symmetrical for the points given: the curves that drive the points on side `from` are copied to the other side
+ * (half a cycle later for 'alt', the same moment for 'mirror'). Returns the new settings for the channels on both sides.
+ */
+export function symmetrize({ params, defs, from, mode = 'alt' }) {
+  const motion = params.motion || {}; const ev = makeEvaluator(params, motion); const out = {};
+  const ids = new Set(defs.flatMap((d) => d.chain).filter((id) => CHANNEL_BY_ID[id]?.sided && id.endsWith(`.${from}`)));
+  for (const id of ids) {
+    const o = flip(id); if (!o || !CHANNEL_BY_ID[o]) continue;
+    const s = motion[id]; const plain = s?.pts?.length >= 2 && (s.amount ?? 1) === 1 && !s.offset && !s.phase && (s.freq ?? 1) === 1;
+    const pts = plain ? s.pts.map((q) => ({ ...q })) : bakePoints((x) => ev.value(id, x), 12);
+    out[id] = { pts }; out[o] = { pts: otherSideCurve(pts, mode) };
+  }
+  return out;
+}
+
 const nearHandle = (pts, u, tol) => pts.findIndex((q) => Math.min(Math.abs(q.u - u), 1 - Math.abs(q.u - u)) <= tol);
 
 /**
@@ -154,6 +175,7 @@ export function moveArcPoint({ params, def, frame, curFrame = frame, target, pro
   const scales = work.map((w) => { const c = CHANNEL_BY_ID[w.id]; return Math.max(1e-3, Math.abs((c.from ? c.from(c.max) : c.max) - (c.from ? c.from(c.min) : c.min)) / 2); });
   const r = solveMove(at, v0, target, scales);
   const entries = {};
-  work.forEach((w, i) => { const pts = w.pts.map((q, k) => (k === w.idx ? { u: q.u, v: r.v[i] } : q)); entries[w.id] = { pts }; });
+  // Only the channels the drag actually changed are written, so a side-on drag leaves the sideways channels alone.
+  work.forEach((w, i) => { if (Math.abs(r.v[i] - v0[i]) < 1e-7) return; const pts = w.pts.map((q, k) => (k === w.idx ? { u: q.u, v: r.v[i] } : q)); entries[w.id] = { pts }; });
   return { entries, err: r.err };
 }

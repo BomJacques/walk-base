@@ -99,3 +99,35 @@ test('arcs start on both sides, and there are more points to follow: chest, toes
     assert.ok(r && r.err < 2.5, `${rig} ${id} err ${r?.err}`); void s0;
   }
 });
+
+test('a point can be moved in all three directions: along the body, up and down, and sideways (seen from the front)', () => {
+  const front = (w) => ({ x: 400 + w[2] * 500, y: 600 - w[1] * 500 }); const top = (w) => ({ x: 400 + w[0] * 500, y: 600 - w[2] * 500 });
+  for (const [rig, ids] of [['human', ['head', 'hip', 'wrist.R', 'ankle.L', 'toe.R']], ['dog', ['head', 'hip', 'paw.FR', 'paw.HL', 'tail']]]) {
+    const p = rig === 'dog' ? dog() : human(); const frame = 4; const cur = poseFor(p, frame);
+    for (const id of ids) for (const [name, proj] of [['front', front], ['top', top]]) {
+      const def = arcPoint(rig, id); const at = def.pick(cur); const s0 = proj([at[0] + cur.pelvisX, at[1], at[2]]);
+      for (const [dx, dy] of [[18, 0], [0, 18]]) {
+        if (name === 'top' && dy && id !== 'wrist.R') { /* checked below */ }
+        const r = moveArcPoint({ params: p, def, frame, target: [s0.x + dx, s0.y + dy], project: proj });
+        assert.ok(r && r.err < 3, `${rig} ${id} from the ${name}, move (${dx}, ${dy}): err ${r?.err}`);
+      }
+    }
+  }
+});
+
+test('symmetry: Alternate copies a side half a cycle later, Mirror at the same moment, and copying right to left leaves the right alone', async () => {
+  const { symmetrize, otherSideCurve } = await import('../src/arcs.js');
+  const pts = [{ u: 0, v: 0.1 }, { u: 0.25, v: 0.3 }, { u: 0.5, v: 0 }, { u: 0.75, v: -0.1 }];
+  assert.deepEqual(otherSideCurve(pts, 'mirror'), pts);
+  const alt = otherSideCurve(pts, 'alt'); assert.deepEqual(alt.map((q) => [q.u, q.v]), [[0, 0], [0.25, -0.1], [0.5, 0.1], [0.75, 0.3]]);
+  const p = human(); const defs = arcPoints('human').filter((d) => d.id === 'ankle.R' || d.id === 'wrist.R');
+  const a = symmetrize({ params: p, defs, from: 'R', mode: 'alt' }); const m = symmetrize({ params: p, defs, from: 'R', mode: 'mirror' });
+  assert.ok(a['foot.y.R'] && a['foot.y.L'] && a['arm.pitch.R'] && a['arm.pitch.L']);
+  const half = (r, l) => r.pts.every((q) => l.pts.some((o) => Math.abs(o.u - ((q.u + 0.5) % 1)) < 1e-9 && Math.abs(o.v - q.v) < 1e-9));
+  assert.ok(half(a['arm.pitch.R'], a['arm.pitch.L']), 'alternate is half a cycle later');
+  assert.deepEqual(m['arm.pitch.R'].pts, m['arm.pitch.L'].pts, 'mirror is the same at the same moment');
+  // applying it changes the left to match the right, and the right is unchanged in shape
+  const q = { ...p, motion: { ...a } }; const z0 = poseFor(p, 3); const z1 = poseFor(q, 3);
+  assert.ok(Math.hypot(...z0.sides.R.wrist.map((v, i) => v - z1.sides.R.wrist[i])) < 0.02, 'the right wrist is where it was (to within the twelve-point curve it is baked to)');
+  assert.deepEqual(m['elbow.flex.R'].pts, m['elbow.flex.L'].pts, 'the elbows match too, so both arms do the same thing at the same moment');
+});

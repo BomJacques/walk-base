@@ -31,7 +31,7 @@ await page.locator('[data-testid="arc-side-L"]').click(); await page.waitForTime
 check('Left only shows the left side', (await ev(() => window.__walkBase.S.s.arcs)).every((i) => !i.endsWith('.R')) && (await ev(() => window.__walkBase.S.s.arcs)).includes('wrist.L'));
 await page.locator('[data-testid="arc-default"]').click(); await page.waitForTimeout(200);
 check('Both sides puts them back', (await ev(() => window.__walkBase.S.s.arcs)).includes('ankle.R') && (await ev(() => window.__walkBase.S.s.arcs)).includes('ankle.L'));
-await ev(() => { window.__walkBase.LAYOUT.arcLink = false; }); // the single-side checks below are with the sides unlinked
+await ev(() => { window.__walkBase.LAYOUT.arcSym = 'none'; }); // the single-side checks below are with the sides unlinked
 await page.locator('[data-testid="arc-none"]').click();
 await page.locator('[data-testid="arc-ankle.R"]').check();
 await page.locator('[data-testid="arc-wrist.L"]').check();
@@ -53,7 +53,7 @@ check('dragging a dot moves it to the finger', Math.hypot(moved.x - (pick.x + 30
 const edited = await ev(() => Object.keys(window.__walkBase.S.motion).sort());
 check('only the foot curves of that side changed', JSON.stringify(edited) === JSON.stringify(['foot.x.R', 'foot.y.R']), edited);
 // with the sides linked, the other side follows half a cycle later
-await ev(() => { window.__walkBase.undo?.(); window.__walkBase.LAYOUT.arcLink = true; }); await page.waitForTimeout(300);
+await ev(() => { window.__walkBase.undo?.(); window.__walkBase.LAYOUT.arcSym = 'alt'; }); await page.waitForTimeout(300);
 const pickL = (await dots()).find((q) => q.id === 'ankle.R' && q.frame === Math.floor(T / 4)); const aL = await client(pickL.x, pickL.y); const tL = await client(pickL.x + 24, pickL.y - 30);
 await page.mouse.move(aL.x, aL.y); await page.mouse.down(); await page.mouse.move((aL.x + tL.x) / 2, (aL.y + tL.y) / 2, { steps: 4 }); await page.mouse.move(tL.x, tL.y, { steps: 4 }); await page.mouse.up(); await page.waitForTimeout(400);
 const mir = await ev(() => { const m = window.__walkBase.S.motion; const r = m['foot.y.R']?.pts; const l = m['foot.y.L']?.pts; if (!r || !l) return null; return r.every((q) => { const u = (q.u + 0.5) % 1; return l.some((p) => Math.abs(p.u - u) < 1e-6 && Math.abs(p.v - q.v) < 1e-9); }); });
@@ -84,6 +84,31 @@ const motion0 = await ev(() => JSON.stringify(window.__walkBase.S.motion));
 if (pk) { const p0 = await client(pk.x, pk.y); const p1 = await client(pk.x + 30, pk.y); await page.mouse.move(p0.x, p0.y); await page.mouse.down(); await page.mouse.move(p1.x, p1.y, { steps: 4 }); await page.mouse.up(); }
 check('arcs follow a performance and are read-only there', pd.length > T && (await ev(() => JSON.stringify(window.__walkBase.S.motion))) === motion0, `${pd.length} dots`);
 
+// symmetry choices, sideways movement, and copying one side to the other
+await ev(() => { const w = window.__walkBase; w.setRig('human'); w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.S.motion = {}; w.S.s.camYaw = 0; w.S.s.showArcs = true; w.S.s.arcs = ['ankle.R', 'ankle.L', 'wrist.R', 'wrist.L']; w.render(); });
+await ev(() => window.__walkBase.setTab('Guides')); await page.waitForTimeout(300);
+check('the Guides tab offers Independent, Alternate and Mirror, with Alternate chosen', (await page.locator('[data-testid="arc-sym-none"]').count()) === 1 && (await page.locator('[data-testid="arc-sym-alt"]').getAttribute('aria-pressed')) === 'true' && (await page.locator('[data-testid="arc-sym-mirror"]').count()) === 1);
+await page.locator('[data-testid="arc-sym-mirror"]').click(); await page.waitForTimeout(200);
+const T2 = await ev(() => window.__walkBase.S.p.cycleFrames);
+const d1 = (await dots()).find((q) => q.id === 'ankle.R' && q.frame === Math.floor(T2 / 4)); const a1 = await client(d1.x, d1.y); const b1 = await client(d1.x + 22, d1.y - 28);
+await page.mouse.move(a1.x, a1.y); await page.mouse.down(); await page.mouse.move((a1.x + b1.x) / 2, (a1.y + b1.y) / 2, { steps: 4 }); await page.mouse.move(b1.x, b1.y, { steps: 4 }); await page.mouse.up(); await page.waitForTimeout(400);
+const same = await ev(() => { const m = window.__walkBase.S.motion; const r = m['foot.y.R']?.pts; const l = m['foot.y.L']?.pts; return Boolean(r && l && JSON.stringify(r) === JSON.stringify(l)); });
+check('Mirror: the left foot gets exactly the same curve at the same moment', same);
+await ev(() => { window.__walkBase.S.motion = {}; window.__walkBase.S.ver++; window.__walkBase.render(); }); await page.waitForTimeout(200);
+// sideways, from the front
+await ev(() => { window.__walkBase.S.s.camYaw = 90; window.__walkBase.render(); }); await page.waitForTimeout(300);
+const d2 = (await dots()).find((q) => q.id === 'ankle.R' && q.frame === Math.floor(T2 / 4)); const a2 = await client(d2.x, d2.y); const b2 = await client(d2.x + 26, d2.y);
+await page.locator('[data-testid="arc-sym-none"]').click(); await page.waitForTimeout(150);
+await page.mouse.move(a2.x, a2.y); await page.mouse.down(); await page.mouse.move((a2.x + b2.x) / 2, a2.y, { steps: 4 }); await page.mouse.move(b2.x, b2.y, { steps: 4 }); await page.mouse.up(); await page.waitForTimeout(400);
+const zc = await ev(() => Object.keys(window.__walkBase.S.motion));
+check('from the front a sideways drag changes how far apart the feet are (the width channel)', zc.includes('foot.z.R'), zc);
+await ev(() => { window.__walkBase.S.s.camYaw = 0; window.__walkBase.S.motion = {}; window.__walkBase.S.ver++; window.__walkBase.render(); }); await page.waitForTimeout(200);
+// copy the right side to the left
+await ev(() => { window.__walkBase.S.motion['arm.pitch.R'] = { amount: 1, offset: 0.3 }; window.__walkBase.S.ver++; window.__walkBase.render(); }); await page.waitForTimeout(150);
+await page.locator('[data-testid="arc-sym-alt"]').click(); await page.waitForTimeout(150);
+await page.locator('[data-testid="arc-copy-RL"]').click(); await page.waitForTimeout(400);
+const cp = await ev(() => { const m = window.__walkBase.S.motion; return Boolean(m['arm.pitch.L']?.pts?.length && m['arm.pitch.R']?.pts?.length); });
+check('Copy right to left gives the left arm a matching curve (half a cycle later)', cp);
 check('no page errors', errors.length === 0, errors.slice(0, 3));
 await browser.close();
 process.exit(fails ? 1 : 0);
