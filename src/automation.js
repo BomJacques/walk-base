@@ -68,6 +68,7 @@ export function motionAt(base, lanes, t, live = null) {
  */
 export function integrate(base, lanes, T, cycleFrames, footContact = null) {
   const u = new Float64Array(T + 1); const x = new Float64Array(T + 1);
+  const px = new Float64Array(T + 1); const pz = new Float64Array(T + 1); let path = false; // where the figure is on the ground: the distance walked, turned by the heading at each moment
   const plants = [];
   for (let t = 0; t < T; t++) {
     const p = paramsAt(base, lanes, t);
@@ -75,13 +76,15 @@ export function integrate(base, lanes, T, cycleFrames, footContact = null) {
     const du = (cad * 1) / cycleFrames;
     u[t + 1] = u[t] + du;
     x[t + 1] = x[t] + du * (p.rig === 'dog' ? p.dogStride : 2 * p.stepLength);
+    const hr = ((p.heading || 0) * Math.PI) / 180; if (p.heading) path = true;
+    px[t + 1] = px[t] + (x[t + 1] - x[t]) * Math.cos(hr); pz[t + 1] = pz[t] + (x[t + 1] - x[t]) * Math.sin(hr);
     if (footContact) {
       for (const [side, off] of [['R', 0], ['L', 0.5 + (p.asymTiming || 0)]]) {
         if (Math.floor(u[t + 1] - off + 1e-9) > Math.floor(u[t] - off + 1e-9)) plants.push({ side, t: t + 1, x: x[t + 1] + footContact(paramsAt(base, lanes, t + 1), side).x });
       }
     }
   }
-  return { u, x, plants };
+  return { u, x, px, pz, path, plants };
 }
 
 /** Removes points that a straight line between their neighbours already describes, within eps. Keeps the first and last. */

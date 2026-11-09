@@ -47,8 +47,9 @@ test('heelDown and heelUp move the foot roll', () => {
 test('the far foot follows its own timing and time on the ground', () => {
   const a = sideGait(P(), 'L'); assert.equal(a.off, 0.5); assert.equal(a.p.duty, 0.6);
   const b = sideGait(P({ asymTiming: 0.05, asymDuty: -0.1, asymLift: -0.5 }), 'L');
-  assert.ok(Math.abs(b.off - 0.55) < 1e-9 && Math.abs(b.p.duty - 0.5) < 1e-9 === false);
-  assert.equal(b.p.duty, 0.52, 'time on the ground stops at the walking limit');
+  assert.ok(Math.abs(b.off - 0.55) < 1e-9);
+  assert.ok(Math.abs(b.p.duty - 0.5) < 1e-9, 'the far foot can stay down for less time');
+  assert.equal(sideGait(P({ asymDuty: -0.5 }), 'L').p.duty, 0.25, 'time on the ground stops at a quarter of the cycle');
   assert.ok(Math.abs(b.p.footLift - DEFAULTS.footLift * 0.5) < 1e-9);
   assert.equal(sideGait(P({ asymDuty: 0.1 }), 'R').off, 0, 'the near foot never changes');
 });

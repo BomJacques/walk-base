@@ -11,7 +11,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Cycle length | both | frames | 4 to 96 | 24 | Frames for two steps. 24 at 24 fps is one step every half second. |
 | Frame rate | both | fps | 6 to 60 | 24 | Frames per second. Changing it changes the walking speed. |
 | Step length | human | legs | 0.3 to 1.4 | 0.78 | Contact to contact, in leg lengths. Longer steps at the same timing walk faster. |
-| Time on the ground | human |  | 0.52 to 0.85 | 0.6 | Fraction of the cycle each foot is down. Under 0.5 would be a run, so it stops at 0.52. |
+| Time on the ground | human |  | 0.25 to 0.85 | 0.6 | Fraction of the cycle each foot is down. Under 0.5 there is a moment with neither foot down: a run. Set Hip bob and Lowest point to match (the Run preset shows how). |
 | Leg straightness | human |  | 0.85 to 0.999 | 0.985 | How straight the leg is at contact. Lower crouches the whole walk. |
 | Hip bob | human | legs | 0 to 0.3 | 0.075 | Vertical travel of the hips, lowest to highest. |
 | Down position | human | cycle | 0.03 to 0.22 | 0.125 | When the body is lowest after contact. 0.125 is a quarter of a step. |
@@ -26,6 +26,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Far foot lands late | human | cycle | -0.12 to 0.12 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
 | Far foot time on ground | human |  | -0.15 to 0.15 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
 | Far foot lift | human |  | -0.8 to 0.8 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
+| Heading | human | ° | -180 to 180 | 0 | Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends. |
 | Ground | human |  | flat, slope, steps | flat | What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step. |
 | Slope | human | ° | -30 to 30 | 8 | How steeply the ground rises along the slope (negative goes downhill). |
 | Step height | human | legs | -0.3 to 0.3 | 0.14 | Height of each step, in leg lengths (negative goes down). |
@@ -123,11 +124,6 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Turntable speed | both | °/s | -120 to 120 | 24 | Degrees per second. Negative circles the other way. |
 | Axes gizmo | both |  | bool | true | Small x, y, z guide: x forward, y up, z the figure right side. |
 | Selection colour | both |  | color | #e0662e | Highlight for the selected part. |
-
-## Look
-
-| Control | Figure | Unit | Range | Default | What it does |
-|---|---|---|---|---|---|
 | Style | both |  | mannequin, outline, stick, silhouette | mannequin | Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
 | Line width | both | px | 0.5 to 12 | 3 | At 1080 pixels tall. It scales with the canvas. |
 | Limb thickness | both | × | 0.5 to 2 | 1 | How thick the tube arms and legs are. |
@@ -150,11 +146,6 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Ground height | both |  | 0.4 to 0.98 | 0.8 | Ground line position, top to bottom. |
 | Figure position | both |  | -0.4 to 0.4 | 0 | Left or right of centre, as a fraction of the width. |
 | Background colour | both |  | color | #ffffff | Preview and solid exports. |
-
-## Guides
-
-| Control | Figure | Unit | Range | Default | What it does |
-|---|---|---|---|---|---|
 | Ground line and ticks | both |  | bool | true | Ticks stay on the ground, so a sliding foot shows. |
 | Footprints | both |  | bool | true | Where each foot plants. |
 | Show the scene | both |  | bool | true | The other figures and the scenery. Off draws the main figure alone. |

@@ -43,7 +43,7 @@ test('arm segments are scaled one at a time', () => {
 });
 
 test('the rubber hose figure has its own presets, proportions and word list', () => {
-  assert.deepEqual(Object.keys(PRESETS_HOSE), ['Bouncy', 'Strut', 'Sneak', 'Skip', 'Stomp', 'Tired']);
+  assert.deepEqual(Object.keys(PRESETS_HOSE).sort(), ['Bouncy', 'Run', 'Skip', 'Sneak', 'Stomp', 'Strut', 'Tired']);
   assert.equal(presetsForFigure('hose'), PRESETS_HOSE);
   assert.ok(HOSE_PROPORTIONS.head > 1.2 && HOSE_PROPORTIONS.neck < 0.6);
   for (const [name, pr] of Object.entries(PRESETS_HOSE)) {

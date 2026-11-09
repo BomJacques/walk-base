@@ -119,5 +119,5 @@ export const SPECIES_MOVES = {
     },
   ],
 };
-const SHARED = { bird: ['stop', 'begin', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake'], theropod: ['stop', 'begin', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff'], sauropod: ['stop', 'begin', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'], ceratopsian: ['stop', 'begin', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'] };
+const SHARED = { bird: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake'], theropod: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff'], sauropod: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'], ceratopsian: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'] };
 export const speciesSharedIds = (fig) => SHARED[fig] || null;

@@ -124,7 +124,7 @@ check('undo brings the lane back', await ev(() => Boolean(window.__walkBase.S.la
 await ev(() => window.__walkBase.closeEditor());
 
 // ---------------- reference picture ----------------
-await q('tab-Guides').click();
+await q('tab-View').click();
 check('the Guides tab has the reference picture section', await q('ref-section').isVisible() && await q('ref-file').count() === 1);
 const png = await ev(() => { const c = document.createElement('canvas'); c.width = 120; c.height = 200; const g = c.getContext('2d'); g.fillStyle = '#e02020'; g.fillRect(0, 0, 120, 200); return c.toDataURL('image/png').split(',')[1]; });
 const redCount = () => ev(() => { const c = document.querySelector('[data-testid="stage"]'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] < 170 && d[i + 2] < 170) n++; return n; });
@@ -152,7 +152,7 @@ check('an export can include the picture', exported > 2000, exported);
 await page.waitForTimeout(500);
 await page.reload(); await page.waitForFunction(() => window.__walkBase); await page.waitForTimeout(500);
 check('the picture and its settings come back after a reload', await ev(() => Boolean(window.__walkBase.REF.img) && window.__walkBase.REF.export === true));
-await q('tab-Guides').click();
+await q('tab-View').click();
 await q('ref-remove').click();
 check('Remove takes it away', await ev(() => !window.__walkBase.REF.img));
 

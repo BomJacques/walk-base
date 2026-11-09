@@ -387,3 +387,10 @@ Not done (still open): a real human run with a flight phase (the walk rig keeps 
 - **Rubber hose** is one colour (body, shorts, legs, arms) with white outlined gloves and feet and the cream face. Squash and stretch now changes the height as well as the width, about the ground, so the legs and arms stretch at the top of the bounce; the strength control goes up to 2.
 - **Outline style** tints the far side (line and fill) with the far-side tint.
 - **Top bar** pop-ups are smaller, and Side, Three-quarter, Front, Back and Top are buttons next to the View menu.
+
+## Phase: run, more movements, heading and path, merged View tab (done, 2026-11-10)
+
+- **A real run.** Time on the ground now goes down to 0.25 (it stopped at 0.52), so both feet can be off the ground at once. Presets Jog (6% of the cycle in the air), Run (27%) and Sprint (44%), and a Run for the rubber hose figure. The hips are lowest in the middle of a stance and highest in flight (Down position 0.14 to 0.2); every foot stays reachable through the whole cycle. The Break into a run movement now ends in a real run, and Slow to a walk undoes the new settings too.
+- **More movements** (human and rubber hose): Jog, Sprint, Duck, Punch, Clap, Salute.
+- **Heading and path.** Heading (Gait tab, Direction) turns the figure to face and walk along a direction; automated, the path curves (the distance walked is turned by the heading at each moment). Movements: Turn right, Turn left, U-turn, Walk a curve, Face straight on (the pace eases through the bend); the dog and the other animals turn too. The camera follows, the ground grid follows, and the figure's drawing, selection, arcs and attachments all follow the path. Limits: feet are planted in the figure's own frame, so in a sharp turn a planted foot slides a little; footprints are hidden while the path bends; the other figures in a scene do not follow the heading, and terrain is measured along the stage, not along the path.
+- **One View tab** holds the camera (blue), the look (amber) and the guides (teal); the Look and Guides tabs are gone (old names still work in the code and in the tests).

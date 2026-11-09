@@ -39,7 +39,7 @@ const st = await ev(() => ({ fig: window.__walkBase.figKey(), model: window.__wa
 check('it is the human rig with the hose model', st.fig === 'hose' && st.model === 'hose' && st.rig === 'human', st);
 check('it starts with its own walk (Bouncy, on twos) and proportions', st.preset === 'Bouncy' && st.exp === 2 && st.head > 1.3, st);
 const presets = await page.locator('[data-testid="preset"] option').allTextContents();
-check('the Preset menu lists the hose walks', ['Bouncy', 'Strut', 'Sneak', 'Skip', 'Stomp', 'Tired'].every((p) => presets.includes(p)), presets);
+check('the Preset menu lists the hose walks', ['Bouncy', 'Strut', 'Sneak', 'Skip', 'Stomp', 'Tired', 'Run'].every((p) => presets.includes(p)), presets);
 const look = await panelText('Look');
 for (const l of ['Limb thickness', 'Limb curve', 'Squash and stretch', 'Ears', 'Eyes', 'Body colour', 'Glove colour', 'Foot colour']) check(`the Look tab has ${l}`, look.includes(l));
 

@@ -527,9 +527,17 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   bodyTarget[1] += gyf(bodyTarget[0]);
   // The head view looks at the face: the camera is centred on the head and zoomed in, and still orbits around it.
   const headView = st.focus === 'head' && !dog;
-  const target = headView ? [pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]] : bodyTarget;
+  // Heading and path: the figure faces a direction and walks along it; with a heading lane the path curves. Its points are turned and moved to that place on the ground.
+  const hDeg = sp.heading || 0; const pathOn = hDeg !== 0 || Boolean(perf?.path);
+  const hRad = (hDeg * Math.PI) / 180; const ch = Math.cos(hRad); const sh = Math.sin(hRad);
+  const Pw = perf ? [perf.px[t0], perf.pz[t0]] : [pz.pelvisX * ch, pz.pelvisX * sh];
+  const toWorld = pathOn ? (pt) => { const lx = pt[0] - pz.pelvisX; return [Pw[0] + lx * ch - pt[2] * sh, pt[1], Pw[1] + lx * sh + pt[2] * ch]; } : (pt) => pt;
+  if (pathOn) { const across = params.travel === 'across' && perf; const c = toWorld([pz.pelvisX + (dog ? 0.45 : 0), 0, 0]); bodyTarget[0] = across ? (perf.px[0] + perf.px[perf.T]) / 2 : c[0]; bodyTarget[2] = across ? (perf.pz[0] + perf.pz[perf.T]) / 2 : c[2]; }
+  const target = headView ? toWorld([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]) : bodyTarget;
   const mouthId = dog ? null : (opts.mouth ?? speechAt(params.speech, perf ? t0 : frame) ?? (headView ? 'rest' : null));
   const cam = makeCam(st, w, h, target, opts.yawOffset || 0, headView ? st.headZoom : dog ? speciesOf(params).view.zoom / (1 + 0.15 * Math.min(1, params.dogFlight || 0)) : 1, headView);
+  const camF = pathOn ? { ...cam, p: (pt) => cam.p(toWorld(pt)) } : cam; // the camera for the figure, whose points are in its own frame
+  const zc = target[2]; // the ground is drawn about where the figure is
   const transparent = opts.transparent ?? st.transparent;
   const layers = opts.layers || { guides: true, figure: true };
   // Swinging strips are simulated over the whole cycle ahead of time; this frame's shape is passed on with the item.
@@ -553,26 +561,26 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       const x0 = target[0] - 5; const x1 = target[0] + 5;
       ctx.strokeStyle = hexA(st.guideColor, 0.75); ctx.lineWidth = cam.lw * 0.8;
       const dx = terrain ? 0.04 : x1 - x0;
-      const run = (z) => { for (let x = x0; x <= x1 + 1e-9; x += dx) { const A = cam.p([x, gyf(x), z]); if (x === x0) ctx.moveTo(A.x, A.y); else ctx.lineTo(A.x, A.y); } };
+      const run = (z) => { for (let x = x0; x <= x1 + 1e-9; x += dx) { const A = cam.p([x, gyf(x), z + zc]); if (x === x0) ctx.moveTo(A.x, A.y); else ctx.lineTo(A.x, A.y); } };
       if (terrain) { // the ground is a solid, so a slope or a flight of steps reads as something to stand on
         ctx.fillStyle = hexA(st.guideColor, 0.12); ctx.beginPath(); run(0);
-        const e1 = cam.p([x1, -0.4, 0]); const e0 = cam.p([x0, -0.4, 0]); ctx.lineTo(e1.x, e1.y); ctx.lineTo(e0.x, e0.y); ctx.closePath(); ctx.fill();
+        const e1 = cam.p([x1, -0.4, zc]); const e0 = cam.p([x0, -0.4, zc]); ctx.lineTo(e1.x, e1.y); ctx.lineTo(e0.x, e0.y); ctx.closePath(); ctx.fill();
         ctx.strokeStyle = hexA(st.guideColor, 0.75); ctx.lineWidth = cam.lw * 0.8;
       }
       ctx.beginPath(); run(0); ctx.stroke();
       ctx.strokeStyle = hexA(st.guideColor, 0.28);
       ctx.beginPath();
-      if (terrain) for (const z of [-0.6, -0.3, 0.3, 0.6]) run(z); else for (const z of [-0.6, -0.3, 0.3, 0.6]) line([x0, 0, z], [x1, 0, z]);
+      if (terrain) for (const z of [-0.6, -0.3, 0.3, 0.6]) run(z); else for (const z of [-0.6, -0.3, 0.3, 0.6]) line([x0, 0, z + zc], [x1, 0, z + zc]);
       const half = step / 2;
       const first = Math.floor(x0 / half) * half;
-      for (let x = first; x < x1; x += half) line([x, gyf(x), -0.6], [x, gyf(x), 0.6]);
+      for (let x = first; x < x1; x += half) line([x, gyf(x), -0.6 + zc], [x, gyf(x), 0.6 + zc]);
       ctx.stroke();
       ctx.strokeStyle = hexA(st.guideColor, 0.75);
       ctx.beginPath();
-      for (let x = first; x < x1; x += half) { const A = cam.p([x, gyf(x), 0]); ctx.moveTo(A.x, A.y); ctx.lineTo(A.x, A.y + 11 * cam.k); }
+      for (let x = first; x < x1; x += half) { const A = cam.p([x, gyf(x), zc]); ctx.moveTo(A.x, A.y); ctx.lineTo(A.x, A.y + 11 * cam.k); }
       ctx.stroke();
     }
-    if (headView) { /* no ground in the head view */ } else if (st.showFootprints && dog) {
+    if (headView || pathOn) { /* no ground in the head view, and no footprints while the path bends */ } else if (st.showFootprints && dog) {
       ctx.fillStyle = hexA(st.guideColor, 0.38);
       for (const pl of perf ? perf.plants : dogPrints(params, target[0] - 4, target[0] + 4)) {
         if (Math.abs(pl.x - target[0]) > 4) continue;
@@ -607,7 +615,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       for (const it of params.attach || []) {
         const sim = sims.get(it.id); if (!sim) continue;
         for (const [which, alpha] of [['tip', 0.95], ['mid', 0.5]]) {
-          const pts = sim.frames.map((s) => { const nd = s.nodes[which === 'tip' ? s.nodes.length - 1 : Math.floor(s.nodes.length / 2)]; return cam.p([s.root[0] + nd[0] + arcOffsetX(params, { pelvisX: s.pelvisX }, pz), s.root[1] + nd[1], s.root[2]]); });
+          const pts = sim.frames.map((s) => { const nd = s.nodes[which === 'tip' ? s.nodes.length - 1 : Math.floor(s.nodes.length / 2)]; return camF.p([s.root[0] + nd[0] + arcOffsetX(params, { pelvisX: s.pelvisX }, pz), s.root[1] + nd[1], s.root[2]]); });
           ctx.setLineDash([8 * cam.k, 6 * cam.k]); ctx.lineWidth = cam.lw * (which === 'tip' ? 0.9 : 0.6); ctx.strokeStyle = hexA(it.fill, alpha);
           ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); if (!perf && pts.length > 2) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
           if (which === 'tip' && st.arcDots) for (const q of pts) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(q.x, q.y, 2.6 * cam.k, 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -618,7 +626,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       const paths = samplePaths(params, defs, pz);
       const curFrame = perf ? Math.min(perf.T - 1, Math.max(0, t0)) : cycleFrames(params).frames.reduce((best, f, i, a) => (Math.abs(f.u - ph.u) < Math.abs(a[best].u - ph.u) ? i : best), 0);
       for (const d of defs) {
-        const col = arcColor(dog ? 'dog' : 'human', d.id); const pts = paths.get(d.id).map((s) => ({ frame: s.frame, ...cam.p(s.p) }));
+        const col = arcColor(dog ? 'dog' : 'human', d.id); const pts = paths.get(d.id).map((s) => ({ frame: s.frame, ...camF.p(s.p) }));
         ctx.setLineDash([8 * cam.k, 6 * cam.k]); ctx.lineWidth = cam.lw * 0.9; ctx.strokeStyle = hexA(col, 0.85);
         ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
         if (!perf && pts.length > 2) ctx.closePath();
@@ -637,16 +645,16 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
 
   let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null; const sceneHits = [];
   const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz, hits: sceneHits }) : [];
-  const dMain = cam.p([pz.pelvisX, 0, 0]).d;
+  const dMain = camF.p([pz.pelvisX, 0, 0]).d;
   if (layers.figure) {
     for (const it of sceneItems) if (it.d < dMain) it.paint();
     if (st.showOnion && opts.onion !== false) {
       const ghostStyle = { ...st, style: st.style === 'silhouette' ? 'stick' : st.style };
       const ghost = (k) => (perf ? poseAt(Math.min(perf.T - 1, Math.max(0, t0 + k * ex))) : poser(params, motion, ph.u + k * ph.step));
-      for (let k = st.onionBefore; k >= 1; k--) drawFigureShapes(ctx, ghost(-k), cam, ghostStyle, { tint: st.onionBeforeTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
-      for (let k = st.onionAfter; k >= 1; k--) drawFigureShapes(ctx, ghost(k), cam, ghostStyle, { tint: st.onionAfterTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
+      for (let k = st.onionBefore; k >= 1; k--) drawFigureShapes(ctx, ghost(-k), camF, ghostStyle, { tint: st.onionBeforeTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
+      for (let k = st.onionAfter; k >= 1; k--) drawFigureShapes(ctx, ghost(k), camF, ghostStyle, { tint: st.onionAfterTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
     }
-    const fig = drawFigureShapes(ctx, pz, cam, st, { parts: opts.parts, attach: attachNow, mouth: mouthId });
+    const fig = drawFigureShapes(ctx, pz, camF, st, { parts: opts.parts, attach: attachNow, mouth: mouthId });
     shapes = fig.shapes; placedAttach = fig.placed || [];
     for (const it of sceneItems) if (it.d >= dMain) it.paint();
     const sel = opts.selection;
@@ -668,13 +676,13 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     if (opts.fix && sel) { // the fix handle: the end of the selected part, to drag back into line
       const bone = partBone(pz, sel.part, sel.seg ?? null, sel.side ?? null);
       if (bone) {
-        const e = cam.p([bone[1][0] + pz.pelvisX, bone[1][1], bone[1][2]]); const r = 11 * cam.k;
+        const e = camF.p([bone[1][0] + pz.pelvisX, bone[1][1], bone[1][2]]); const r = 11 * cam.k;
         ctx.save(); ctx.lineWidth = cam.lw * 1.8; ctx.strokeStyle = '#e0662e'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
         ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, TAU); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.arc(e.x, e.y, r * 0.35, 0, TAU); ctx.fillStyle = '#e0662e'; ctx.fill();
         ctx.restore(); fixHandle = { x: e.x, y: e.y };
         // and one at the base of the part: it moves the part before it, since that is where this one starts
-        const b0 = cam.p([bone[0][0] + pz.pelvisX, bone[0][1], bone[0][2]]); const q = 8 * cam.k;
+        const b0 = camF.p([bone[0][0] + pz.pelvisX, bone[0][1], bone[0][2]]); const q = 8 * cam.k;
         ctx.save(); ctx.lineWidth = cam.lw * 1.6; ctx.strokeStyle = '#e0662e'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
         ctx.beginPath(); ctx.rect(b0.x - q, b0.y - q, q * 2, q * 2); ctx.fill(); ctx.stroke(); ctx.restore();
         fixHandle.base = { x: b0.x, y: b0.y };
@@ -748,5 +756,5 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
     ctx.restore();
   }
-  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam, pz, attach: placedAttach, handles, arcDots, fixHandle, sceneHits };
+  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam: camF, pz, attach: placedAttach, handles, arcDots, fixHandle, sceneHits };
 }

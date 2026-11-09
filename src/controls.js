@@ -10,7 +10,7 @@ const c = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, labe
 
 /** What a tab is called on its button. Gait is the one tab for the walk, the body and the scene, and the person using it calls it Body. */
 export const TAB_LABELS = { Gait: 'Body' };
-export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Speech', 'View', 'Look', 'Guides', 'Sampler', 'Export'];
+export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Speech', 'View', 'Sampler', 'Export'];
 
 const RAW_CONTROLS = [
   // Gait
@@ -19,7 +19,7 @@ const RAW_CONTROLS = [
   n('p', 'cycleFrames', 'Gait', 'Timing', 'Cycle length', 'frames', 4, 96, 1, 'Frames for two steps. 24 at 24 fps is one step every half second.'),
   n('p', 'fps', 'Gait', 'Timing', 'Frame rate', 'fps', 6, 60, 1, 'Frames per second. Changing it changes the walking speed.'),
   n('p', 'stepLength', 'Gait', 'Stride', 'Step length', 'legs', 0.3, 1.4, 0.01, 'Contact to contact, in leg lengths. Longer steps at the same timing walk faster.'),
-  n('p', 'duty', 'Gait', 'Stride', 'Time on the ground', '', 0.52, 0.85, 0.01, 'Fraction of the cycle each foot is down. Under 0.5 would be a run, so it stops at 0.52.'),
+  n('p', 'duty', 'Gait', 'Stride', 'Time on the ground', '', 0.25, 0.85, 0.01, 'Fraction of the cycle each foot is down. Under 0.5 there is a moment with neither foot down: a run. Set Hip bob and Lowest point to match (the Run preset shows how).'),
   n('p', 'legExtend', 'Gait', 'Stride', 'Leg straightness', '', 0.85, 0.999, 0.001, 'How straight the leg is at contact. Lower crouches the whole walk.'),
   n('p', 'bob', 'Gait', 'Weight', 'Hip bob', 'legs', 0, 0.3, 0.005, 'Vertical travel of the hips, lowest to highest.'),
   n('p', 'downPhase', 'Gait', 'Weight', 'Down position', 'cycle', 0.03, 0.22, 0.005, 'When the body is lowest after contact. 0.125 is a quarter of a step.'),
@@ -34,6 +34,7 @@ const RAW_CONTROLS = [
   n('p', 'asymTiming', 'Gait', 'Left and right', 'Far foot lands late', 'cycle', -0.12, 0.12, 0.005, 'Moves the far foot off its half-cycle: the two steps become unequal, one short and one long.'),
   n('p', 'asymDuty', 'Gait', 'Left and right', 'Far foot time on ground', '', -0.15, 0.15, 0.005, 'Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp.'),
   n('p', 'asymLift', 'Gait', 'Left and right', 'Far foot lift', '', -0.8, 0.8, 0.01, 'The far foot lifts more (positive) or less (negative) than the near one.'),
+  n('p', 'heading', 'Gait', 'Direction', 'Heading', '°', -180, 180, 1, 'Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends.'),
   e('p', 'terrain', 'Gait', 'Ground', 'Ground', ['flat', 'slope', 'steps'], 'What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step.'),
   n('p', 'terrainGrade', 'Gait', 'Ground', 'Slope', '°', -30, 30, 0.5, 'How steeply the ground rises along the slope (negative goes downhill).'),
   n('p', 'terrainRise', 'Gait', 'Ground', 'Step height', 'legs', -0.3, 0.3, 0.005, 'Height of each step, in leg lengths (negative goes down).'),
@@ -179,7 +180,7 @@ const RAW_CONTROLS = [
   n('x', 'bitrate', 'Export', 'Names', 'Video bitrate', 'Mbps', 1, 80, 1, 'MP4 only.'),
 ];
 /** Gait and Body are one tab: the walk first, then the body. `area` keeps which it came from, for its colour. */
-export const CONTROLS = RAW_CONTROLS.map((c) => (c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : { ...c, area: c.tab }));
+export const CONTROLS = RAW_CONTROLS.map((c) => (c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : c.tab === 'Look' || c.tab === 'Guides' ? { ...c, tab: 'View', area: c.tab } : { ...c, area: c.tab }));
 
 /** Which figure a control belongs to: 'both', 'human' or 'dog'. Timing, camera, look, guides and export are shared. */
 const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel']);
@@ -194,6 +195,9 @@ export const PRESETS = {
   Confident: { stepLength: 0.86, bob: 0.1, armSwing: 32, lean: 0, torsoSway: 2.4, headBob: 0.6, duty: 0.58, footLift: 0.18, elbowSwing: 34 },
   Brisk: { stepLength: 0.95, bob: 0.09, duty: 0.56, armSwing: 34, lean: 6, cycleFrames: 16, footLift: 0.2, elbowBase: 40, elbowSwing: 30 },
   Heavy: { stepLength: 0.66, bob: 0.13, duty: 0.64, footLift: 0.09, lean: 6, armSwing: 14, elbowBase: 20, headNod: 3.5, cycleFrames: 32, heelStrike: 18, torsoSway: 3 },
+  Jog: { stepLength: 0.9, duty: 0.46, footLift: 0.26, bob: 0.09, downPhase: 0.2, lean: 7, legExtend: 0.95, cycleFrames: 18, armSwing: 40, elbowBase: 70, elbowSwing: 8, torsoSway: 2 },
+  Run: { stepLength: 1.05, duty: 0.36, footLift: 0.32, bob: 0.12, downPhase: 0.18, lean: 10, legExtend: 0.93, cycleFrames: 16, armSwing: 50, elbowBase: 80, elbowSwing: 10, torsoSway: 3 },
+  Sprint: { stepLength: 1.35, duty: 0.28, footLift: 0.4, bob: 0.14, downPhase: 0.14, lean: 16, legExtend: 0.92, cycleFrames: 12, armSwing: 60, elbowBase: 90, elbowSwing: 12, torsoSway: 4 },
   Uphill: { stepLength: 0.5, terrain: 'slope', terrainGrade: 12, lean: 8, bob: 0.07, footLift: 0.2, cycleFrames: 28 },
   Downhill: { stepLength: 0.55, terrain: 'slope', terrainGrade: -12, lean: -3, bob: 0.06, footLift: 0.12, cycleFrames: 24 },
   'Up the steps': { stepLength: 0.45, terrain: 'steps', terrainRise: 0.14, terrainRun: 0.9, lean: 5, bob: 0.04, footLift: 0.2, duty: 0.66, cycleFrames: 30 },
@@ -269,6 +273,7 @@ export const PRESETS_HOSE = {
   Skip: { stepLength: 0.85, bob: 0.2, duty: 0.52, armSwing: 55, elbowBase: 20, elbowSwing: 20, footLift: 0.36, cycleFrames: 14, exposure: 2, lean: 2, torsoSway: 5, headNod: 6, headBob: 0, pelvisRoll: 5, heelStrike: 6, toeOff: 45, liftPeak: 0.35, swingReach: 0.6 },
   Stomp: { stepLength: 0.66, bob: 0.11, duty: 0.6, armSwing: 28, elbowBase: 40, elbowSwing: 14, footLift: 0.24, cycleFrames: 18, exposure: 2, lean: 6, torsoSway: 3, headNod: 5, heelStrike: 28, heelDown: 0.07, liftPeak: 0.3, swingReach: 0.95, legExtend: 0.985, toeOut: 10 },
   Tired: { stepLength: 0.5, bob: 0.07, duty: 0.66, armSwing: 14, elbowBase: 8, elbowSwing: 6, footLift: 0.07, cycleFrames: 32, exposure: 2, lean: 14, torsoSway: 3, headNod: 6, headBob: 0, heelStrike: 4, toeOff: 18, legExtend: 0.94, toeOut: 20 },
+  Run: { stepLength: 0.95, duty: 0.4, footLift: 0.3, bob: 0.14, downPhase: 0.17, lean: 8, legExtend: 0.93, cycleFrames: 12, exposure: 2, armSwing: 60, elbowBase: 20, elbowSwing: 10, torsoSway: 3 },
 };
 /** The proportions the rubber hose figure starts with: a big head, a short body, long thin limbs. */
 export const HOSE_PROPORTIONS = Object.freeze({ head: 1.5, neck: 0.35, torso: 0.8, waist: 0.9, shoulderWidth: 0.8, arm: 1.15, handSize: 1.3, footSize: 1.35, limbGirth: 1 });

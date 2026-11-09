@@ -31,7 +31,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
   await page.locator('#rig').selectOption('human'); await page.waitForTimeout(250);
   // tabs fit without scrolling sideways, and every tab is reachable and big enough
   const tabs = await ev(() => { const t = document.querySelector('.tabs'); const bs = [...t.querySelectorAll('.tab')].map((b) => b.getBoundingClientRect()); const pr = document.querySelector('.panel').getBoundingClientRect(); return { sideways: t.scrollWidth > t.clientWidth + 1, n: bs.length, tall: Math.min(...bs.map((b) => b.height)), inside: bs.every((b) => b.left >= pr.left - 1 && b.right <= pr.right + 1) }; });
-  check(`${label}: all ${tabs.n} tabs fit in the panel, with no sideways scrolling`, tabs.n >= 10 && !tabs.sideways && tabs.inside && tabs.tall >= 40, tabs);
+  check(`${label}: all ${tabs.n} tabs fit in the panel, with no sideways scrolling`, tabs.n >= 8 && !tabs.sideways && tabs.inside && tabs.tall >= 40, tabs);
 
   // advanced groups start folded
   await tab('Body');

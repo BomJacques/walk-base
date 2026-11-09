@@ -39,6 +39,7 @@ export const DEFAULTS = Object.freeze({
   asymDuty: 0,          // far foot time on the ground, added to duty
   asymLift: 0,          // far foot lift, as a fraction more or less
   asymArm: 0,           // far arm swing, as a fraction more or less
+  heading: 0,           // degrees the figure faces and walks away from straight along the stage (automate it to walk a curve or turn a corner)
   terrain: 'flat',      // the ground under the walk: flat | slope | steps
   terrainGrade: 8,      // degrees the ground rises (negative falls) along a slope
   terrainRise: 0.14,    // height of each step, in leg lengths (negative goes down)
@@ -148,7 +149,7 @@ export function groundAt(p, x) {
 export function sideGait(params, side) {
   const p = params;
   if (side === 'R' || side === 'right' ) return { p, off: 0, d: p.stepLength * p.duty };
-  const duty = clamp(p.duty + (p.asymDuty || 0), 0.52, 0.88);
+  const duty = clamp(p.duty + (p.asymDuty || 0), 0.25, 0.88);
   const q = { ...p, duty, footLift: p.footLift * Math.max(0, 1 + (p.asymLift || 0)) };
   return { p: q, off: 0.5 + (p.asymTiming || 0), d: p.stepLength * duty };
 }

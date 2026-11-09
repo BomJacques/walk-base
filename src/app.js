@@ -60,7 +60,7 @@ function perfData() {
   const key = `${S.ver}|${T}|${JSON.stringify(S.p)}`;
   if (perfCache?.key !== key) { const dog = S.p.rig === 'dog';
     const s = integrate(S.p, S.lanes, T, n, dog ? null : contact);
-    perfCache = { key, T, u: s.u, x: s.x, plants: dog ? dogPlants(S.p, S.lanes, T, s) : s.plants }; }
+    perfCache = { key, T, u: s.u, x: s.x, px: s.px, pz: s.pz, path: s.path, plants: dog ? dogPlants(S.p, S.lanes, T, s) : s.plants }; }
   const live = rec.liveValues();
   return { ...perfCache, lanes: S.lanes, live: Object.keys(live).length ? live : null };
 }
@@ -1329,6 +1329,7 @@ function collapsible(host) {
     if (!hd || hd.tagName !== 'H3') return;
     // On the joined Gait and Body tab the colour says which part a section belongs to: blue for the walk, amber for the body, sage for proportions. Elsewhere each section gets its own muted colour.
     if (S.tab === 'Gait') sec.dataset.hue = sec.dataset.area === 'Scene' ? '5' : /proportions$/i.test(hd.textContent) ? '4' : sec.dataset.area === 'Body' ? '1' : '0';
+    else if (S.tab === 'View') sec.dataset.hue = { View: '0', Look: '1', Guides: '2' }[sec.dataset.area] ?? '2'; // blue for the camera, amber for the look, teal for the guides
     else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and shoulders, onion skin, colours, names, target app); a choice you make is remembered.
@@ -1359,8 +1360,7 @@ function renderPanel() {
     if (S.tab === 'Gait') { host.append(sceneSection()); host.append(gaitChartSection()); }
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
     for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
-    if (S.tab === 'View') host.append(viewExtras());
-    if (S.tab === 'Guides') host.append(arcSection(), refSection());
+    if (S.tab === 'View') host.append(viewExtras(), arcSection(), refSection());
     if (S.tab === 'Export') host.append(exportSection());
   }
   collapsible(host);
@@ -2027,7 +2027,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
-  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t; renderPanel(); },
+  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),

@@ -143,7 +143,7 @@ export const HUMAN_MOVES = [
   },
   {
     id: 'run', label: 'Break into a run', frames: 40, ends: 'keeps running',
-    help: 'While walking: the steps lengthen and quicken, the arms pump, the body leans in and the feet leave the ground between steps. Slow to a walk undoes it.',
+    help: 'While walking: the steps lengthen and quicken, the arms pump, the body leans in and both feet leave the ground between steps. Slow to a walk undoes it.',
     build: (b, D) => ({
       [CADENCE]: at(D, [[0, 1], [0.7, 1.4], [1, 1.4]]),
       [P('stepLength')]: at(D, [[0, b.stepLength], [0.8, b.stepLength * 1.4]]),
@@ -152,7 +152,8 @@ export const HUMAN_MOVES = [
       [P('armSwing')]: at(D, [[0, b.armSwing], [0.8, b.armSwing * 1.5]]),
       [P('elbowBase')]: at(D, [[0, b.elbowBase], [0.8, Math.max(b.elbowBase, 70)]]),
       [P('lean')]: at(D, [[0, b.lean], [0.8, b.lean + 9]]),
-      [P('duty')]: at(D, [[0, b.duty], [0.8, Math.min(b.duty, 0.42)]]),
+      [P('duty')]: at(D, [[0, b.duty], [0.8, Math.min(b.duty, 0.36)]]),
+      [P('downPhase')]: at(D, [[0, b.downPhase], [0.8, 0.18]]),
     }),
   },
   {
@@ -160,9 +161,9 @@ export const HUMAN_MOVES = [
     help: 'Returns the pace, lean and arms to the walk set on the Gait tab, from a run or a quick walk.',
     build: (b, D) => ({
       [CADENCE]: at(D, [[0, 1.4], [0.8, 1]]),
-      ...Object.fromEntries(['stepLength', 'footLift', 'bob', 'armSwing', 'elbowBase', 'lean', 'duty'].map((n) => [P(n), at(D, [[0, b[n]], [0.8, b[n]]])])),
+      ...Object.fromEntries(['stepLength', 'footLift', 'bob', 'armSwing', 'elbowBase', 'elbowSwing', 'lean', 'duty', 'downPhase'].map((n) => [P(n), at(D, [[0, b[n]], [0.8, b[n]]])])),
     }),
-    resetsParams: ['stepLength', 'footLift', 'bob', 'armSwing', 'elbowBase', 'lean', 'duty'],
+    resetsParams: ['stepLength', 'footLift', 'bob', 'armSwing', 'elbowBase', 'elbowSwing', 'lean', 'duty', 'downPhase'],
   },
 ];
 
