@@ -125,6 +125,32 @@ await ev(() => { window.__walkBase.S.sceneSel = 'main'; window.__walkBase.setTab
   await ev(() => { const e = document.querySelector('[data-testid="main-fill"]'); e.value = '#f6f3ec'; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);
 }
 await wait(350);
+// the scene list is the layers: show and hide, lock, and forward and back
+{
+  await ev(() => { window.__walkBase.S.s.camYaw = 0; window.__walkBase.S.s.camPitch = 0; window.__walkBase.setTab('Gait'); }); await wait(150);
+  const ids = await ev(() => window.__walkBase.S.scene.actors.map((a) => a.id)); const a1 = ids[0];
+  const order = () => page.locator('[data-testid^="scene-item-"]').evaluateAll((b) => b.map((x) => x.dataset.testid.replace('scene-item-', '')));
+  const zs = await ev((i) => { const w = window.__walkBase; const a = w.S.scene.actors.find((x) => x.id === i); a.z = 1.2; a.x = 1.4; a.visible = true; w.S.scene.props.forEach((p, k) => { p.z = -2 + k * 0.1; }); w.S.scene.actors.forEach((x) => { if (x.id !== i) x.z = -0.7; }); w.renderPanel?.(); w.setTab('Gait'); return a.z; }, a1); await wait(150);
+  check('the list runs from the nearest at the top to the furthest at the bottom', (await order())[0] === 'main' ? false : (await order())[0] === a1 && (await order()).at(-1) !== a1, (await order()).slice(0, 3));
+  const z0 = await ev((i) => window.__walkBase.S.scene.actors.find((x) => x.id === i).z, a1);
+  await q(`scene-back-${a1}`).click(); await wait(150);
+  check('Send back moves a figure further away and down the list', (await ev((i) => window.__walkBase.S.scene.actors.find((x) => x.id === i).z, a1)) < z0);
+  await q(`scene-fwd-${a1}`).click(); await wait(150);
+  check('Bring forward moves it nearer', Math.abs((await ev((i) => window.__walkBase.S.scene.actors.find((x) => x.id === i).z, a1)) - z0) < 1e-9);
+  const withIt = await stagePng();
+  await q(`scene-eye-${a1}`).click(); await wait(150);
+  check('the eye hides it', (await ev((i) => window.__walkBase.S.scene.actors.find((x) => x.id === i).visible, a1)) === false && Buffer.compare(withIt, await stagePng()) !== 0);
+  await q(`scene-eye-${a1}`).click(); await wait(100);
+  await q(`scene-lock-${a1}`).click(); await wait(150);
+  check('the lock is on', (await ev((i) => window.__walkBase.S.scene.actors.find((x) => x.id === i).locked, a1)) === true);
+  await q(`scene-del-${a1}`).click(); await wait(150);
+  check('a locked figure cannot be removed', (await ev((i) => window.__walkBase.S.scene.actors.some((x) => x.id === i), a1)) === true);
+  await q(`scene-fwd-${a1}`).click(); await wait(100);
+  check('or moved in the list', (await ev((i) => window.__walkBase.S.scene.actors.find((x) => x.id === i).z, a1)) === z0);
+  await q(`scene-lock-${a1}`).click(); await wait(150);
+  check('and unlocking frees it', (await ev((i) => window.__walkBase.S.scene.actors.find((x) => x.id === i).locked, a1)) === false);
+  await wait(350);
+}
 // raising scenery and a figure's own colours
 await q(`scene-item-${await ev(() => window.__walkBase.S.scene.props[0].id)}`).click();
 await ev(() => { const e = document.querySelector('[data-testid="scene-y"]'); e.value = 1.2; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);

@@ -40,7 +40,7 @@ export const STYLE_DEFAULTS = Object.freeze({
   arcs: ['head', 'hip', 'wrist.R', 'wrist.L', 'ankle.R', 'ankle.L'],
   arcsDog: ['head', 'hip', 'paw.FR', 'paw.FL', 'paw.HR', 'paw.HL', 'tail'],
   arcDots: true,
-  showLabels: true,
+  showLabels: false,
   pictureModel: 'hide covered parts', // what the body does when pictures are attached
   showScene: true,           // the other figures and the scenery
   showFootLabels: false,

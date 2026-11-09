@@ -488,3 +488,9 @@ A Loop button in the transport bar (and Performance > Make a seamless loop) adju
 - a plain cycle already repeats exactly, so there it only fits the exposure.
 It says what it changed and how smooth the join is: the step from the last frame to the first, as a share of the biggest step between other frames (1 or less is seamless). One Undo puts it back. A test checks that a drifting performance has a jump at the join and none after.
 Limits: terrain and a turning path do not repeat (the figure's movement does, the ground does not, and it says so); a figure that runs free (a channel set to Free running with a frequency that is not a whole number) may still drift; the scene's other figures take a whole number of their own cycles to each of the main figure's, so they loop with it.
+
+## Phase D done (2026-11-10): menu clean-up and layers
+
+- **Dark mode dropdowns.** The theme you choose (Light, Dark, or follow the device) now also decides how the browser draws its own pop-up lists and pickers, so the Figure, Preset, Speed and Source lists and every other drop-down are dark in the dark theme whatever the device is set to.
+- **Poses.** The pose labels on the stage (CONTACT, DOWN, PASSING, UP) are off by default. The Poses group of settings is gone from the View tab (and Foot labels with it); the labels are one item in the View menu, Pose labels on the stage.
+- **Layers.** No full layer system: figures, scenery and pictures already act as layers. The Scene list is the layer list, nearest at the top and furthest at the bottom; each row has an eye (show or hide), a lock (it cannot be dragged, moved or removed), and Bring forward and Send back (which move it nearer or further, so the order is the real depth). Right-click has Lock and Unlock too. Pictures on a figure keep their four layers (Back, Behind, In front, Top).

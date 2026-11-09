@@ -418,3 +418,12 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 @media (max-width: 720px) { .help-card { grid-template-columns: 1fr; top: 70px; } }
 
 @media (max-width: 900px) { .brand { display: none; } }
+
+/* the chosen theme decides how the browser draws its own pop-up lists and pickers, whatever the device is set to */
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+select, select option, select optgroup { background-color: var(--panel-2); color: var(--ink); }
+.menu, .menu .mi { color-scheme: inherit; }
+.scene-line .btn.icon { flex: none; }
+.scene-line .btn.icon[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.scene-row .dim { opacity: .5; }

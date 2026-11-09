@@ -447,6 +447,7 @@ function sceneDragStart(e, toFrame) {
 }
 /** Moves it so it stays under the finger on the ground. Along the stage is always possible; depth needs a view from above or an angle, since a side view cannot show it. */
 function sceneDragMove(d, e, toFrame) {
+  if (d.it.locked) return;
   const q = toFrame(e.clientX, e.clientY); if (!q) return;
   const c = d.cam; const o = c.p([d.x0, 0, d.z0]); const ax = c.p([d.x0 + 1, 0, d.z0]); const az = c.p([d.x0, 0, d.z0 + 1]);
   const a11 = ax.x - o.x; const a21 = ax.y - o.y; const a12 = az.x - o.x; const a22 = az.y - o.y; const dx = q.x - d.q0.x; const dy = q.y - d.q0.y;
@@ -630,17 +631,24 @@ function addActor(fig) {
   S.scene.actors.push(a); S.sceneSel = a.id; sceneChanged(true); setMessage(`${FIG_LABELS[fig]} added behind and beside the main figure. Pick its walk and place it below.`);
 }
 function addProp(type) { const q = newProp(type, { x: 0.9 + S.scene.props.length * 0.7, z: -0.9 }); S.scene.props.push(q); S.sceneSel = q.id; sceneChanged(true); }
-function removeSceneItem(id) { S.scene.actors = S.scene.actors.filter((a) => a.id !== id); S.scene.props = S.scene.props.filter((q) => q.id !== id); if (S.sceneSel === id) S.sceneSel = null; sceneChanged(true); }
+function removeSceneItem(id) { if (findSceneItem(id)?.locked) { setMessage('That one is locked. Unlock it in the Scene list first.'); return; } S.scene.actors = S.scene.actors.filter((a) => a.id !== id); S.scene.props = S.scene.props.filter((q) => q.id !== id); if (S.sceneSel === id) S.sceneSel = null; sceneChanged(true); }
 function sceneSection() {
   const host = h('div', { testid: 'scene-section' });
   const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIGS.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) })) });
   const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => addProp(k.id) })) });
-  const rows = [{ id: 'main', label: `${FIG_LABELS[figKey()]} (main)`, kind: 'figure', main: true }, ...S.scene.actors.map((a) => ({ id: a.id, label: `${a.name} (${a.preset || 'walk'})`, kind: 'figure' })), ...S.scene.props.map((q) => ({ id: q.id, label: q.name, kind: 'scenery' }))];
+  // The list is the layers: the nearest at the top, the furthest at the bottom, so up brings one forward and down sends it back.
+  const rows = [{ id: 'main', label: `${FIG_LABELS[figKey()]} (main)`, kind: 'figure', main: true, z: 0, visible: true, locked: false }, ...S.scene.actors.map((a) => ({ id: a.id, label: `${a.name} (${a.preset || 'walk'})`, kind: 'figure', z: a.z, visible: a.visible, locked: a.locked })), ...S.scene.props.map((q) => ({ id: q.id, label: q.name, kind: 'scenery', z: q.z, visible: q.visible, locked: q.locked }))].sort((a, b) => b.z - a.z);
+  const layerStep = (id, dz) => { const it = findSceneItem(id); if (!it || it.locked) return; it.z = Math.max(-8, Math.min(8, Math.round((it.z + dz) * 100) / 100)); sceneChanged(true); };
+  const layerFlag = (id, k) => { const it = findSceneItem(id); if (!it) return; it[k] = !it[k]; sceneChanged(true); };
   host.append(h('section', { class: 'group', 'data-area': 'Scene' }, h('h3', null, rows.length > 1 ? `Scene (${rows.length - 1})` : 'Scene'),
     h('div', { class: 'btnrow' }, addFig, addPr),
     rows.length === 1 ? h('p', { class: 'hint' }, 'Add more figures, each with its own walk and colours, and scenery to stand them in. Tap a figure on the stage to select it, or press and hold (right-click on a mouse) for a menu.') : null,
     rows.length ? h('div', { class: 'scene-list', role: 'listbox', 'aria-label': 'Scene items' }, rows.map((r) => h('div', { class: 'scene-line' },
-      h('button', { type: 'button', class: 'scene-row', role: 'option', 'aria-selected': String(r.id === S.sceneSel), testid: `scene-item-${r.id}`, onClick: () => { S.sceneSel = r.id; renderPanel(); } }, h('span', null, r.label), h('small', null, r.kind)),
+      h('button', { type: 'button', class: 'scene-row', role: 'option', 'aria-selected': String(r.id === S.sceneSel), testid: `scene-item-${r.id}`, onClick: () => { S.sceneSel = r.id; renderPanel(); } }, h('span', { class: r.visible ? '' : 'dim' }, r.label), h('small', null, r.kind)),
+      r.main ? null : h('button', { type: 'button', class: 'btn icon', 'aria-label': `${r.visible ? 'Hide' : 'Show'} ${r.label}`, 'aria-pressed': String(!r.visible), title: r.visible ? 'Hide' : 'Show', testid: `scene-eye-${r.id}`, onClick: () => layerFlag(r.id, 'visible') }, icon(r.visible ? 'eye' : 'eyeoff', 14)),
+      r.main ? null : h('button', { type: 'button', class: 'btn icon', 'aria-label': `${r.locked ? 'Unlock' : 'Lock'} ${r.label}`, 'aria-pressed': String(Boolean(r.locked)), title: r.locked ? 'Unlock' : 'Lock: it cannot be dragged or removed', testid: `scene-lock-${r.id}`, onClick: () => layerFlag(r.id, 'locked') }, icon(r.locked ? 'lock' : 'unlock', 14)),
+      r.main ? null : h('button', { type: 'button', class: 'btn icon', 'aria-label': `Bring ${r.label} forward`, title: 'Bring forward', testid: `scene-fwd-${r.id}`, onClick: () => layerStep(r.id, 0.3) }, icon('up', 14)),
+      r.main ? null : h('button', { type: 'button', class: 'btn icon', 'aria-label': `Send ${r.label} back`, title: 'Send back', testid: `scene-back-${r.id}`, onClick: () => layerStep(r.id, -0.3) }, icon('down', 14)),
       r.main ? null : h('button', { type: 'button', class: 'btn icon scene-del', 'aria-label': `Remove ${r.label}`, title: 'Remove', testid: `scene-del-${r.id}`, onClick: () => removeSceneItem(r.id) }, icon('close', 14))))) : h('p', { class: 'hint' }, 'Add more figures, each with its own walk, and scenery to stand them in. Tap a figure on the stage to select it.')));
   if (S.sceneSel === 'main') {
     const set1 = (k, v) => { S.s[k] = v; render(); save(); };
@@ -1822,6 +1830,7 @@ function menuBar() {
     mb('View', 'menu-view', () => [
       { label: 'Stage only', testid: 'stage-only', checked: S.stageOnly, onClick: () => { S.stageOnly = !S.stageOnly; document.body.classList.toggle('stage-only', S.stageOnly); render(); } },
       { label: 'Frame information on the stage', testid: 'view-hud', checked: LAYOUT.hud, onClick: () => { LAYOUT.hud = !LAYOUT.hud; layoutSave(); render(); } },
+      { label: 'Pose labels on the stage', testid: 'view-pose-labels', checked: Boolean(S.s.showLabels), onClick: () => { S.s.showLabels = !S.s.showLabels; render(); save(); } },
       { label: 'Fit figure to window', testid: 'menu-fit', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } },
       { separator: true },
       { heading: 'Theme' },
@@ -2038,6 +2047,7 @@ function gestures() {
         { label: 'Duplicate', testid: 'ctx-scene-dup', onClick: () => { const c = JSON.parse(JSON.stringify(it)); c.id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`; c.name = `${it.name} copy`; c.x += 0.8; (isActor ? S.scene.actors : S.scene.props).push(c); S.sceneSel = c.id; sceneChanged(true); } },
         ...(isActor ? [] : [{ label: 'Raise', testid: 'ctx-scene-up', onClick: () => { it.y = Math.min(8, (it.y || 0) + 0.25); sceneChanged(true); } }, { label: 'Lower', testid: 'ctx-scene-down', onClick: () => { it.y = Math.max(-3, (it.y || 0) - 0.25); sceneChanged(true); } }]),
         { label: it.visible ? 'Hide' : 'Show', testid: 'ctx-scene-hide', onClick: () => { it.visible = !it.visible; sceneChanged(true); } },
+        { label: it.locked ? 'Unlock' : 'Lock', testid: 'ctx-scene-lock', onClick: () => { it.locked = !it.locked; sceneChanged(true); } },
         { separator: true }, { label: 'Remove', testid: 'ctx-scene-del', onClick: () => removeSceneItem(it.id) }];
     } else {
       label = 'Stage';
