@@ -424,3 +424,27 @@ Not done (still open): a real human run with a flight phase (the walk rig keeps 
 
 **E. More gait variety**
 12. **Noise and variety.** Small, repeatable randomness so a walk is not a metronome: wobble in stride length, step timing, bounce, hip sway, head, arms and hands, each with an amount and a speed (smooth noise, not jitter), a seed so a take can be repeated, and a Make it a loop option that keeps the noise periodic. Other body and gait ideas: a tired walk that sags over time, a weight carried on one side, a heel-to-toe and a flat-footed choice, an arm-swing phase shift, a drunk or wobbly walk (sway and stagger), and a mood slider that moves several settings together (happy, sad, sneaky, proud).
+
+## Added to the phases (asked for 2026-11-10, later)
+
+Both lists are fitted into the lettered phases above.
+
+**A. Selecting and touch controls**
+- **PC pivot.** Ctrl and the middle mouse button pivot the camera, as in Blender: Ctrl + middle-drag orbits, middle-drag pans, the wheel zooms. Today the wheel zooms and a drag orbits or pans.
+- **Bug to look at first: no arm or hand in the Attach pop-up.** The code lists Upper arm, Forearm and Hand (both sides) as places to attach, so find out when the pop-up leaves them out (a selected shoulder, the rubber hose figure, a part with a picture already on it, or a stale selection) and fix it.
+- **Character attribute reset.** A Reset button on the Body tab for the selected figure: reset gait, body proportions, colours or all, each undoable, with a confirm for All. Today only each slider has its own reset.
+
+**B. Working with the file**
+- **Import scenery pictures.** Bring in a JPG, PNG or similar as a piece of scenery: a flat cut-out standing on the ground, with Along, Depth, Height, Size and Turn, sorted by depth with the figures, saved with the file. Optional: a crop and a tolerance to cut out a plain background.
+- **Conform a picture of someone to the model.** Today a picture bends over one joint. Next: put pins on a picture (head, shoulders, elbows, wrists, hips, knees, ankles), tie each pin to the matching joint of the figure, and warp the picture (a mesh of triangles) so it follows the figure as it walks. A helper places the pins from a photo of a standing person. Needs a triangle mesh draw (canvas has none, so slices or WebGL) and a way to keep the far limbs behind.
+
+**E. More gait**
+- **Weight.** One Weight slider for the sense of heaviness: a slower cadence, a longer time on the ground, a deeper and later down position, smaller and slower foot lifts, heavier landings (a small pause and a drop at contact), arms swinging less, the head and chest lagging. Light does the opposite. Presets Heavy and Light, set per figure.
+- **Stumble.** A movement: the toe catches, the body pitches forward, the arms fling out, a quick recovery step and straighten (or a fall, in the physics phase). Variants: trip on a step, slip, stagger. Uses Weight and Terrain.
+
+**F. The scene**
+- **Physics for scenery.** Props that can be dropped, pushed and bounce: gravity, a floor, bounce and friction per prop, a push from a foot or hand; the result is baked into ordinary lanes so it can be repeated and edited (see the physics roadmap). Start with a ball dropped from a height, then a box pushed over.
+- **Line-drawn scenery.** Make trees (then rocks, a lamp post, fences) in the same line-drawn style as the figures: an outline in the line colour with a light fill, trunk and branch strokes, a canopy of overlapping round shapes, and the same Outline, Stick and Silhouette styles as the figure, so a scene matches whatever style is chosen. Keep the look of the current graphics.
+
+**G. Menu clean-up**
+- **Remove the gait chart** from the Body tab (it takes the top of the panel). Keep its numbers (feet down, steps a minute) as a one-line summary.
