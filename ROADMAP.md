@@ -448,3 +448,9 @@ Both lists are fitted into the lettered phases above.
 
 **G. Menu clean-up**
 - **Remove the gait chart** from the Body tab (it takes the top of the panel). Keep its numbers (feet down, steps a minute) as a one-line summary.
+
+**F. Physics for the figures (added 2026-11-10)**
+- **Swing and hang.** The figure holds a bar, a rope or a ledge with one or both hands and swings on it: a pendulum from the grip, the body hanging from the arms, legs trailing and swinging, a push to start and a damping so it settles. Controls: grip point (a scenery object or a height), rope length, push, damping. Needs the hand pinned to a point in the world (the pin idea in the first suggestions list).
+- **Fall.** A drop from a height or a trip into a fall: gravity on the body, limbs flung and then going slack, a landing on the ground or on scenery, a bounce or roll and a settle. The stumble movement can hand over to it. Variants: backward, forward, off a ledge.
+- **Hop.** A real ballistic hop and jump: push off, flight on a parabola with the body and limbs following it, a landing that takes the weight (knees give, arms swing) and a settle. One-footed and two-footed, a series of hops, and a hop with a landing on a step. It uses the same flight phase as the run, so the body height in the air comes from gravity, not a drawn curve.
+- **How.** One simple body simulation (a chain of bones with gravity, joint limits and a damping), run ahead of time over the whole performance like the cape and hair already are, and baked into ordinary lanes so a result can be repeated, edited and exported. Test it before looking at it: energy never grows, a dropped body lands, and a run of the same take is identical. This is the physics roadmap's first phase for the figures (see Physics roadmap above); the scenery physics (a ball dropped, a box pushed) uses the same engine, so build the engine once.
