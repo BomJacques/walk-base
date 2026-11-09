@@ -41,6 +41,11 @@ export const DEFAULTS = Object.freeze({
   asymArm: 0,           // far arm swing, as a fraction more or less
   hoseFollow: 0.6,      // rubber hose figure: how far the hands and feet trail behind the limb they are on (follow-through)
   hoseStretch: 0.5,     // rubber hose figure: how far an arm or a swinging leg stretches when it reaches
+  weight: 0,            // how heavy the figure feels: positive is heavy (slower, flatter feet, a deeper drop), negative is light (springy, higher feet)
+  noiseAmount: 0,       // variety: how much small random wobble is added to the walk (0 is none)
+  noiseSpeed: 2,        // how quickly the wobble changes (1 slow to 4 quick)
+  noiseSeed: 7,         // which wobble: the same seed always gives the same take
+  noiseLoop: true,      // keep the wobble repeating every cycle, so the loop stays seamless
   heading: 0,           // degrees the figure faces and walks away from straight along the stage (automate it to walk a curve or turn a corner)
   terrain: 'flat',      // the ground under the walk: flat | slope | steps
   terrainGrade: 8,      // degrees the ground rises (negative falls) along a slope
@@ -148,8 +153,50 @@ export function groundAt(p, x) {
  * shifted by asymTiming, and can stay down for a different time and lift differently. Returns the gait the foot follows,
  * its phase offset and the stride half-length d (so a planted foot still holds one place on the ground).
  */
+/**
+ * The walk's settings with the weight applied: a heavy figure stays on the ground longer, lifts its feet less and flatter, drops deeper into each step, swings its arms less,
+ * takes shorter steps and leans in; a light one is the other way round. Done once (the result is marked), so every part of the program sees the same numbers.
+ */
+export function withWeight(p) {
+  const w = clamp(p.weight || 0, -1, 1);
+  if (!w || p._weighted) return p;
+  const q = { ...p, _weighted: true };
+  const f = (k) => 1 + k * w;
+  if (p.rig === 'dog') {
+    q.dogLift = p.dogLift * clamp(f(-0.35), 0.4, 1.6); q.dogDuty = clamp(p.dogDuty + 0.06 * w, 0.15, 0.85); q.dogBob = p.dogBob * clamp(f(0.4), 0.4, 1.8);
+    q.dogStride = p.dogStride * clamp(f(-0.12), 0.7, 1.2); q.dogFlex = p.dogFlex * clamp(f(0.2), 0.6, 1.4);
+    return q;
+  }
+  q.duty = clamp(p.duty + 0.06 * w, 0.25, 0.85); q.footLift = p.footLift * clamp(f(-0.35), 0.4, 1.6); q.bob = Math.min(p.bob * clamp(f(0.25), 0.5, 1.5), Math.max(p.bob, 0.1)); // a deeper drop, but never past what the legs can reach
+  q.downPhase = clamp(p.downPhase + 0.02 * w, 0.03, 0.22); q.armSwing = p.armSwing * clamp(f(-0.35), 0.4, 1.6); q.stepLength = p.stepLength * clamp(f(-0.08), 0.8, 1.15);
+  q.heelStrike = p.heelStrike * clamp(f(0.3), 0.5, 1.5); q.lean = p.lean + 3 * w; q.pelvisRoll = Math.min(p.pelvisRoll * clamp(f(0.4), 0.5, 1.6), Math.max(p.pelvisRoll, 7)); q.headNod = p.headNod * clamp(f(0.4), 0.5, 1.6);
+  return q;
+}
+
+/** Smooth variety, the same for the same seed. t is where we are in the walk (cycles); id names what is being wobbled. Periodic in the cycle when loop is on. */
+const hash = (n) => { let x = Math.sin(n * 12.9898) * 43758.5453; x -= Math.floor(x); return x; };
+const strHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+export function noiseSignal(seed, id, t, speed = 2, loop = true) {
+  const base = strHash(id) * 0.001 + seed * 7.31; const sp = clamp(Math.round(speed), 1, 4);
+  const freqs = loop ? [sp, sp + 1, sp + 3] : [0.37 * sp, 0.61 * sp, 0.89 * sp]; // whole numbers of waves per cycle repeat exactly; the others drift from cycle to cycle
+  let v = 0;
+  freqs.forEach((f, k) => { const a = 0.45 + 0.55 * hash(base + k * 3.7); const ph = hash(base + k * 11.3) * 2 * Math.PI; v += a * Math.sin(2 * Math.PI * f * t + ph); });
+  return v / 1.5;
+}
+/** How much each channel wobbles at full noise: lengths in leg lengths, angles in radians. */
+const NOISE_AMP = {
+  'pelvis.y': 0.012, 'pelvis.z': 0.01, 'pelvis.yaw': 0.05, 'pelvis.roll': 0.04, 'spine1.pitch': 0.03, 'spine2.pitch': 0.03, 'spine3.pitch': 0.03, 'spine2.roll': 0.03, 'spine3.roll': 0.03,
+  'neck.pitch': 0.05, 'head.yaw': 0.08, 'head.pitch': 0.05, 'arm.pitch.R': 0.14, 'arm.pitch.L': 0.14, 'elbow.flex.R': 0.1, 'elbow.flex.L': 0.1,
+  'dog.pelvis.y': 0.01, 'dog.spine1.pitch': 0.03, 'dog.spine2.pitch': 0.03, 'dog.neck.pitch': 0.06, 'dog.head.yaw': 0.1, 'dog.head.pitch': 0.05, 'dog.tail1.yaw': 0.15, 'dog.tail1.pitch': 0.08, 'dog.tail2.yaw': 0.12,
+};
+/** The wobble to add to a channel now (0 when noise is off or the channel does not wobble). t is the walk's phase in cycles, running on over a performance. */
+export function noiseOf(p, id, t) {
+  const a = NOISE_AMP[id]; if (!a || !(p.noiseAmount > 0)) return 0;
+  return a * clamp(p.noiseAmount, 0, 1) * noiseSignal(p.noiseSeed ?? 7, id, t, p.noiseSpeed ?? 2, p.noiseLoop !== false);
+}
+
 export function sideGait(params, side) {
-  const p = params;
+  const p = withWeight(params);
   if (side === 'R' || side === 'right' ) return { p, off: 0, d: p.stepLength * p.duty };
   const duty = clamp(p.duty + (p.asymDuty || 0), 0.25, 0.88);
   const q = { ...p, duty, footLift: p.footLift * Math.max(0, 1 + (p.asymLift || 0)) };
@@ -169,7 +216,7 @@ export function supportStats(rows, n = 400) {
 
 /** A walk in numbers: stance bars, double support, cadence, speed and stride. */
 export function gaitSummary(params) {
-  const p = { ...DEFAULTS, ...params };
+  const p = withWeight({ ...DEFAULTS, ...params });
   const near = sideGait(p, 'R'); const far = sideGait(p, 'L');
   const rows = [{ name: 'Near foot', start: 0, duty: near.p.duty }, { name: 'Far foot', start: wrap(far.off), duty: far.p.duty }];
   const st = supportStats(rows);
@@ -193,7 +240,7 @@ function pelvisHeight(u, p, hContact) {
  * Joint names follow the figure's left (near) and right (far) sides.
  */
 export function pose(params, u) {
-  const p = { ...DEFAULTS, ...params };
+  const p = withWeight({ ...DEFAULTS, ...params });
   const uw = wrap(u);
   const L = BODY.thigh + BODY.shin;
   const d = p.stepLength * p.duty;

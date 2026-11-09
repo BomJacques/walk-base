@@ -1,7 +1,7 @@
 // Motion channels. Every moving part of the figure is driven by named channels, each a cyclic curve over the walk cycle (u from 0 to 1).
 // A channel's value = amount * base(u - phase) + offset, where base is the built-in motion unless you have drawn your own curve.
 // Angles are stored in radians, distances in leg lengths. The `ui` fields convert for display.
-import { DEFAULTS } from './rig.js';
+import { DEFAULTS, withWeight } from './rig.js';
 import { DOG_GAITS } from './dogdefaults.js';
 
 const TAU = Math.PI * 2;
@@ -221,7 +221,7 @@ const settingsOf = (motion, id) => motion?.[id];
  * An evaluator for one pose. valueAt(id, u) is memoised per call, so defaults that read other channels stay cheap.
  */
 export function makeEvaluator(params, motion = {}, free = null) {
-  const p = { ...DEFAULTS, ...params };
+  const p = withWeight({ ...DEFAULTS, ...params });
   const memo = new Map();
   const evalAt = (id, u) => {
     const key = `${id}@${u.toFixed(7)}`;

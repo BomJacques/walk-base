@@ -99,6 +99,35 @@ check('with the dark theme the browser draws its own pop-up lists dark', (await 
 await q('menu-view').click(); await q('theme-light').click(); await wait(150);
 check('and light draws them light', (await ev(() => getComputedStyle(document.documentElement).colorScheme)) === 'light');
 await q('menu-view').click(); await q('theme-auto').click(); await wait(100);
+// ---- weight, variety, the walk in one line, and reset
+await ev(() => window.__walkBase.setTab('Gait')); await wait(200);
+check('the gait chart is gone, and the walk is one line of numbers', (await page.locator('canvas.gaitchart').count()) === 0 && /steps a minute/.test(await ev(() => document.querySelector('[data-testid="gait-facts"]')?.textContent || '')));
+check('Weight, Noise, Noise speed, Noise seed and the loop switch are in the Gait tab', await ev(() => ['rng-weight', 'rng-noiseAmount', 'rng-noiseSpeed', 'rng-noiseSeed'].every((id) => document.querySelector(`[data-testid="${id}"]`))));
+const frame3 = async () => { await ev(() => { window.__walkBase.setFrame(3); window.__walkBase.render(); }); await wait(120); return page.locator('[data-testid="stage"]').screenshot(); };
+const w0 = await frame3();
+await ev(() => { const e = document.querySelector('[data-testid="rng-weight"]'); e.value = 1; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
+check('Weight changes the walk', Buffer.compare(w0, await frame3()) !== 0 && (await ev(() => window.__walkBase.S.p.weight)) === 1);
+const gaitLine = await ev(() => document.querySelector('[data-testid="gait-facts"]').textContent);
+await ev(() => { const e = document.querySelector('[data-testid="rng-weight"]'); e.value = 0; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
+check('and the line of numbers follows it', gaitLine !== (await ev(() => document.querySelector('[data-testid="gait-facts"]').textContent)), gaitLine);
+const n0 = await frame3();
+await ev(() => { const e = document.querySelector('[data-testid="rng-noiseAmount"]'); e.value = 1; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
+check('Noise changes the walk', Buffer.compare(n0, await frame3()) !== 0);
+await ev(() => { const e = document.querySelector('[data-testid="rng-noiseAmount"]'); e.value = 0; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(150);
+// the Heavy and Light walks and the new movements
+await ev(() => window.__walkBase.applyPreset('Heavy')); await wait(200);
+check('Heavy is a walk with weight', (await ev(() => window.__walkBase.S.p.weight)) > 0.5);
+await ev(() => window.__walkBase.applyPreset('Normal')); await wait(150);
+check('the stumble, slip and stagger movements are there', await ev(() => ['stumble', 'slip', 'stagger'].every((id) => window.__walkBase.clipsFor('human').some((c) => c.id === id))));
+// reset
+await ev(() => { const w = window.__walkBase; w.S.p.weight = 0.5; w.S.p.noiseAmount = 0.4; w.S.r = { head: 1.4 }; w.S.s.fillColor = '#aa3355'; w.S.sceneSel = 'main'; w.setTab('Gait'); }); await wait(250);
+await q('fig-reset').click(); await q('reset-body').click(); await wait(150);
+check('Reset the body puts the proportions back and leaves the walk alone', (await ev(() => Object.keys(window.__walkBase.S.r).length)) === 0 && (await ev(() => window.__walkBase.S.p.weight)) === 0.5);
+await q('fig-reset').click(); await q('reset-colours').click(); await wait(150);
+check('Reset the colours puts the colours back', (await ev(() => window.__walkBase.S.s.fillColor)) !== '#aa3355');
+await q('fig-reset').click(); await q('reset-gait').click(); await wait(200);
+check('Reset the walk puts weight and variety back', (await ev(() => window.__walkBase.S.p.weight)) === 0 && (await ev(() => window.__walkBase.S.p.noiseAmount)) === 0);
+await ev(() => { window.__walkBase.S.p.weight = 0; window.__walkBase.S.p.noiseAmount = 0; window.__walkBase.S.sceneSel = null; window.__walkBase.render(); });
 // ---- the seamless loop
 await ev(() => window.__walkBase.setTab('Gait')); await wait(200);
 await ev(() => { const w = window.__walkBase; w.S.lanes = { 'p:stepLength': { interp: 'smooth', pts: [{ t: 0, v: 0.5 }, { t: 60, v: 0.9 }, { t: 100, v: 0.9 }] }, 'p:bob': { interp: 'smooth', pts: [{ t: 0, v: 0.04 }, { t: 100, v: 0.12 }] } }; w.S.perfLen = 100; w.S.ver++; w.render(); const r = document.querySelector('[data-testid="rng-bob"]'); if (r) { r.value = 0.08; r.dispatchEvent(new Event('input', { bubbles: true })); } }); await wait(500);

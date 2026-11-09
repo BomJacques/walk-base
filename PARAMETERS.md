@@ -26,6 +26,11 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Far foot lands late | human | cycle | -0.12 to 0.12 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
 | Far foot time on ground | human |  | -0.15 to 0.15 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
 | Far foot lift | human |  | -0.8 to 0.8 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
+| Weight | human |  | -1 to 1 | 0 | How heavy the figure feels. Heavy (positive): longer on the ground, flatter and lower feet, a deeper drop into each step, shorter steps, less arm swing, a forward lean. Light (negative): springy, higher feet, quicker. Use a longer Cycle length for a heavy walk and a shorter one for a light walk. |
+| Noise | human |  | 0 to 1 | 0 | Small wobble added to the bounce, sway, back, head and arms so the walk is not a metronome. 0 is none. |
+| Noise speed | human |  | 1 to 4 | 2 | How quickly the wobble changes: 1 is slow, 4 is busy. |
+| Noise seed | human |  | 1 to 999 | 7 | Which wobble you get. The same seed always gives the same take; change it to try another. |
+| Keep the wobble looping | human |  | bool | true | On: the wobble repeats every cycle, so the loop stays seamless. Off: it carries on changing from cycle to cycle over a longer performance (the Loop button turns it back on). |
 | Follow-through | human |  | 0 to 1.5 | 0.6 | Hands and swinging feet trail behind the arm or leg they are on and catch up after, so a limb flows instead of moving all at once. 0 is stiff. |
 | Stretchy limbs | human |  | 0 to 1.5 | 0.5 | An arm that reaches, or a leg that swings out, stretches longer, up to half again at 1. 0 keeps every limb the same length. |
 | Heading | both | ° | -180 to 180 | 0 | Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends. |
@@ -151,10 +156,8 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Ground line and ticks | both |  | bool | true | Ticks stay on the ground, so a sliding foot shows. |
 | Footprints | both |  | bool | true | Where each foot plants. |
 | Show the scene | both |  | bool | true | The other figures and the scenery. Off draws the main figure alone. |
-| Foot labels | both |  | bool | false | Names the ankle, heel, ball and toe on the near foot. |
 | Motion arcs | both |  | bool | false | Paths of the points you tick below through the cycle. Drag a dot to reshape the movement. |
 | Frame dots | both |  | bool | true | One dot on the path for every frame, so the spacing shows speed and ease. Drag a dot to bend the path there. |
-| Pose labels | both |  | bool | true | Names CONTACT, DOWN, PASSING and UP on the frames where they fall. |
 | Onion skin | both |  | bool | false | Neighbouring drawings, tinted. |
 | Drawings before | both |  | 0 to 6 | 2 | Preceding drawings. |
 | Drawings after | both |  | 0 to 6 | 2 | Following drawings. |

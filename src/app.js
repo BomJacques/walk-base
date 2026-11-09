@@ -632,6 +632,28 @@ function addActor(fig) {
 }
 function addProp(type) { const q = newProp(type, { x: 0.9 + S.scene.props.length * 0.7, z: -0.9 }); S.scene.props.push(q); S.sceneSel = q.id; sceneChanged(true); }
 function removeSceneItem(id) { if (findSceneItem(id)?.locked) { setMessage('That one is locked. Unlock it in the Scene list first.'); return; } S.scene.actors = S.scene.actors.filter((a) => a.id !== id); S.scene.props = S.scene.props.filter((q) => q.id !== id); if (S.sceneSel === id) S.sceneSel = null; sceneChanged(true); }
+/** Puts a figure's gait, body or colours back to where they started. what: 'gait' | 'body' | 'colours' | 'all'. target: 'main' or a figure in the scene. */
+function resetFigure(target, what) {
+  if (what === 'all' && typeof confirm === 'function' && !confirm('Reset this figure\'s walk, body and colours?')) return;
+  const hoseColours = ['hoseBody', 'hoseFace', 'hoseGlove', 'hoseShoe', 'hoseShorts', 'hoseEyes', 'hoseEars'];
+  const doGait = what === 'gait' || what === 'all'; const doBody = what === 'body' || what === 'all'; const doColours = what === 'colours' || what === 'all';
+  if (target === 'main') {
+    if (doGait) { const names = presetsForFigure(figKey()); applyPreset(names[S.preset] ? S.preset : Object.keys(names)[0]); }
+    if (doBody) S.r = figKey() === 'hose' ? { ...HOSE_PROPORTIONS } : {};
+    if (doColours) for (const k of ['fillColor', 'lineColor', 'farTint', 'farOpacity', 'fillOpacity', ...hoseColours]) S.s[k] = STYLE_DEFAULTS[k];
+    S.ver++; renderPanel(); render(); save(); setMessage(`Reset the ${what === 'all' ? 'figure' : what}.`);
+  } else if (target) {
+    if (doGait) target.p = actorParams(target.fig, target.preset || Object.keys(presetsForFigure(target.fig))[0]);
+    if (doBody) target.r = target.fig === 'hose' ? { ...HOSE_PROPORTIONS } : {};
+    if (doColours) { target.fill = ''; target.line = ''; target.tint = ''; }
+    sceneChanged(true); setMessage(`Reset ${target.name}.`);
+  }
+}
+const resetMenu = (target) => menuButton({ label: 'Reset', testid: 'fig-reset', title: 'Put this figure\'s walk, body or colours back to where they started', items: () => [
+  { label: 'Reset the walk (gait, weight, variety)', testid: 'reset-gait', onClick: () => resetFigure(target, 'gait') },
+  { label: 'Reset the body (proportions)', testid: 'reset-body', onClick: () => resetFigure(target, 'body') },
+  { label: 'Reset the colours', testid: 'reset-colours', onClick: () => resetFigure(target, 'colours') },
+  { separator: true }, { label: 'Reset everything about this figure…', testid: 'reset-fig-all', onClick: () => resetFigure(target, 'all') }] });
 function sceneSection() {
   const host = h('div', { testid: 'scene-section' });
   const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIGS.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) })) });
@@ -653,7 +675,7 @@ function sceneSection() {
   if (S.sceneSel === 'main') {
     const set1 = (k, v) => { S.s[k] = v; render(); save(); };
     const c1 = (label, k, tid) => h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, label)), h('input', { type: 'color', class: 'color', value: S.s[k], 'aria-label': label, testid: tid, onInput: (e) => set1(k, e.target.value) }));
-    host.append(h('section', { class: 'group', 'data-area': 'Scene' }, h('h3', null, 'This figure'), c1('Fill colour', 'fillColor', 'main-fill'), c1('Line colour', 'lineColor', 'main-line'), c1('Far-side tint', 'farTint', 'main-tint'),
+    host.append(h('section', { class: 'group', 'data-area': 'Scene' }, h('h3', null, 'This figure'), c1('Fill colour', 'fillColor', 'main-fill'), c1('Line colour', 'lineColor', 'main-line'), c1('Far-side tint', 'farTint', 'main-tint'), h('div', { class: 'btnrow' }, resetMenu('main')),
       h('p', { class: 'hint' }, 'The main figure keeps its colours with the stage settings. The other figures in the scene each have their own.')));
     return host;
   }
@@ -677,7 +699,7 @@ function sceneSection() {
       row(it.kind === 'ball' || it.kind === 'cylinder' || it.kind === 'lamp' || it.kind === 'tree' ? 'Width' : 'Length', 'w', 0.05, 6, 0.01, 'scene-w'),
       it.kind === 'box' ? row('Depth of it', 'd', 0.05, 4, 0.01, 'scene-d') : null, row('Height', 'h', 0.05, 5, 0.01, 'scene-h'), colour('Colour', 'color', 'scene-color'));
   }
-  body.push(h('div', { class: 'btnrow' },
+  body.push(h('div', { class: 'btnrow' }, ...(actor ? [resetMenu(it)] : []),
     h('button', { type: 'button', class: 'btn', testid: 'scene-hide', onClick: () => set({ visible: !it.visible }, true) }, it.visible ? 'Hide' : 'Show'),
     h('button', { type: 'button', class: 'btn', testid: 'scene-copy', onClick: () => { const c = JSON.parse(JSON.stringify(it)); c.id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`; c.name = `${it.name} copy`; c.x += 0.8; (actor ? S.scene.actors : S.scene.props).push(c); S.sceneSel = c.id; sceneChanged(true); } }, 'Copy'),
     h('button', { type: 'button', class: 'btn', testid: 'scene-remove', onClick: () => removeSceneItem(it.id) }, 'Remove')));
@@ -785,7 +807,7 @@ function markCustom() { if (S.preset !== 'Custom') { S.preset = 'Custom'; const 
 function setParam(c, v) {
   const val = clampTo(c, v);
   S[c.scope][c.id] = val;
-  if (c.scope === 'p') markCustom();
+  if (c.scope === 'p') { markCustom(); refreshGaitLine(); }
   if (c.scope === 'x' && (c.id === 'width' || c.id === 'height')) S.x[c.id] = Math.max(c.min, Math.round(val / 2) * 2);
   if (c.id === 'cycleFrames' || c.id === 'exposure') { buildStrip(); if (S.frame >= cycleFrames(P()).frames.length) S.frame = 0; }
   if (c.scope === 'x') refreshSummary();
@@ -796,7 +818,7 @@ const DOG_KEYS = Object.keys(DEFAULTS).filter((k) => k.startsWith('dog'));
 const SHARED_KEYS = ['rig', 'fps', 'cycleFrames', 'exposure', 'travel'];
 function applyPreset(name) {
   const rig = S.p.rig; const fig = figKey();
-  const mine = rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
+  const mine = rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'weight', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
   const reset = Object.fromEntries(mine.map((k) => [k, DEFAULTS[k]]));
   const { camYaw, ...presetP } = presetsForFigure(fig)[name] || {}; // a preset may also turn the camera, to show its movement best
   S.p = { ...S.p, ...reset, ...presetP, rig, model: S.p.model };
@@ -1437,7 +1459,8 @@ function drawGaitChart(cv, rows) {
     ctx.fillStyle = tok('--ink', '#1c1c20'); ctx.beginPath(); ctx.moveTo(x0 + s * wBar - 4, y - 3); ctx.lineTo(x0 + s * wBar + 4, y - 3); ctx.lineTo(x0 + s * wBar, y + 3); ctx.closePath(); ctx.fill(); // the contact
   });
 }
-function gaitChartSection() {
+/** The walk in one line: how long both feet are down, the pace and the stride (the chart that used to sit here took the top of the panel). */
+function gaitFactsText() {
   const dog = S.p.rig === 'dog';
   let rows; const facts = [];
   if (dog) {
@@ -1449,13 +1472,10 @@ function gaitChartSection() {
     const g = gaitSummary(S.p); rows = g.rows;
     facts.push(`both feet down ${Math.round(g.doubleSupport * 100)}% of the time`, g.flight > 0.01 ? `in the air ${Math.round(g.flight * 100)}%` : null, `${Math.round(g.stepsPerMin)} steps a minute`, `${g.speed.toFixed(2)} legs a second`, `stride ${g.stride.toFixed(2)} legs`, Math.abs(g.stepRatio - 1) > 0.03 ? `uneven steps (${g.stepRatio.toFixed(2)} to 1)` : null);
   }
-  const cv = document.createElement('canvas'); cv.className = 'gaitchart'; cv.setAttribute('role', 'img');
-  cv.setAttribute('aria-label', `Gait chart: when each foot is on the ground over one cycle. ${facts.filter(Boolean).join(', ')}.`);
-  drawGaitChart(cv, rows);
-  return h('section', { class: 'group', testid: 'gait-chart' }, h('h3', null, 'Gait chart'), cv,
-    h('p', { class: 'hint', testid: 'gait-facts' }, facts.filter(Boolean).join('  ·  ')),
-    h('p', { class: 'hint' }, 'One cycle left to right. A filled bar is a foot on the ground; the marker is where it lands. Change the settings below and the bars follow.'));
+  return facts.filter(Boolean).join('  ·  ');
 }
+const gaitChartSection = () => h('p', { class: 'hint gait-line', testid: 'gait-facts' }, gaitFactsText());
+function refreshGaitLine() { const el = document.querySelector('[data-testid="gait-facts"]'); if (el) el.textContent = gaitFactsText(); }
 
 // ---------- speech: text to mouth shapes ----------
 function buildSpeechNow() {
@@ -1708,6 +1728,7 @@ function makeLoop() {
   const before = loopGap(P());
   const r = makeSeamless({ base: S.p, lanes: S.lanes, perfLen: S.perfLen, cycleFrames: S.p.cycleFrames, exposure: S.p.exposure });
   S.p.cycleFrames = r.cycleFrames; S.lanes = r.lanes; S.perfLen = r.perfLen; S.ver++; S.frame = 0;
+  if (S.p.noiseAmount > 0 && S.p.noiseLoop === false) { S.p.noiseLoop = true; r.notes.push('The wobble is set to repeat every cycle.'); }
   const changed = was.n !== S.p.cycleFrames || was.len !== S.perfLen || was.lanes !== JSON.stringify(S.lanes);
   if (changed) markCustom();
   buildStrip(); renderPanel(); render(); save();

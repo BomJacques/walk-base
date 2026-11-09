@@ -1,7 +1,7 @@
 // 3D walk rig. Joints are in leg lengths: x forward, y up, z to the figure's right (toward the camera in the default side view).
 // The built-in motion is the planar walk from rig.js plus the 3D parts a side view hides: hip twist, hip drop, shoulder counter-rotation,
 // side sway and toe-out. Every moving part is a channel from motion.js, so any of it can be tuned or drawn by hand.
-import { BODY, DEFAULTS, foot, sideGait, LEG_LENGTH, groundAt } from './rig.js';
+import { BODY, DEFAULTS, foot, sideGait, LEG_LENGTH, groundAt, withWeight, noiseOf } from './rig.js';
 import { makeEvaluator } from './motion.js';
 
 const wrap = (u) => u - Math.floor(u);
@@ -58,10 +58,11 @@ export function ik3(hip, ankle, l1, l2, pole) {
  * Joints are relative to the figure's world position; add pelvisX for travel.
  */
 export function pose3(params, motion, u, extra = null) {
-  const p = { ...DEFAULTS, ...params };
+  const p = withWeight({ ...DEFAULTS, ...params });
   const ev = makeEvaluator(p, motion, extra?.freeU ?? null);
   const uw = wrap(u);
-  const c = (id) => ev.value(id, uw);
+  const noiseT = extra?.freeU != null ? extra.freeU : uw; // over a performance the wobble runs on with the timeline
+  const c = (id) => ev.value(id, uw) + (p.noiseAmount > 0 ? noiseOf(p, id, noiseT) : 0);
   const sc = (k) => (p.proportions || {})[k] ?? 1;
   // Follow-through (rubber hose): the pose a little earlier in the cycle, so a hand or a swinging foot can trail behind the limb it is on.
   const fol = p.model === 'hose' && !extra?.noLag ? Math.max(0, p.hoseFollow || 0) : 0;

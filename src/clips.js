@@ -161,7 +161,7 @@ CLIPS.dog = [...CLIPS.dog, ...DOG_MOVES];
 export const CLIP_GROUPS = [
   ['Pace', ['turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'begin', 'stop', 'jog', 'run', 'sprint', 'slow', 'speedup', 'slowdown', 'limp', 'nolimp', 'takeoff', 'land', 'trip']],
   ['Posture', ['sit', 'down', 'beg', 'kneel', 'crouch', 'standup', 'bow', 'stretch', 'playbow', 'headdown', 'rollover']],
-  ['Action', ['duck', 'punch', 'jump', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff', 'peck', 'roar', 'lunge', 'rearup', 'toss']],
+  ['Action', ['stumble', 'slip', 'stagger', 'duck', 'punch', 'jump', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff', 'peck', 'roar', 'lunge', 'rearup', 'toss']],
   ['Gesture', ['clap', 'salute', 'wave', 'cheer', 'shrug', 'nod', 'look', 'lookaround', 'wag', 'scratch', 'neckswing']],
 ];
 export const groupOfClip = (id) => CLIP_GROUPS.find(([, ids]) => ids.includes(id))?.[0] || 'Other';

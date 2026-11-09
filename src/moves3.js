@@ -1,5 +1,5 @@
 // Movements for the running figure and a few more actions and gestures. Written like moves.js: poses along the clip, each starting from whatever the figure is doing.
-import { targetOfParam as P, CADENCE } from './automation.js';
+import { targetOfParam as P, targetOfChannel as C, CADENCE } from './automation.js';
 import { HUMAN_MOVES, DOG_MOVES, poseBuild, at, BASE_ARMS } from './moves.js';
 
 /** Settings of a jog and a sprint, the same as the presets on the Gait tab (a run has a moment with neither foot down). */
@@ -58,3 +58,41 @@ const TURNS = [
 ];
 HUMAN_MOVES.push(...TURNS);
 DOG_MOVES.push(...TURNS);
+
+// Stumbles: the walk is thrown off and recovered. Each is a pose along the clip for the body and the arms, plus a change of pace and step, and each starts from whatever the figure is doing.
+const withPace = (poses, opts, pace) => (b, D, k = 1) => ({ ...poseBuild(poses, opts)(b, D, k), ...pace(b, D) });
+const fwd = (a, c, d) => ({ 'spine1.pitch': a, 'spine2.pitch': c, 'spine3.pitch': d });
+HUMAN_MOVES.push(
+  {
+    id: 'stumble', label: 'Stumble', frames: 44, ends: 'recovers and walks on',
+    help: 'While walking: a toe catches, the body pitches forward, the arms fling up and out, a quick short step saves it, then the figure straightens and carries on. Run it again from a heavy walk (Weight) for a harder stumble.',
+    build: withPace([
+      [0.2, { 'pelvis.y': -0.03, ...fwd(0.12, 0.1, 0.06) }],
+      [0.32, { 'pelvis.y': -0.07, ...fwd(0.3, 0.24, 0.16), 'neck.pitch': -0.12, 'head.pitch': -0.1, 'arm.pitch.R': 1.9, 'arm.pitch.L': 1.7, 'elbow.flex.R': 0.4, 'elbow.flex.L': 0.4 }],
+      [0.5, { 'pelvis.y': -0.04, ...fwd(0.16, 0.12, 0.08), 'arm.pitch.R': 1.1, 'arm.pitch.L': 0.9, 'elbow.flex.R': 0.3, 'elbow.flex.L': 0.3, 'head.pitch': -0.05 }],
+      [0.78, { ...fwd(0.04, 0.03, 0.02) }],
+    ], { kill: BASE_ARMS }, (b, D) => ({
+      [CADENCE]: at(D, [[0, 1], [0.3, 0.72], [0.5, 1.3], [0.8, 1], [1, 1]]),
+      [P('stepLength')]: at(D, [[0, b.stepLength], [0.3, b.stepLength * 0.7], [0.5, b.stepLength * 1.2], [0.8, b.stepLength], [1, b.stepLength]]),
+    })),
+  },
+  {
+    id: 'slip', label: 'Slip', frames: 40, ends: 'regains balance',
+    help: 'While walking: a foot slides out from under the figure, the hips drop, the body leans back, the arms fling out, then it finds its feet and straightens.',
+    build: withPace([
+      [0.2, { 'foot.x.R': 0.22, 'pelvis.y': -0.1, ...fwd(-0.1, -0.1, -0.06) }],
+      [0.34, { 'foot.x.R': 0.3, 'pelvis.y': -0.17, ...fwd(-0.24, -0.18, -0.1), 'arm.pitch.R': 1.7, 'arm.pitch.L': 1.6, 'elbow.flex.R': 0.2, 'elbow.flex.L': 0.2, 'head.pitch': 0.1, 'neck.pitch': 0.08 }],
+      [0.56, { 'foot.x.R': 0.1, 'pelvis.y': -0.06, ...fwd(-0.08, -0.06, -0.04), 'arm.pitch.R': 0.7, 'arm.pitch.L': 0.6, 'elbow.flex.R': 0.3, 'elbow.flex.L': 0.3 }],
+      [0.8, { ...fwd(0.02, 0.02, 0.01) }],
+    ], { kill: BASE_ARMS }, (b, D) => ({ [CADENCE]: at(D, [[0, 1], [0.3, 0.6], [0.6, 0.9], [0.85, 1], [1, 1]]) })),
+  },
+  {
+    id: 'stagger', label: 'Stagger', frames: 72, ends: 'steadies',
+    help: 'While walking: the body sways from side to side, the head rolls and the arms swing wide for balance, the steps are short and uneven, and then it steadies.',
+    build: withPace([0.14, 0.28, 0.42, 0.56, 0.7].map((f, i) => { const sg = i % 2 ? -1 : 1; return [f, { 'spine2.roll': 0.16 * sg, 'spine3.roll': 0.1 * sg, 'head.roll': -0.12 * sg, 'pelvis.y': -0.02, 'arm.pitch.R': 0.5 + 0.4 * sg, 'arm.pitch.L': 0.5 - 0.4 * sg, 'elbow.flex.R': 0.3, 'elbow.flex.L': 0.3 }]; }).concat([[0.86, { 'spine2.roll': 0.03 }]]), { kill: BASE_ARMS }, (b, D) => ({
+      [CADENCE]: at(D, [[0, 1], [0.15, 0.85], [0.75, 0.85], [1, 1]]),
+      [P('stepLength')]: at(D, [[0, b.stepLength], [0.15, b.stepLength * 0.85], [0.75, b.stepLength * 0.85], [1, b.stepLength]]),
+    })),
+  },
+);
+export { C };

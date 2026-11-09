@@ -1,6 +1,6 @@
 // 3D dog rig. Joints are in shoulder heights (a standing dog's withers are about 1.0 high): x forward, y up, z to the dog's right.
 // Like the human it is built on channels, so every part can be tuned, drawn by hand and automated. The four paws are planted by IK.
-import { DEFAULTS, groundAt } from './rig.js';
+import { DEFAULTS, groundAt, withWeight, noiseOf } from './rig.js';
 import { DOG_GAITS, speciesOf } from './dogdefaults.js';
 import { makeEvaluator } from './motion.js';
 import { paramsAt } from './automation.js';
@@ -46,7 +46,8 @@ export const pawPhase = (gait, leg) => {
  * The gait one paw follows: its phase, time on the ground and lift. The left paws can land late, stay down for a different time and lift differently
  * (a limp, an uneven walk). The planted ground each covers follows its time on the ground, so a paw never slides.
  */
-export function pawGait(p, leg) {
+export function pawGait(params, leg) {
+  const p = withWeight(params);
   const left = leg[1] === 'L';
   return {
     ph: wrap(pawPhase(p.dogGait, leg) + (left ? p.dogAsymTiming || 0 : 0)),
@@ -116,10 +117,11 @@ export function standHeights(p, sc) {
 }
 
 export function poseDog(params, motion, u, extra = null) {
-  const p = { ...DEFAULTS, ...params };
+  const p = withWeight({ ...DEFAULTS, ...params });
   const ev = makeEvaluator(p, motion, extra?.freeU ?? null);
   const uw = wrap(u);
-  const c = (id) => ev.value(`dog.${id}`, uw);
+  const noiseT = extra?.freeU != null ? extra.freeU : uw;
+  const c = (id) => ev.value(`dog.${id}`, uw) + (p.noiseAmount > 0 ? noiseOf(p, `dog.${id}`, noiseT) : 0);
   const sc = (k) => (p.proportions || {})[k] ?? 1;
   const L = bonesOf(p); const sp = speciesOf(p); const biped = sp.legs === 2;
   const fl = clamp(p.dogFlight ?? 0, 0, 1); // in the air: the body lifts and the feet tuck up
