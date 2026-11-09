@@ -1,7 +1,7 @@
 // Shapes for the dog: the same kind of screen polygons as the human, each tagged with its part and side so it can be picked, tinted and exported in layers.
 import { add, sub, mul, norm, apply } from './rig3.js';
 import { hull, circlePts, TAU } from './geom.js';
-import { pawPhase, poseDog, legsOf, bonesOf, DOGB } from './dog3.js';
+import { pawGait, poseDog, legsOf, bonesOf, DOGB } from './dog3.js';
 import { speciesOf } from './dogdefaults.js';
 
 export function buildDogShapes(pz, cam) {
@@ -120,7 +120,7 @@ export function dogPrints(params, fromX, toX) {
   const stride = params.dogStride; const out = [];
   const c0 = Math.floor((fromX - 2) / stride); const c1 = Math.ceil((toX + 2) / stride);
   for (const leg of legsOf(params)) {
-    const ph = pawPhase(params.dogGait, leg);
+    const ph = pawGait(params, leg).ph;
     const z = poseDog(params, params.motion || {}, ph);
     const px = z.legs[leg].paw[0] + ph * stride;
     for (let c = c0; c <= c1; c++) out.push({ leg, x: px + c * stride, z: z.legs[leg].paw[2] });

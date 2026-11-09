@@ -6,6 +6,7 @@ import { poseDog } from './dog3.js';
 import { poseFor } from './keyposes.js';
 import { makeEvaluator, CHANNEL_BY_ID } from './motion.js';
 import { bakePoints, addHandle, mirrorPoints } from './curves.js';
+import { PROP, falloff, wrapDist } from './proportional.js';
 
 const sides = [['R', 'Right', 'right'], ['L', 'Left', 'left']];
 const LEGS = [['FR', 'Front right'], ['FL', 'Front left'], ['HR', 'Hind right'], ['HL', 'Hind left']];
@@ -145,7 +146,7 @@ const nearHandle = (pts, u, tol) => pts.findIndex((q) => Math.min(Math.abs(q.u -
  * point cannot be reshaped here (a performance, or a channel that runs free).
  * `entries` are baked curves (amount 1, offset 0), so the movement is the same as before everywhere except round the dragged frame.
  */
-export function moveArcPoint({ params, def, frame, curFrame = frame, target, project }) {
+export function moveArcPoint({ params, def, frame, curFrame = frame, target, project, prop = PROP }) {
   if (params.perf || params.sampled) return null;
   const rig = params.rig === 'dog' ? 'dog' : 'human';
   const poser = rig === 'dog' ? poseDog : pose3;
@@ -158,7 +159,7 @@ export function moveArcPoint({ params, def, frame, curFrame = frame, target, pro
   const work = ids.map((id) => {
     const s = motion[id];
     const plain = s?.pts?.length >= 2 && (s.amount ?? 1) === 1 && !s.offset && !s.phase && (s.freq ?? 1) === 1;
-    let pts = plain ? s.pts.map((q) => ({ ...q })) : bakePoints((x) => ev.value(id, x), 12);
+    let pts = plain ? s.pts.map((q) => ({ ...q })) : bakePoints((x) => ev.value(id, x), prop.on ? 24 : 12);
     let idx = nearHandle(pts, u, 0.4 / T);
     if (idx < 0) { pts = addHandle(pts, u, ev.value(id, u)); idx = nearHandle(pts, u, 1e-6); }
     return { id, pts, idx };
@@ -176,6 +177,6 @@ export function moveArcPoint({ params, def, frame, curFrame = frame, target, pro
   const r = solveMove(at, v0, target, scales);
   const entries = {};
   // Only the channels the drag actually changed are written, so a side-on drag leaves the sideways channels alone.
-  work.forEach((w, i) => { if (Math.abs(r.v[i] - v0[i]) < 1e-7) return; const pts = w.pts.map((q, k) => (k === w.idx ? { u: q.u, v: r.v[i] } : q)); entries[w.id] = { pts }; });
+  work.forEach((w, i) => { if (Math.abs(r.v[i] - v0[i]) < 1e-7) return; const dv = r.v[i] - v0[i]; const pts = w.pts.map((q, k) => (k === w.idx ? { u: q.u, v: r.v[i] } : prop.on ? { u: q.u, v: q.v + dv * falloff(prop.type, wrapDist(q.u, u) / prop.radius) } : q)); entries[w.id] = { pts }; });
   return { entries, err: r.err };
 }

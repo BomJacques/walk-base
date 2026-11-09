@@ -1,6 +1,7 @@
 // Automation lane editor: one parameter over the whole performance. Tap to add a point, drag to move, double-tap to remove, or draw freehand.
 // Unlike the cycle curve editor this one does not wrap: time runs from the first frame to the last.
 import { laneValue, thinPoints, replaceSpan } from './automation.js';
+import { PROP, proportionalMove } from './proportional.js';
 
 /** Pure editing helpers, exported for tests. */
 export function moveLanePoint(pts, index, t, v, T) {
@@ -116,6 +117,7 @@ export class LaneEditor {
       ctx.stroke();
       lane.pts.forEach((q, i) => { ctx.fillStyle = surface; ctx.strokeStyle = accent; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(this.tx(q.t, L), this.vy(q.v, L), this.drag?.index === i ? 11 : 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); });
     } else { ctx.fillStyle = ink2; ctx.textAlign = 'center'; ctx.fillText('No automation yet. Tap to add a point, or record it while playing.', (L.l + w - L.r) / 2, (L.t + h - L.b) / 2); }
+    if (this.drag && PROP.on) { const c0 = this.drag.pts[this.drag.index].t; const sp = Math.max(1, T - 1) * PROP.radius; const a = Math.max(L.l, this.tx(c0 - sp, L)); const b = Math.min(w - L.r, this.tx(c0 + sp, L)); ctx.fillStyle = `${accent}1f`; ctx.fillRect(a, L.t, b - a, h - L.t - L.b); }
     if (this.stroke) { ctx.strokeStyle = '#e0662e'; ctx.lineWidth = 3; ctx.beginPath(); this.stroke.forEach((q, i) => { const x = this.tx(q.t, L); const y = this.vy(q.v, L); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); }
     const f = this.api.frame(); const px = this.tx(f, L);
     ctx.strokeStyle = '#d0342c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(px, L.t - 4); ctx.lineTo(px, h - L.b); ctx.stroke();
@@ -145,7 +147,7 @@ export class LaneEditor {
     cv.addEventListener('pointermove', (e) => {
       const q = pos(e); const L = this.layout();
       if (this.scrubbing) { this.scrub(q.x, L); return; }
-      if (this.drag) { const at = this.fromXY(q.x, q.y, L); const pts = this.drag.pts.map((p) => ({ ...p })); moveLanePoint(pts, this.drag.index, at.t, at.v, this.api.length()); this.api.setLane({ ...this.lane(), pts }); this.draw(); }
+      if (this.drag) { const at = this.fromXY(q.x, q.y, L); const pts = this.drag.pts.map((p) => ({ ...p })); moveLanePoint(pts, this.drag.index, at.t, at.v, this.api.length()); const span = Math.max(1, this.api.length() - 1); proportionalMove(pts.map((q) => q), this.drag.pts, this.drag.index, (a, b) => Math.abs(a.t - b.t) / span); this.api.setLane({ ...this.lane(), pts }); this.draw(); }
       else if (this.stroke) { this.stroke.push(this.fromXY(q.x, q.y, L)); this.draw(); }
     });
     const end = (e) => {

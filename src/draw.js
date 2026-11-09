@@ -40,6 +40,7 @@ export const STYLE_DEFAULTS = Object.freeze({
   arcsDog: ['head', 'hip', 'paw.FR', 'paw.FL', 'paw.HR', 'paw.HL', 'tail'],
   arcDots: true,
   showLabels: true,
+  pictureModel: 'hide covered parts', // what the body does when pictures are attached
   showFootLabels: false,
   showGizmo: true,
   showMouthLabel: true,
@@ -296,11 +297,22 @@ function paintShape(ctx, sh, cam, st, ghost) {
   ctx.stroke();
 }
 
+const DEPTH_OFF = { back: -1000, behind: -0.0006, front: 0.0006, top: 1000 };
+/** Whether a body shape is left out because a picture is attached to its part (or to any part, when the model is hidden). */
+function coveredByPicture(sh, st, attach) {
+  if (st.pictureModel === 'show the model' || !attach?.length) return false;
+  const pics = attach.filter((it) => it.visible && it.kind === 'image' && it.img);
+  if (!pics.length) return false;
+  if (st.pictureModel === 'hide the model') return true;
+  const partOf = (p) => (p === 'girdle' ? 'arm' : p);
+  return pics.some((it) => it.part === partOf(sh.part) && (!it.side || !sh.side || it.side === sh.side));
+}
+
 /** Draws the attachments of a figure that is drawn as lines: behind ones first, then in front. Returns the placed items. */
 function paintAttachLines(ctx, pz, cam, opts, parts) {
   if (!opts.attach?.length || opts.tint) return [];
   const placed = placeItems(opts.attach, pz, cam).filter(({ f }) => (f.role === 'far' ? parts.far : f.role === 'near' ? parts.near : parts.body));
-  for (const kind of ['behind', 'front']) for (const { it, f } of placed) if (it.depth === kind) paintItem(ctx, it, f, cam);
+  for (const kind of ['back', 'behind', 'front', 'top']) for (const { it, f } of placed) if (it.depth === kind) paintItem(ctx, it, f, cam);
   return placed;
 }
 
@@ -359,12 +371,12 @@ function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
   const { face } = built; let shapes = built.shapes;
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
-  if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (it.depth === 'behind' ? -0.0006 : 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);
+  if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (DEPTH_OFF[it.depth] ?? 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);
   if (st.style === 'outline' && !ghost) {
     // First pass: every limb and the body, stroked twice as thick. The fills that follow leave only the outer edge, so arms, legs and body read as one outline with no lines crossing inside.
     ctx.save(); ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw * 2.2; ctx.lineJoin = 'round';
     for (const sh of shapes) {
-      if (sh.attach || sh.pts.length < 3 || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
+      if (sh.attach || sh.pts.length < 3 || (!ghost && coveredByPicture(sh, st, opts.attach)) || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
       ctx.beginPath(); sh.pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); ctx.stroke();
     }
     ctx.restore();
@@ -372,6 +384,7 @@ function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
   for (const sh of shapes) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam); continue; }
+    if (!ghost && coveredByPicture(sh, st, opts.attach)) continue;
     paintShape(ctx, sh, cam, st, ghost);
     if (sh.face && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHoseFace(ctx, pz, cam, st, opts.mouth);
     if (sh.part === 'head' && opts.mouth && !hose && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHeadMouth(ctx, pz, cam, st, opts.mouth);

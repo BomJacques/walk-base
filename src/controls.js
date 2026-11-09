@@ -74,6 +74,9 @@ export const CONTROLS = [
   n('p', 'dogStride', 'Gait', 'Dog stride', 'Stride', 'heights', 0.1, 5, 0.01, 'Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster.'),
   n('p', 'dogDuty', 'Gait', 'Dog stride', 'Time on the ground', '', 0.15, 0.85, 0.01, 'Fraction of the cycle each paw is down.'),
   n('p', 'dogLift', 'Gait', 'Dog paws', 'Paw lift', 'heights', 0, 0.5, 0.005, 'How high the swinging paw clears the ground.'),
+  n('p', 'dogAsymTiming', 'Gait', 'Dog left and right', 'Left paws land late', 'cycle', -0.12, 0.12, 0.005, 'Moves the left paws off their place in the beat, so the steps on the two sides are unequal.'),
+  n('p', 'dogAsymDuty', 'Gait', 'Dog left and right', 'Left paws time on ground', '', -0.15, 0.15, 0.005, 'Added to the left paws only. Less is a leg that is hurried off the ground, as when it hurts.'),
+  n('p', 'dogAsymLift', 'Gait', 'Dog left and right', 'Left paws lift', '', -0.8, 0.8, 0.01, 'The left paws lift more (positive) or less (negative) than the right.'),
   n('p', 'dogWidth', 'Gait', 'Dog paws', 'Paws width', 'heights', 0, 0.3, 0.005, 'Distance of each paw from the centre line.'),
   n('p', 'dogElbowOut', 'Gait', 'Dog paws', 'Elbows and knees out', '°', -15, 30, 0.5, 'Direction the elbows and knees point away from straight ahead.'),
   n('p', 'dogBob', 'Body', 'Dog body', 'Body bounce', 'heights', 0, 0.3, 0.002, 'Up and down travel of the hips.'),
@@ -116,6 +119,7 @@ export const CONTROLS = [
   n('s', 'hoseLimb', 'Look', 'Rubber hose', 'Limb thickness', '×', 0.5, 2, 0.01, 'How thick the tube arms and legs are.'),
   n('s', 'hoseBend', 'Look', 'Rubber hose', 'Limb curve', '', 0, 1, 0.01, '1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint.'),
   n('s', 'hoseSquash', 'Look', 'Rubber hose', 'Squash and stretch', '', 0, 1.5, 0.05, 'The body swells when it is lowest in the step and thins as it rises.'),
+  e('s', 'pictureModel', 'Look', 'Pictures', 'Body under pictures', ['hide covered parts', 'hide the model', 'show the model'], 'What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin.'),
   e('s', 'hoseEars', 'Look', 'Rubber hose', 'Ears', ['none', 'round'], 'Round ears on top of the head. Off by default.'),
   e('s', 'hoseEyes', 'Look', 'Rubber hose', 'Eyes', ['pie', 'round', 'dots'], 'Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots.'),
   c('s', 'hoseBody', 'Look', 'Rubber hose', 'Body colour', 'The head, body, arms and legs.'),
@@ -209,6 +213,7 @@ export const PRESETS_DOG = {
   Pace: { dogGait: 'pace', dogStride: 1.3, dogDuty: 0.55, dogLift: 0.18, dogBob: 0.04, dogFlex: 9, dogTwist: 2, dogShoulder: 0.03, cycleFrames: 16 },
   Gallop: { dogGait: 'gallop', dogStride: 2.6, dogDuty: 0.22, dogLift: 0.38, dogBob: 0.2, dogFlex: 3, dogArch: 0, dogCurl: 18, dogTwist: 2, dogShoulder: 0.07, dogWidth: 0.07, dogHeadNod: 6, dogEar: 18, dogTailAngle: 10, dogWag: 6, cycleFrames: 12 },
   Sniffing: { dogStride: 0.55, dogLift: 0.08, dogNeckAngle: 15, dogHeadAngle: 55, dogTailAngle: 8, dogWag: 8, cycleFrames: 32, dogBob: 0.015 },
+  Limp: { dogStride: 0.7, dogLift: 0.1, dogDuty: 0.7, dogAsymDuty: -0.14, dogAsymLift: -0.5, dogAsymTiming: 0.04, dogBob: 0.03, dogNeckAngle: 44, dogHeadAngle: 40, dogWag: 4, cycleFrames: 28 },
   'Old dog': { dogStride: 0.6, dogLift: 0.06, dogDuty: 0.74, dogBob: 0.012, dogFlex: 3, dogArch: 1, dogTwist: 3, dogShoulder: 0.025, dogNeckAngle: 38, dogHeadAngle: 42, dogTailAngle: 0, dogWag: 6, cycleFrames: 36 },
 };
 /** Presets for the other legged figures. Each one names its species, so choosing it sets the whole figure. Units are the figure's own heights. */

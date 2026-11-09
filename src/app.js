@@ -9,7 +9,7 @@ import { CONTROLS, TABS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, show
 import { SPECIES } from './dogdefaults.js';
 import { wordsFor } from './words.js';
 import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
-import { dogPlants, pawPhase } from './dog3.js';
+import { dogPlants, pawGait, legsOf } from './dog3.js';
 import { PARTS, CHANNEL_BY_ID, partChannels, partLabel, makeEvaluator, sampleFinal, isEdited, allowedFrequencies } from './motion.js';
 import { CurveEditor, mirrorPoints } from './curves.js';
 import { cleanPhys, STRIP_LIMITS } from './stripdefs.js';
@@ -22,7 +22,8 @@ import { findKeyFrames, laneTable, tableCsv } from './keyposes.js';
 import { VISEMES, VISEME_BY_ID, buildSpeech, cleanSpeech, keyOn } from './lipsync.js';
 import { paintMouth } from './mouth.js';
 import { icon } from './icons.js';
-import { attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
+import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
+import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner } from './menu.js';
 
 const KEY = 'walkbase.v2';
@@ -237,7 +238,7 @@ function cleanAttach(raw) {
         id: String(a.id || freshId()).slice(0, 40), name: String(a.name || a.kind).slice(0, 40), kind: a.kind, part: a.part, seg: a.seg ?? null, side: a.side ?? null,
         anchor: { mode: an.mode === 'free' ? 'free' : 'boundary', t: num(an.t, 0.12, 0, 1), off: num(an.off, 0, -0.3, 0.3), x: num(an.x, 0, -1.5, 1.5), y: num(an.y, 0, -1.5, 1.5) },
         x: num(a.x, 0, -2, 2), y: num(a.y, 0, -2, 2), rot: num(a.rot, 0, -360, 360), scale: num(a.scale, 1, 0.05, 8), w: num(a.w, 0.26, 0.01, 3), h: num(a.h, 0.18, 0.01, 3),
-        fill: col(a.fill, '#f2b84b'), stroke: col(a.stroke, '#26231f'), sw: num(a.sw, 2, 0, 12), opacity: num(a.opacity, 0.92, 0, 1), depth: a.depth === 'behind' ? 'behind' : 'front', flip: Boolean(a.flip), visible: a.visible !== false,
+        fill: col(a.fill, '#f2b84b'), stroke: col(a.stroke, '#26231f'), sw: num(a.sw, 2, 0, 12), opacity: num(a.opacity, 0.92, 0, 1), depth: ['back', 'behind', 'front', 'top'].includes(a.depth) ? a.depth : 'front', flip: Boolean(a.flip), bend: Boolean(a.bend), visible: a.visible !== false,
         img: a.kind === 'image' ? String(a.img || '') : null,
         ...(a.kind === 'strip' ? { phys: cleanPhys(a.phys) } : {}),
       });
@@ -352,7 +353,7 @@ function attachSection() {
       num('Length', () => sel.h, (v) => P_({ h: v }), 0.08, 2.5, 0.005, 'attach-h', 'How long it is when it hangs straight. The square on the stage drags it too.'),
       ph('taper', 'Width at the tip', 'phys-taper', 'As a share of the width at the top.'),
       ph('nodes', 'Joints', 'phys-nodes', 'More joints bend more smoothly and cost more to work out.'),
-      seg('Depth', [['front', 'In front'], ['behind', 'Behind']], sel.depth, (v) => patchAttach(sel.id, { depth: v }, { panel: true }), 'attach-depth')),
+      seg('Depth', [['back', 'Back'], ['behind', 'Behind'], ['front', 'In front'], ['top', 'Top']], sel.depth, (v) => patchAttach(sel.id, { depth: v }, { panel: true }), 'attach-depth')),
       h('section', { class: 'group' }, h('h3', null, 'Physics'),
         h('p', { class: 'hint' }, 'The strip is pinned at its ring and swings as the body moves. It is worked out for the whole cycle at once, so scrubbing and exporting always match. Turn on Motion arcs to see where its tip and middle go.'),
         ph('gravity', 'Gravity', 'phys-gravity', 'How hard it is pulled down. 0 floats.'),
@@ -369,8 +370,10 @@ function attachSection() {
     num('Size', () => sel.scale, (v) => P_({ scale: v }), 0.1, 5, 0.01, 'attach-scale', 'Makes the whole attachment bigger or smaller.'),
     num('Width', () => sel.w, (v) => P_({ w: v }), 0.02, 1.5, 0.005, 'attach-w'),
     sel.kind === 'image' || sel.kind === 'line' ? null : num('Height', () => sel.h, (v) => P_({ h: v }), 0.02, 1.5, 0.005, 'attach-h'),
-    seg('Depth', [['front', 'In front'], ['behind', 'Behind']], sel.depth, (v) => patchAttach(sel.id, { depth: v }, { panel: true }), 'attach-depth'),
-    h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Flip')), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: sel.flip, testid: 'attach-flip', onChange: (e) => P_({ flip: e.target.checked }) }), h('span', null, 'Flip across the part')))));
+    seg('Depth', [['back', 'Back'], ['behind', 'Behind'], ['front', 'In front'], ['top', 'Top']], sel.depth, (v) => patchAttach(sel.id, { depth: v }, { panel: true }), 'attach-depth'),
+    h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Flip')), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: sel.flip, testid: 'attach-flip', onChange: (e) => P_({ flip: e.target.checked }) }), h('span', null, 'Flip across the part'))),
+    canBend(sel) ? h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Bend')), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: Boolean(sel.bend), testid: 'attach-bend', onChange: (e) => P_({ bend: e.target.checked }, { panel: true }) }), h('span', null, 'Bend over the joint'))) : null,
+    canBend(sel) ? h('p', { class: 'hint' }, 'A long picture on the upper leg or upper arm carries on over the knee or elbow and bends with it, instead of staying straight. Make the picture long enough to cross the joint, and turn it so its long side runs along the limb.') : null));
   if (sel.kind !== 'image') {
     host.append(h('section', { class: 'group' }, h('h3', null, 'Look'),
       sel.kind === 'line' ? null : h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Fill')), h('input', { type: 'color', class: 'color', value: sel.fill, 'aria-label': 'Fill colour', testid: 'attach-fill', onInput: (e) => P_({ fill: e.target.value }) })),
@@ -446,7 +449,7 @@ function arcDragStart(e, toFrame) {
 }
 function arcDragMove(d, e, toFrame) {
   const q = toFrame(e.clientX, e.clientY); if (!q) return;
-  const r = moveArcPoint({ params: P(), def: d.def, frame: d.frame, curFrame: d.curFrame, target: [q.x, q.y], project: (w) => d.cam.p(w) });
+  const r = moveArcPoint({ params: P(), def: d.def, frame: d.frame, curFrame: d.curFrame, target: [q.x, q.y], project: (w) => d.cam.p(w), prop: PROP });
   if (!r) { setMessage('This point cannot be reshaped while a channel on its path runs free.'); return; }
   for (const [id, s] of Object.entries(r.entries)) {
     S.motion[id] = s;
@@ -637,8 +640,8 @@ function fitPills() {
   pillCtx = pillCtx || document.createElement('canvas').getContext('2d');
   document.querySelectorAll('.pillfield select').forEach((sel) => {
     const cs = getComputedStyle(sel); pillCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    const w = Math.max(60, Math.ceil(pillCtx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width) + 38); // the text, a margin and the arrow
-    if (sel.dataset.fit !== String(w)) { sel.parentElement.style.width = `${w}px`; sel.dataset.fit = String(w); }
+    const w = Math.max(60, Math.ceil(pillCtx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width) + 30); // the text and the arrow
+    if (sel.dataset.fit !== String(w)) { sel.style.width = `${w}px`; sel.dataset.fit = String(w); }
   });
 }
 function updateHud(info) {
@@ -1219,6 +1222,7 @@ function openLaneEditor(target) {
     h('div', { class: 'pop-row' }, h('div', { class: 'seg segmode' }, mode('handles', 'Handles'), mode('draw', 'Draw')),
       h('button', { type: 'button', class: 'btn', testid: 'lane-interp', onClick: (e) => { const l = S.lanes[target]; if (!l) return; l.interp = l.interp === 'linear' ? 'smooth' : 'linear'; S.ver++; e.currentTarget.textContent = l.interp === 'linear' ? 'Straight lines' : 'Eased'; laneEd.draw(); render(); save(); } }, S.lanes[target]?.interp === 'linear' ? 'Straight lines' : 'Eased'),
       h('button', { type: 'button', class: 'btn', testid: 'lane-clear', onClick: () => { delete S.lanes[target]; S.ver++; closeEditor(); markCustom(); render(); save(); } }, 'Clear lane')),
+    propRow(() => laneEd?.draw()),
     h('p', { class: 'hint' }, 'Time runs left to right across the whole performance. The dashed line is the value with no automation. Tap to add a point, drag to move it, double-tap to remove it. Draw sketches the movement. Drag the strip at the top to scrub.'),
     laneTools(target, () => view.base()),
     host);
@@ -1330,7 +1334,7 @@ function gaitChartSection() {
   let rows; const facts = [];
   if (dog) {
     const names = { HR: 'Hind right', HL: 'Hind left', FR: 'Front right', FL: 'Front left' };
-    rows = ['HR', 'HL', 'FR', 'FL'].map((l) => ({ name: names[l], start: pawPhase(S.p.dogGait, l), duty: S.p.dogDuty }));
+    rows = legsOf(S.p).map((l) => ({ name: names[l], start: pawGait(S.p, l).ph, duty: pawGait(S.p, l).duty }));
     const st = supportStats(rows); const cps = S.p.fps / Math.max(1, S.p.cycleFrames);
     facts.push(`${st.mean.toFixed(1)} feet down on average`, st.flight > 0.01 ? `in the air ${Math.round(st.flight * 100)}% of the cycle` : 'never in the air', `${cps.toFixed(1)} cycles a second`, `stride ${S.p.dogStride.toFixed(2)}`);
   } else {
@@ -1445,6 +1449,7 @@ function openEditor(id) {
     h('div', { class: 'pop-row' }, h('div', { class: 'seg segmode' }, mode('handles', 'Handles'), mode('draw', 'Draw')),
       h('button', { type: 'button', class: 'btn', testid: 'edit-smooth', onClick: () => editor.smooth() }, 'Smooth'),
       h('button', { type: 'button', class: 'btn', testid: 'edit-reset', onClick: () => { setMotion(S.edit.id, null); editor.draw(); renderPanel(); } }, 'Back to built-in')),
+    propRow(() => editor?.draw()),
     h('p', { class: 'hint' }, 'Handles: tap to start, drag a handle, tap empty space to add, double-tap a handle to remove. Draw: sketch the motion with your finger or Pencil. The dashed line is the built-in motion; the red line is the playhead. Drag along the strip at the top to scrub.'),
     host);
   document.body.classList.add('editing');
@@ -1619,6 +1624,14 @@ function menuBar() {
       { label: 'Movements…', testid: 'pm-movements', onClick: () => goTab('Auto') },
       { label: 'Saved performances…', testid: 'pm-saved', onClick: () => goTab('Auto') },
     ]));
+}
+/** Proportional editing: the controls shared by the curve editors (and the arc dots). */
+function propRow(redraw) {
+  const radiusLabel = h('span', { class: 'num-out' }, `${Math.round(PROP.radius * 100)}%`);
+  const btn = h('button', { type: 'button', class: 'btn', testid: 'prop-toggle', 'aria-pressed': String(PROP.on), title: 'Proportional editing: moving a point also moves the points near it, by less the further they are, so the curve bends in a smooth arc.', onClick: (e) => { setProp({ on: !PROP.on }); e.currentTarget.setAttribute('aria-pressed', String(PROP.on)); redraw?.(); } }, 'Proportional');
+  const rad = h('input', { type: 'range', class: 'rng', min: 2, max: 50, step: 1, value: Math.round(PROP.radius * 100), 'aria-label': 'Proportional reach', testid: 'prop-radius', onInput: (e) => { setProp({ radius: Number(e.target.value) / 100 }); radiusLabel.textContent = `${e.target.value}%`; redraw?.(); } });
+  const fall = h('select', { class: 'select', 'aria-label': 'Falloff', testid: 'prop-falloff', onChange: (e) => { setProp({ type: e.target.value }); redraw?.(); } }, FALLOFFS.map(([k, l]) => h('option', { value: k, selected: k === PROP.type }, l)));
+  return h('div', { class: 'pop-row prop-row' }, btn, h('label', { class: 'prop-reach' }, h('small', null, 'Reach'), rad, radiusLabel), fall);
 }
 const iconBtn = (name, label, testid, onClick, extra = {}) => h('button', { type: 'button', class: 'btn ghost icon', testid, 'aria-label': label, title: label, onClick, ...extra }, icon(name), h('span', { class: 'sr' }, label));
 
@@ -1933,6 +1946,7 @@ if (LAYOUT.resume) {
   try { refAdopt(JSON.parse(localStorage.getItem(REF_KEY) || 'null')); } catch { /* none kept */ }
   loadAttachImages();
 } else { try { for (const k of [KEY, REF_KEY, ATT_IMG_KEY]) localStorage.removeItem(k); } catch { /* storage unavailable */ } }
+loadProp();
 hist.reset(snapState());
 build();
 render();

@@ -4,6 +4,9 @@ export const DOG_DEFAULTS = Object.freeze({
   dogStride: 0.95,        // distance covered in one full cycle, in shoulder heights
   dogDuty: 0.68,          // fraction of the cycle a paw is on the ground
   dogLift: 0.13,          // paw clearance in the swing
+  dogAsymTiming: 0,       // cycle fraction the left paws land late
+  dogAsymDuty: 0,         // left paws' time on the ground, added to dogDuty
+  dogAsymLift: 0,         // left paws' lift, as a fraction more or less
   dogBob: 0.03,           // up and down travel of the hips
   dogFlex: 6,             // degrees the spine bends side to side
   dogArch: 2,             // degrees the back arches with each footfall

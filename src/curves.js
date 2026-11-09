@@ -2,6 +2,7 @@
 // Pure editing logic (no DOM) is exported for tests; CurveEditor wires it to a canvas.
 import { makeEvaluator, CHANNEL_BY_ID, sampleDefault, sampleFinal } from './motion.js';
 import { cycleFrames, keyPhases } from './rig.js';
+import { PROP, proportionalMove, wrapDist } from './proportional.js';
 
 const wrap = (u) => u - Math.floor(u);
 const sortPts = (pts) => pts.slice().sort((a, b) => a.u - b.u);
@@ -168,6 +169,11 @@ export class CurveEditor {
     ctx.setLineDash([6, 5]); ctx.strokeStyle = ink2; ctx.lineWidth = 1.5; path(def); ctx.setLineDash([]);
     const fin = sampleFinal(this.id, P, m, 96); fin.push(fin[0]);
     ctx.strokeStyle = accent; ctx.lineWidth = 3; path(fin);
+    // the reach of proportional editing, round the handle being dragged
+    if (this.drag && PROP.on) {
+      const c0 = this.drag.pts[this.drag.index].u; const a = this.toXY(c0 - PROP.radius, 0, L, R).x; const b = this.toXY(c0 + PROP.radius, 0, L, R).x;
+      ctx.fillStyle = `${accent}1f`; ctx.fillRect(Math.max(L.l, a), L.t, Math.min(w - L.r, b) - Math.max(L.l, a), h - L.t - L.b);
+    }
     // Handles
     const sett = this.settings();
     const pts = (sett.freq ?? 1) === 1 ? sett.pts : null;
@@ -227,6 +233,7 @@ export class CurveEditor {
         const at = this.fromXY(q.x, q.y, L, R);
         const pts = this.drag.pts.map((p) => ({ ...p }));
         moveHandle(pts, this.drag.index, at.u, at.v);
+        proportionalMove(pts, this.drag.pts, this.drag.index, (a, b) => wrapDist(a.u, b.u));
         this.api.set(this.id, { pts: sortPts(pts), amount: 1, offset: 0, phase: 0 });
         this.draw();
       } else if (this.stroke) {

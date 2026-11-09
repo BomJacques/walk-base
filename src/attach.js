@@ -121,7 +121,7 @@ export function newItem(kind, target, over = {}) {
     id: freshId(), name: kind === 'image' ? 'Picture' : (KINDS.find((k) => k[0] === kind)?.[1] ?? 'Shape'), kind,
     part: target.part, seg: target.seg ?? null, side: target.side ?? null,
     anchor: { mode: 'boundary', t: 0.12, off: 0, x: 0, y: 0 }, x: 0, y: -0.04, rot: 0, scale: 1, w: 0.26, h: 0.18,
-    fill: '#f2b84b', stroke: '#26231f', sw: 2, opacity: 0.92, depth: 'front', flip: false, visible: true, img: null,
+    fill: '#f2b84b', stroke: '#26231f', sw: 2, opacity: 0.92, depth: 'front', flip: false, bend: false, visible: true, img: null,
     ...(kind === 'strip' ? { w: 0.2, h: 0.55, fill: '#b23a48', depth: 'behind', phys: { ...STRIP_DEFAULTS } } : {}),
     ...over,
   };
@@ -157,8 +157,60 @@ export function itemFrame(pz, cam, it) {
   const A = W(bone[0]); const B = W(bone[1]);
   const dx = B.x - A.x; const dy = B.y - A.y;
   const ang = Math.hypot(dx, dy) > 1e-6 * cam.scale ? Math.atan2(dy, dx) : 0;
-  return { ox: A.x, oy: A.y, cos: Math.cos(ang), sin: Math.sin(ang), scale: cam.scale, ang, L: Math.max(1e-4, len(sub(bone[1], bone[0]))), r: partRadius(pz, it.part, it.seg), depth: (A.d + B.d) / 2, role: it.side === 'L' ? 'far' : it.side === 'R' ? 'near' : 'body' };
+  const frame = { ox: A.x, oy: A.y, cos: Math.cos(ang), sin: Math.sin(ang), scale: cam.scale, ang, L: Math.max(1e-4, len(sub(bone[1], bone[0]))), r: partRadius(pz, it.part, it.seg), depth: (A.d + B.d) / 2, role: it.side === 'L' ? 'far' : it.side === 'R' ? 'near' : 'body' };
+  const next = it.bend && canBend(it) ? bendChain(pz, it) : null;
+  if (next) { const C = W(next); frame.chain = { A, B, C, L1: frame.L, L2: Math.max(1e-4, len(sub(next, bone[1]))) }; }
+  return frame;
 }
+
+/** A picture can bend over the joint at the end of its part: the upper leg over the knee, the upper arm over the elbow. */
+export const canBend = (it) => it.kind === 'image' && !it.part?.startsWith('dog.') && ((it.part === 'leg' && (it.seg ?? 0) === 0) || it.part === 'arm');
+function bendChain(pz, it) { const sd = it.side ? pz.sides?.[it.side] : null; return sd ? (it.part === 'leg' ? sd.ankle : sd.wrist) : null; }
+
+/**
+ * Where a point of a bending picture goes on the screen. s runs along the limb from the start of the part, n across it, both in the part's own units.
+ * The limb is two straight bones; round the joint the path is a smooth curve, so a picture over the knee or elbow bends instead of folding.
+ */
+export function bendPoint(f, s, n) {
+  const { A, B, C, L1, L2 } = f.chain; const k = f.scale;
+  const d1 = unit2(B.x - A.x, B.y - A.y); const d2 = unit2(C.x - B.x, C.y - B.y);
+  const P1 = { x: A.x + d1.x * L1 * k, y: A.y + d1.y * L1 * k }; const P2 = { x: P1.x + d2.x * L2 * k, y: P1.y + d2.y * L2 * k };
+  const w = Math.min(L1, L2) * 0.4;
+  let p; let t;
+  if (s <= L1 - w) { p = { x: A.x + d1.x * s * k, y: A.y + d1.y * s * k }; t = d1; }
+  else if (s >= L1 + w) { const q = s - L1; p = { x: P1.x + d2.x * q * k, y: P1.y + d2.y * q * k }; t = d2; }
+  else { // a quadratic curve through the corner
+    const u = (s - (L1 - w)) / (2 * w); const a = { x: P1.x - d1.x * w * k, y: P1.y - d1.y * w * k }; const c = { x: P1.x + d2.x * w * k, y: P1.y + d2.y * w * k };
+    const m = 1 - u; p = { x: m * m * a.x + 2 * m * u * P1.x + u * u * c.x, y: m * m * a.y + 2 * m * u * P1.y + u * u * c.y };
+    t = unit2(2 * m * (P1.x - a.x) + 2 * u * (c.x - P1.x), 2 * m * (P1.y - a.y) + 2 * u * (c.y - P1.y));
+  }
+  void P2;
+  return { x: p.x - t.y * n * k, y: p.y + t.x * n * k };
+}
+const unit2 = (x, y) => { const l = Math.hypot(x, y) || 1; return { x: x / l, y: y / l }; };
+
+/** Paints a picture bent along its limb: cut into thin slices across its long direction, each placed on the curve. */
+function paintBent(ctx, it, f, inf) {
+  const a = anchorLocal(it, f.L, f.r); const cx = a.x + it.x; const cy = a.y + it.y;
+  const { w, h } = itemSize(it, inf.aspect); const sw = w * it.scale; const sh = h * it.scale; const rot = (it.rot * Math.PI) / 180;
+  const cr = Math.cos(rot); const sr = Math.sin(rot); const fl = it.flip ? -1 : 1;
+  const toPart = (u, v) => { const px = u * sw; const py = v * sh * fl; return { x: cx + cr * px - sr * py, y: cy + sr * px + cr * py }; };
+  const warp = (u, v) => { const q = toPart(u, v); return bendPoint(f, q.x, q.y); };
+  const alongX = Math.abs(cr) >= Math.abs(sr); const N = 28; const iw = inf.img.naturalWidth; const ih = inf.img.naturalHeight;
+  for (let i = 0; i < N; i++) {
+    const t0 = i / N; const t1 = (i + 1) / N;
+    const [u0, u1, v0, v1] = alongX ? [t0 - 0.5, t1 - 0.5, -0.5, 0.5] : [-0.5, 0.5, t0 - 0.5, t1 - 0.5];
+    const T0 = warp(u0, v0); const T1 = warp(u1, v0); const T3 = warp(u0, v1);
+    const sx0 = (u0 + 0.5) * iw; const sy0 = (v0 + 0.5) * ih; const sw0 = (u1 - u0) * iw; const sh0 = (v1 - v0) * ih;
+    if (sw0 <= 0 || sh0 <= 0) continue;
+    const m11 = (T1.x - T0.x) / sw0; const m12 = (T1.y - T0.y) / sw0; const m21 = (T3.x - T0.x) / sh0; const m22 = (T3.y - T0.y) / sh0;
+    ctx.save(); ctx.setTransform(...mulM(ctx.getTransform(), [m11, m12, m21, m22, T0.x - m11 * sx0 - m21 * sy0, T0.y - m12 * sx0 - m22 * sy0]));
+    const ex = alongX ? Math.min(1, iw - sx0 - sw0) : 0; const ey = alongX ? 0 : Math.min(1, ih - sy0 - sh0); // a pixel more, so the slices overlap and leave no seam
+    ctx.drawImage(inf.img, sx0, sy0, sw0 + ex, sh0 + ey, sx0, sy0, sw0 + ex, sh0 + ey); ctx.restore();
+  }
+}
+/** The matrix m (a DOMMatrix, already on the canvas) followed by the plain matrix q [a, b, c, d, e, f], as the six numbers setTransform wants. */
+function mulM(m, q) { return [m.a * q[0] + m.c * q[1], m.b * q[0] + m.d * q[1], m.a * q[2] + m.c * q[3], m.b * q[2] + m.d * q[3], m.a * q[4] + m.c * q[5] + m.e, m.b * q[4] + m.d * q[5] + m.f]; }
 export const toScreen = (f, lx, ly) => ({ x: f.ox + (f.cos * lx - f.sin * ly) * f.scale, y: f.oy + (f.sin * lx + f.cos * ly) * f.scale });
 export const toLocal = (f, x, y) => { const dx = (x - f.ox) / f.scale; const dy = (y - f.oy) / f.scale; return { x: f.cos * dx + f.sin * dy, y: -f.sin * dx + f.cos * dy }; };
 
@@ -265,6 +317,7 @@ export function paintItem(ctx, it, f, cam, ghost = null) {
   if (it.kind === 'strip') { paintStrip(ctx, it, f, cam, ghost); return; }
   const pl = itemPlace(it, f, cam);
   const inf = it.kind === 'image' ? imageInfo(it.img) : null;
+  if (inf && f.chain) { ctx.save(); ctx.globalAlpha *= clamp(it.opacity, 0, 1); paintBent(ctx, it, f, inf); ctx.restore(); return; }
   const { w, h } = itemSize(it, inf?.aspect);
   ctx.save();
   ctx.translate(pl.c.x, pl.c.y); ctx.rotate(pl.ang); ctx.scale(pl.k, it.flip ? -pl.k : pl.k);

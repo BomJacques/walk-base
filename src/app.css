@@ -361,3 +361,22 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 
 /* the gait chart */
 .gaitchart { display: block; width: 100%; max-width: 640px; height: auto; margin: 6px 0 2px; }
+
+/* top bar: the small label sits beside the value, not on top of it */
+.pillfield { display: inline-flex; align-items: center; gap: 6px; padding-left: 10px; min-width: 0; box-shadow: inset 0 0 0 1px var(--line); border-radius: var(--r); background: var(--ctl); }
+.pillfield:hover { background: var(--ctl-hover); }
+.pillfield:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pillfield small { position: static; flex: none; font-size: 10px; }
+.pillfield .select { position: static; inset: auto; width: auto; height: 100%; border: 0; background-color: transparent; padding: 0 26px 0 0; font-size: max(16px, var(--fs-in)); }
+.pillfield .select:hover { background-color: transparent; }
+.pillfield .select:focus-visible { outline: none; }
+.pillfield { flex: none; white-space: nowrap; }
+.pillfield .select { flex: none; max-width: none; text-overflow: clip; }
+
+/* proportional editing row in the curve editors */
+.prop-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prop-reach { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 140px; min-width: 120px; }
+.prop-reach small { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); font-weight: 600; }
+.prop-reach .rng { flex: 1; min-width: 60px; }
+.prop-row .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+@media (max-width: 900px) { .pillfield { padding-left: 0; } .pillfield small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .pillfield .select { padding-left: 12px; } }

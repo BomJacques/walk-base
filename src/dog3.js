@@ -42,6 +42,19 @@ export const pawPhase = (gait, leg) => {
   return { HR: 0, HL: 0.5, FR: g.front, FL: wrap(g.front + 0.5) }[leg];
 };
 
+/**
+ * The gait one paw follows: its phase, time on the ground and lift. The left paws can land late, stay down for a different time and lift differently
+ * (a limp, an uneven walk). The planted ground each covers follows its time on the ground, so a paw never slides.
+ */
+export function pawGait(p, leg) {
+  const left = leg[1] === 'L';
+  return {
+    ph: wrap(pawPhase(p.dogGait, leg) + (left ? p.dogAsymTiming || 0 : 0)),
+    duty: clamp(p.dogDuty + (left ? p.dogAsymDuty || 0 : 0), 0.15, 0.9),
+    lift: p.dogLift * (left ? Math.max(0, 1 + (p.dogAsymLift || 0)) : 1),
+  };
+}
+
 /** Cubic Hermite through (k, v) knots with given end slopes; interior slopes from the neighbours. */
 function knots(ks, vs, s0, s1, k) {
   const n = ks.length;
@@ -80,11 +93,11 @@ export function runPawPath(w, duty, D, lift) {
 }
 
 /** Ground a planted paw covers. Limited to what the legs can span, so a very long stride on short legs shortens its steps instead of tearing the leg off. */
-export function stanceTravel(p, sc) {
+export function stanceTravel(p, sc, duty = p.dogDuty) {
   const L = bonesOf(p); const leg = sc('dLeg'); const { hock, pastern } = speciesOf(p).lean;
   const hind = 0.88 * (L.thigh + L.shin) * leg - L.meta * leg * Math.sin(hock);
   const dmax = 2 * (speciesOf(p).legs === 2 ? hind : Math.min(hind, 0.88 * (L.upper + L.fore) * leg - L.pastern * leg * Math.sin(pastern)));
-  return Math.min(p.dogStride * p.dogDuty, Math.max(0.05, dmax));
+  return Math.min(p.dogStride * duty, Math.max(0.05, dmax));
 }
 
 /** Body height at which the hind hips and the shoulders keep every planted paw within reach. */
@@ -172,8 +185,8 @@ export function poseDog(params, motion, u, extra = null) {
   for (const leg4 of ['HR', 'HL', 'FR', 'FL']) {
     const front = leg4[0] === 'F'; const side = leg4[1]; const s = side === 'R' ? 1 : -1;
     const k = (id) => c(`${front ? 'f' : 'h'}${id}.${side}`);
-    const w = wrap(uw - pawPhase(p.dogGait, leg4));
-    const f = p.dogGait === 'gallop' ? gallopPawPath(w, p.dogDuty, D, p.dogLift, front) : p.dogGait === 'run' ? runPawPath(w, p.dogDuty, D, p.dogLift) : pawPath(w, p.dogDuty, D, p.dogLift);
+    const g = pawGait(p, leg4); const w = wrap(uw - g.ph); const Dp = g.duty === p.dogDuty ? D : stanceTravel(p, sc, g.duty);
+    const f = p.dogGait === 'gallop' ? gallopPawPath(w, g.duty, Dp, g.lift, front) : p.dogGait === 'run' ? runPawPath(w, g.duty, Dp, g.lift) : pawPath(w, g.duty, Dp, g.lift);
     const ang = front ? PASTERN_LEAN : HOCK_LEAN;
     const bone = (front ? L.pastern : L.meta) * leg;
     const pitch = f.theta + k('paw.pitch');
@@ -232,10 +245,10 @@ export function dogPlants(base, lanes, T, s) {
   if ((base.dogFlight || 0) > 0.5) return out;
   for (let t = 0; t < T; t++) {
     for (const leg of legsOf(base)) {
-      const ph = pawPhase(base.dogGait, leg);
+      const ph = pawGait(base, leg).ph;
       if (Math.floor(s.u[t + 1] - ph + 1e-9) > Math.floor(s.u[t] - ph + 1e-9)) {
         const p = paramsAt(base, lanes, t + 1);
-        const z = poseDog(p, {}, pawPhase(p.dogGait, leg)).legs[leg];
+        const z = poseDog(p, {}, pawGait(p, leg).ph).legs[leg];
         out.push({ leg, side: leg[1], t: t + 1, x: s.x[t + 1] + z.paw[0], z: z.paw[2] });
       }
     }
