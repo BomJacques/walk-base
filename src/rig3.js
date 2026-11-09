@@ -63,6 +63,9 @@ export function pose3(params, motion, u, extra = null) {
   const uw = wrap(u);
   const c = (id) => ev.value(id, uw);
   const sc = (k) => (p.proportions || {})[k] ?? 1;
+  // Follow-through (rubber hose): the pose a little earlier in the cycle, so a hand or a swinging foot can trail behind the limb it is on.
+  const fol = p.model === 'hose' && !extra?.noLag ? Math.max(0, p.hoseFollow || 0) : 0;
+  const prev = fol > 0 ? pose3(params, motion, uw - 0.12, { ...(extra || {}), noLag: true, worldX: extra?.worldX != null ? extra.worldX - 0.12 * 2 * p.stepLength : undefined }) : null;
   const d = p.stepLength * p.duty;
   const hContact = contactHeight(p);
   const phi = p.downPhase + 0.25;
@@ -116,11 +119,17 @@ export function pose3(params, motion, u, extra = null) {
     const wrist = add(elbow, apply(Rf, [0, -BODY.foreArm * aL * sc('foreArm'), 0]));
     const Rw = mm(Rf, Rpitch(-k('wrist.flex')));
     const hand = add(wrist, apply(Rw, [0, -BODY.hand * aL * sc('handSize'), 0]));
+    const wristF = prev ? add(wrist, mul(sub(prev.sides[side].wrist, wrist), 0.35 * fol)) : wrist; // the wrist and the hand drag behind the arm
+    let handF = hand; // the hand keeps its length from the wrist and only its direction trails, so it stays on the end of the arm
+    if (prev) { const lagged = add(hand, mul(sub(prev.sides[side].hand, hand), 0.6 * fol)); const dir = sub(lagged, wristF); const l = len(dir); handF = l > 1e-9 ? add(wristF, mul(dir, len(sub(hand, wrist)) / l)) : hand; }
 
     const sg = sideGait(p, side);
     const w = wrap(uw - sg.off);
     const f = foot(w, sg.p, sg.d);
-    const ankle = [f.x + k('foot.x'), f.y + k('foot.y') + (tf[side]?.y ?? 0), s * k('foot.z')];
+    let ankle = [f.x + k('foot.x'), f.y + k('foot.y') + (tf[side]?.y ?? 0), s * k('foot.z')];
+    // a swinging foot trails behind the leg, and eases back to nothing as it lands and as it leaves the ground
+    const kSwing = w >= sg.p.duty ? Math.sin(Math.PI * ((w - sg.p.duty) / Math.max(1e-6, 1 - sg.p.duty))) : 0;
+    if (prev && kSwing > 0) ankle = add(ankle, mul(sub(prev.sides[side].ankle, ankle), 0.3 * fol * kSwing));
     const hip = add(P, apply(Rp, [0, 0, s * hw]));
     const fwdDir = norm([Rp[0], 0, Rp[2]]);
     const out = k('knee.out');
@@ -130,12 +139,13 @@ export function pose3(params, motion, u, extra = null) {
     const leg = ik3(hip, ankle, l1, LEG_LENGTH - l1, pole);
 
     const psi = -s * k('foot.yaw');
-    const theta = f.theta + k('foot.pitch') + (tf[side]?.slope ?? 0);
+    let theta = f.theta + k('foot.pitch') + (tf[side]?.slope ?? 0);
+    if (prev && kSwing > 0) theta += (prev.sides[side].foot.theta - theta) * 0.6 * fol * kSwing;
     const fHead = [Math.cos(psi), 0, -Math.sin(psi)];
     const lat = [Math.sin(psi), 0, Math.cos(psi)];
     const fx = add(mul(fHead, Math.cos(theta)), [0, Math.sin(theta), 0]);
     const fy = add(mul(fHead, -Math.sin(theta)), [0, Math.cos(theta), 0]);
-    sides[side] = { s, shoulder, elbow, wrist, hand, hip, knee: leg.knee, ankle: leg.ankle, reached: leg.reached, stance: w < sg.p.duty, w, foot: { fx, fy, lat, theta }, frames: { Ru, Rf, Rw } };
+    sides[side] = { s, shoulder, elbow, wrist, hand, wristF, handF, hip, knee: leg.knee, ankle: leg.ankle, reached: leg.reached, stance: w < sg.p.duty, w, foot: { fx, fy, lat, theta }, frames: { Ru, Rf, Rw } };
   }
   return { u: uw, pelvisX: extra?.worldX ?? uw * 2 * p.stepLength, bobDev: P[1] - hContact - gY - meanDev, groundY: gY, params: p, hw, pelvis: P, Rp, R1, R2, R3, Rn, Rh, base0, j1, j2, j3, neckBase, neckTop, headC, headR, sides };
 }

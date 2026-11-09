@@ -2,7 +2,7 @@
 // World: x forward, y up, z the figure's right. Camera: yaw orbits about the vertical through the figure, pitch lifts it above (positive) or below.
 // Yaw 0 and pitch 0 is the side view, with the figure's right side toward you.
 import { cycleFrames, keyPhases, sideGait, groundAt } from './rig.js';
-import { pose3, footCorners, footShape, footMarks, add, mul, apply } from './rig3.js';
+import { pose3, footCorners, footShape, footMarks, add, mul, sub, len, apply } from './rig3.js';
 import { paramsAt, motionAt } from './automation.js';
 import { drawSampled } from './sampler.js';
 import { hull, circlePts } from './geom.js';
@@ -187,6 +187,21 @@ function headMap(pz, cam) {
     return W(add(pz.headC, apply(pz.Rh, [0.95 * hr * Math.sqrt(Math.max(0.02, 1 - r2)) + 0.004 * hr, yy, zz])));
   };
 }
+/**
+ * The limbs of the rubber hose figure as they are drawn: the wrist and hand trail behind the arm (follow-through), and an arm that reaches, or a leg that swings out,
+ * stretches. Stretch grows each limb about its root as it straightens, up to half again as long at full strength; a leg stretches along the ground, not down through it.
+ */
+function hoseLimbs(sd, p) {
+  const wrist = sd.wristF || sd.wrist; const hand = sd.handF || sd.hand; const k = Math.max(0, p?.hoseStretch ?? 0);
+  if (!k) return { ...sd, wrist, hand };
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const grow = (root, pts, ext, flat) => pts.map((q) => { const v = sub(q, root); return add(root, flat ? [v[0] * (1 + ext), v[1], v[2] * (1 + ext)] : mul(v, 1 + ext)); });
+  const armL = len(sub(sd.elbow, sd.shoulder)) + len(sub(wrist, sd.elbow)); const eA = clamp01((len(sub(wrist, sd.shoulder)) / armL - 0.7) / 0.3);
+  const [elbow, wrist2, hand2] = grow(sd.shoulder, [sd.elbow, wrist, hand], k * 0.5 * eA * eA, false);
+  const legL = len(sub(sd.knee, sd.hip)) + len(sub(sd.ankle, sd.knee)); const eL = sd.stance ? 0 : clamp01((len(sub(sd.ankle, sd.hip)) / legL - 0.8) / 0.2);
+  const [knee, ankle] = grow(sd.hip, [sd.knee, sd.ankle], k * 0.5 * eL * eL, true);
+  return { ...sd, elbow, wrist: wrist2, hand: hand2, knee, ankle };
+}
 function buildHoseShapes(pz, cam, st) {
   const shapes = [];
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
@@ -224,7 +239,7 @@ function buildHoseShapes(pz, cam, st) {
   }
 
   for (const side of ['R', 'L']) {
-    const sd = pz.sides[side]; const role = side === 'R' ? 'near' : 'far';
+    const sd = hoseLimbs(pz.sides[side], pz.params); const role = side === 'R' ? 'near' : 'far';
     // legs and arms are single tubes with no knee or elbow: one curve through the three joints
     tubeOf(hoseCurve(sd.hip, sd.knee, sd.ankle, bend), Array(14).fill(0.052 * limbK * wMul), 'leg', side, role, st.hoseBody);
     tubeOf(hoseCurve(sd.shoulder, sd.elbow, sd.wrist, bend), Array(14).fill(0.04 * limbK * wMul), 'arm', side, role, st.hoseBody);
@@ -336,7 +351,7 @@ function sceneDrawables(ctx, params, st, cam, env) {
   }
   for (const q of sc.props || []) {
     if (!q.visible) continue;
-    out.push({ d: cam.p([q.x, 0, q.z]).d, paint: () => paintProp(ctx, q, cam, st) });
+    out.push({ d: cam.p([q.x, 0, q.z]).d, paint: () => { hits.push({ id: q.id, shapes: paintProp(ctx, q, cam, st).map((pts) => ({ pts, part: 'prop', side: null })) }); } });
   }
   void pz;
   return out.sort((a, b) => a.d - b.d);
@@ -349,16 +364,19 @@ function paintProp(ctx, q, cam, st) {
   for (const b of balls) { const c = cam.p(b.c); parts.push({ d: c.d, ball: b, c }); }
   parts.sort((a, b) => a.d - b.d);
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineWidth = cam.lw * 0.7; ctx.strokeStyle = st.lineColor;
+  const polys = []; // where it is on the screen, so it can be tapped and dragged
   for (const p of parts) {
-    if (p.face) { ctx.beginPath(); p.pts.forEach((s, i) => (i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y))); ctx.closePath(); ctx.fillStyle = shade(p.face.color, faceLight(p.face.normal)); ctx.fill(); ctx.stroke(); }
+    if (p.face) { polys.push(p.pts.map((s) => [s.x, s.y])); ctx.beginPath(); p.pts.forEach((s, i) => (i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y))); ctx.closePath(); ctx.fillStyle = shade(p.face.color, faceLight(p.face.normal)); ctx.fill(); ctx.stroke(); }
     else {
       const r = p.ball.r * cam.scale; const ry = (p.ball.ry ?? p.ball.r) * cam.scale;
+      polys.push(Array.from({ length: 16 }, (_, i) => [p.c.x + r * Math.cos((i / 16) * TAU), p.c.y + ry * Math.sin((i / 16) * TAU)]));
       const g = ctx.createRadialGradient(p.c.x - r * 0.35, p.c.y - ry * 0.4, r * 0.1, p.c.x, p.c.y, Math.max(r, ry));
       g.addColorStop(0, shade(p.ball.color, 1.25)); g.addColorStop(1, shade(p.ball.color, 0.72));
       ctx.beginPath(); ctx.ellipse(p.c.x, p.c.y, r, ry, 0, 0, TAU); ctx.fillStyle = g; ctx.fill(); ctx.stroke();
     }
   }
   ctx.restore();
+  return polys;
 }
 
 /** Draws the attachments of a figure that is drawn as lines: behind ones first, then in front. Returns the placed items. */
@@ -510,7 +528,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   }
   // A performance evaluates the gait, the channel settings and the position at its own frame; a plain cycle uses one set of values.
   const dog = params.rig === 'dog';
-  const terrain = !dog && params.terrain && params.terrain !== 'flat';
+  const terrain = params.terrain && params.terrain !== 'flat' && !(dog && (params.dogFlight || 0) > 0.5);
   const gyf = terrain ? (x) => groundAt(params, x) : () => 0; // the height of the ground
   const poser = dog ? poseDog : pose3;
   const perf = params.perf || null;
@@ -584,7 +602,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       ctx.fillStyle = hexA(st.guideColor, 0.38);
       for (const pl of perf ? perf.plants : dogPrints(params, target[0] - 4, target[0] + 4)) {
         if (Math.abs(pl.x - target[0]) > 4) continue;
-        const q = [[pl.x - 0.05, pl.z - 0.035], [pl.x + 0.12, pl.z - 0.035], [pl.x + 0.12, pl.z + 0.035], [pl.x - 0.05, pl.z + 0.035]].map(([x, zz]) => cam.p([x, 0, zz]));
+        const q = [[pl.x - 0.05, pl.z - 0.035], [pl.x + 0.12, pl.z - 0.035], [pl.x + 0.12, pl.z + 0.035], [pl.x - 0.05, pl.z + 0.035]].map(([x, zz]) => cam.p([x, gyf(pl.x), zz]));
         ctx.beginPath(); q.forEach((pt, i) => (i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y))); ctx.closePath(); ctx.fill();
       }
     } else if (st.showFootprints && perf) {
@@ -756,5 +774,5 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
     ctx.restore();
   }
-  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam: camF, pz, attach: placedAttach, handles, arcDots, fixHandle, sceneHits };
+  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam: camF, camWorld: cam, pz, attach: placedAttach, handles, arcDots, fixHandle, sceneHits };
 }

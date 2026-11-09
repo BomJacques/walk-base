@@ -39,6 +39,8 @@ export const DEFAULTS = Object.freeze({
   asymDuty: 0,          // far foot time on the ground, added to duty
   asymLift: 0,          // far foot lift, as a fraction more or less
   asymArm: 0,           // far arm swing, as a fraction more or less
+  hoseFollow: 0.6,      // rubber hose figure: how far the hands and feet trail behind the limb they are on (follow-through)
+  hoseStretch: 0.5,     // rubber hose figure: how far an arm or a swinging leg stretches when it reaches
   heading: 0,           // degrees the figure faces and walks away from straight along the stage (automate it to walk a curve or turn a corner)
   terrain: 'flat',      // the ground under the walk: flat | slope | steps
   terrainGrade: 8,      // degrees the ground rises (negative falls) along a slope

@@ -394,3 +394,33 @@ Not done (still open): a real human run with a flight phase (the walk rig keeps 
 - **More movements** (human and rubber hose): Jog, Sprint, Duck, Punch, Clap, Salute.
 - **Heading and path.** Heading (Gait tab, Direction) turns the figure to face and walk along a direction; automated, the path curves (the distance walked is turned by the heading at each moment). Movements: Turn right, Turn left, U-turn, Walk a curve, Face straight on (the pace eases through the bend); the dog and the other animals turn too. The camera follows, the ground grid follows, and the figure's drawing, selection, arcs and attachments all follow the path. Limits: feet are planted in the figure's own frame, so in a sharp turn a planted foot slides a little; footprints are hidden while the path bends; the other figures in a scene do not follow the heading, and terrain is measured along the stage, not along the path.
 - **One View tab** holds the camera (blue), the look (amber) and the guides (teal); the Look and Guides tabs are gone (old names still work in the code and in the tests).
+
+## Phase: stretchy hose limbs, dragging in the scene, terrain for animals (done, 2026-11-10)
+
+- **Rubber hose follow-through and stretch.** Follow-through: the wrist and hand drag behind the arm, and a swinging foot trails behind the leg and eases back to nothing as it lands and leaves the ground (a planted foot never moves). Stretchy limbs: an arm that reaches grows up to half again as long, and a leg that swings out stretches along the ground, never down through it. Both are Gait tab settings for the rubber hose figure (Follow-through, Stretchy limbs).
+- **Dragging in the scene.** Drag a scene figure or a piece of scenery along the ground on the stage; the main figure and pictures on it win over the scene. Along is always possible; depth needs a view from above or an angle. Not done: height (see the next phase).
+- **Terrain for the dog and the animals.** Slope and steps work for the dog and the other animals: each paw stands on the ground where it lands, the swinging paw clears the next step, the hips and shoulders ride near the lower paw of their pair, and the back tilts to carry the shoulders. Dog presets Uphill, Downhill, Up the steps. Not done for a flying bird.
+
+## Next phases (asked for 2026-11-10, in the order I would do them)
+
+**A. Selecting and touch controls (do first: everything else leans on it)**
+1. **Touch like Procreate.** Two fingers pan and pinch; one finger taps to select and drags to move what is under it; the camera orbit moves to a deliberate gesture (a dedicated Orbit tool, or two-finger twist). Today a single finger on empty space pans or orbits, which fights with selecting. Needs a real iPad to judge.
+2. **Select by tap, and context menus act on that object.** Tapping any figure or scenery object makes it the one every menu, panel and context menu applies to (the Body tab, colours, copy, delete, move). A small floating menu next to the selection (Copy, Paste, Duplicate, Delete, Colour, Height). The main figure is just another selectable figure.
+3. **Each figure has its own colours.** Fill, line and far-side tint per figure (today these are one setting for the whole stage); the rubber hose colours per figure too.
+4. **Move scenery up and down** (a Height slider and a drag handle), so a box can be lifted, a ball dropped from a height, a shelf set.
+
+**B. Working with the file**
+5. **Copy and paste.** Copy a figure, an object, a picture attachment, a lane or a span of frames, and paste it (with an offset).
+6. **Save.** A clear Save (and Save as) in the File menu with a visible saved or unsaved state; autosave to the browser already exists, so this is about a named file you can keep and reopen.
+7. **Help overlay.** A Help button that dims the screen and points at each part (top bar, stage tools, tabs, timeline) with one line each, plus a short list of gestures. Shown once on first visit, always available.
+
+**C. Making loops**
+8. **Seamless loop.** One button: find the nearest frame count and phase so the last frame joins the first with no jump, by adjusting the cycle length, the stride to the distance travelled and the start phase (and, for a performance, fading lanes to meet at the ends), then show the join. Checked by a test that compares frame 0 with frame N.
+
+**D. Menu clean-up**
+9. **Dark mode dropdowns.** The pop-up menus and the native pickers take the dark theme's background and text.
+10. **Remove the Preset dropdown for poses and keep labels off.** The pose labels (Cn, Dn, Pn, Un on the timeline) default to off and the pose pop-up is removed from the top bar.
+11. **Do we need layers?** A recommendation, not a build: not a full layer system. Three things already act as layers (figures, scenery, pictures) and the Scene list is the layer list. Worth adding: show or hide and lock per item, and drag to reorder depth within the Scene section. Revisit only if drawings (not figures) become something you paint.
+
+**E. More gait variety**
+12. **Noise and variety.** Small, repeatable randomness so a walk is not a metronome: wobble in stride length, step timing, bounce, hip sway, head, arms and hands, each with an amount and a speed (smooth noise, not jitter), a seed so a take can be repeated, and a Make it a loop option that keeps the noise periodic. Other body and gait ideas: a tired walk that sags over time, a weight carried on one side, a heel-to-toe and a flat-footed choice, an arm-swing phase shift, a drunk or wobbly walk (sway and stagger), and a mood slider that moves several settings together (happy, sad, sneaky, proud).

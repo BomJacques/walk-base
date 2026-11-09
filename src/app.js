@@ -55,7 +55,7 @@ let perfCache = null;
 function perfData() {
   const n = Math.max(2, Math.round(S.p.cycleFrames));
   // On uneven ground the figure has to keep going to climb, so a plain cycle becomes four cycles long.
-  const T = S.perfLen > 0 ? Math.round(S.perfLen) : S.p.rig !== 'dog' && S.p.terrain && S.p.terrain !== 'flat' ? n * 4 : n;
+  const T = S.perfLen > 0 ? Math.round(S.perfLen) : S.p.terrain && S.p.terrain !== 'flat' ? n * 4 : n;
   if (!hasLanes(S.lanes) && T === n) return null;
   const key = `${S.ver}|${T}|${JSON.stringify(S.p)}`;
   if (perfCache?.key !== key) { const dog = S.p.rig === 'dog';
@@ -431,6 +431,31 @@ function arcSection() {
         .map((p) => h('button', { type: 'button', class: `pchip arcchip${arcSide(p.id) ? '' : ' solo'}`, testid: `arc-${p.id}`, 'aria-pressed': String(on.has(p.id)), onClick: () => toggle(p.id, !on.has(p.id)) },
           h('span', { class: 'arcsw', style: `background:${arcColor(rig, p.id)}` }), h('span', null, wd(p.label))))))));
 }
+/** A figure or a piece of scenery from the scene under the finger, to drag along the ground. The main figure and a picture on it win over the scene. */
+function sceneDragStart(e, toFrame) {
+  const hits = S.last?.sceneHits; const q = toFrame(e.clientX, e.clientY);
+  if (!hits?.length || !q || !S.last.camWorld || S.source === 'sampled') return null;
+  if (pickPart(S.last.shapes.filter((s) => !s.attach), q.x, q.y) || pickAttachment(q, 'front')) return null;
+  const hit = [...hits].reverse().find((h) => pickPart(h.shapes, q.x, q.y)); if (!hit) return null;
+  const it = S.scene.actors.find((a) => a.id === hit.id) || S.scene.props.find((p) => p.id === hit.id); if (!it) return null;
+  pause();
+  return { scene: true, id: it.id, it, x0: it.x, z0: it.z, q0: q, cam: S.last.camWorld, moved: false };
+}
+/** Moves it so it stays under the finger on the ground. Along the stage is always possible; depth needs a view from above or an angle, since a side view cannot show it. */
+function sceneDragMove(d, e, toFrame) {
+  const q = toFrame(e.clientX, e.clientY); if (!q) return;
+  const c = d.cam; const o = c.p([d.x0, 0, d.z0]); const ax = c.p([d.x0 + 1, 0, d.z0]); const az = c.p([d.x0, 0, d.z0 + 1]);
+  const a11 = ax.x - o.x; const a21 = ax.y - o.y; const a12 = az.x - o.x; const a22 = az.y - o.y; const dx = q.x - d.q0.x; const dy = q.y - d.q0.y;
+  const det = a11 * a22 - a12 * a21; let nx = d.x0; let nz = d.z0;
+  if (Math.abs(det) > 1e-4 * c.scale * c.scale) { nx += (dx * a22 - dy * a12) / det; nz += (a11 * dy - a21 * dx) / det; } else if (Math.abs(a11) > 1e-6) nx += dx / a11;
+  d.it.x = Math.min(12, Math.max(-12, nx)); d.it.z = Math.min(8, Math.max(-8, nz)); d.moved = true;
+  S.ver++; render();
+}
+function sceneDragEnd(d) {
+  S.sceneSel = d.id; S.tab = 'Gait'; selectPart(null, { openTab: false });
+  if (d.moved) { save(); setMessage('Moved. Along and Depth in the Scene section of the Body tab give the exact place.'); }
+  renderPanel();
+}
 /** The attachment under a canvas point. Front ones win over the body; behind ones only where no body part is. */
 function pickAttachment(q, which) {
   const info = S.last; if (!info?.attach?.length) return null;
@@ -750,7 +775,7 @@ const DOG_KEYS = Object.keys(DEFAULTS).filter((k) => k.startsWith('dog'));
 const SHARED_KEYS = ['rig', 'fps', 'cycleFrames', 'exposure', 'travel'];
 function applyPreset(name) {
   const rig = S.p.rig; const fig = figKey();
-  const mine = rig === 'dog' ? DOG_KEYS : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
+  const mine = rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
   const reset = Object.fromEntries(mine.map((k) => [k, DEFAULTS[k]]));
   const { camYaw, ...presetP } = presetsForFigure(fig)[name] || {}; // a preset may also turn the camera, to show its movement best
   S.p = { ...S.p, ...reset, ...presetP, rig, model: S.p.model };
@@ -1845,14 +1870,14 @@ function gestures() {
   };
   stage.addEventListener('pointerdown', (e) => {
     stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (ptrs.size === 1) { drag = attachDragStart(e, toFrame) || fixDragStart(e, toFrame) || arcDragStart(e, toFrame); if (drag) { down = null; start = null; return; } }
+    if (ptrs.size === 1) { drag = attachDragStart(e, toFrame) || fixDragStart(e, toFrame) || arcDragStart(e, toFrame) || sceneDragStart(e, toFrame); if (drag) { down = null; start = null; return; } }
     start = snap();
     down = ptrs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false, yaw: S.s.camYaw, pitch: S.s.camPitch } : null;
   });
   stage.addEventListener('pointermove', (e) => {
     if (!ptrs.has(e.pointerId)) return;
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (drag) { (drag.arc ? arcDragMove : drag.fix ? fixDragMove : attachDragMove)(drag, e, toFrame); return; }
+    if (drag) { (drag.arc ? arcDragMove : drag.fix ? fixDragMove : drag.scene ? sceneDragMove : attachDragMove)(drag, e, toFrame); return; }
     const pts = [...ptrs.values()];
     if (!start) return;
     if (pts.length >= 2) {
@@ -1872,7 +1897,7 @@ function gestures() {
     render();
   });
   const up = (e) => {
-    if (drag) { if (drag.arc || drag.fix) { renderPanel(); save(); } else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
+    if (drag) { if (drag.arc || drag.fix) { renderPanel(); save(); } else if (drag.scene) sceneDragEnd(drag); else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     const was = down; const had = ptrs.has(e.pointerId);
     ptrs.delete(e.pointerId);
     if (had && was && !was.moved && performance.now() - was.t < 500) {

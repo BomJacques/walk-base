@@ -1,6 +1,6 @@
 // 3D dog rig. Joints are in shoulder heights (a standing dog's withers are about 1.0 high): x forward, y up, z to the dog's right.
 // Like the human it is built on channels, so every part can be tuned, drawn by hand and automated. The four paws are planted by IK.
-import { DEFAULTS } from './rig.js';
+import { DEFAULTS, groundAt } from './rig.js';
 import { DOG_GAITS, speciesOf } from './dogdefaults.js';
 import { makeEvaluator } from './motion.js';
 import { paramsAt } from './automation.js';
@@ -133,11 +133,32 @@ export function poseDog(params, motion, u, extra = null) {
 
   // Spine: the hips are the root; the back is tilted so the shoulders sit at the height the front legs need.
   const spineLen = lens[0] + lens[1] + lens[2];
-  const rise = heights.shoulder + L.shoulderDrop - heights.hip;
+  // Uneven ground: each paw stands on the ground where it lands, a swinging paw lifts to clear what is ahead, the hips ride at the height under the hind paws,
+  // and the back tilts to carry the shoulders at the height under the front paws.
+  const terr = p.terrain && p.terrain !== 'flat' && fl < 0.5;
+  const tilt0 = biped ? -rad(p.dogTilt) : -Math.asin(clamp((heights.shoulder + L.shoulderDrop - heights.hip) / spineLen, -0.6, 0.6));
+  const restX0 = spineLen * Math.cos(tilt0) - L.shoulderBack;
+  const wx = extra?.worldX ?? uw * p.dogStride;
+  const tG = {}; let gHind = 0; let gFront = 0;
+  if (terr) {
+    const gs = { H: [], F: [] };
+    for (const leg4 of legsOf(p)) {
+      const front0 = leg4[0] === 'F'; const gt = pawGait(p, leg4); const w0 = wrap(uw - gt.ph); const Dp0 = gt.duty === p.dogDuty ? D : stanceTravel(p, sc, gt.duty);
+      const f0 = p.dogGait === 'gallop' ? gallopPawPath(w0, gt.duty, Dp0, gt.lift, front0) : p.dogGait === 'run' ? runPawPath(w0, gt.duty, Dp0, gt.lift) : pawPath(w0, gt.duty, Dp0, gt.lift);
+      const x = wx + (front0 ? restX0 : 0) + f0.x; const g0 = groundAt(p, x); const ahead = groundAt(p, x + 0.3);
+      const swing = f0.stance ? 0 : clamp(f0.y / Math.max(0.01, gt.lift), 0, 1);
+      tG[leg4] = { y: g0 + Math.max(0, ahead - g0) * swing, slope: Math.atan2(groundAt(p, x + 0.06) - groundAt(p, x - 0.06), 0.12) * (1 - swing) };
+      gs[front0 ? 'F' : 'H'].push(g0);
+    }
+    // The hips and the shoulders ride near the lower paw of their pair, so the higher leg bends and the lower one never overreaches.
+    const near = (a) => { if (!a.length) return null; const lo = Math.min(...a); return lo + 0.12 * (Math.max(...a) - lo); };
+    gHind = near(gs.H) ?? 0; gFront = near(gs.F) ?? gHind;
+  }
+  const rise = heights.shoulder + L.shoulderDrop - heights.hip + (gFront - gHind);
   const baseTilt = biped ? -rad(p.dogTilt) : -Math.asin(clamp(rise / spineLen, -0.6, 0.6));
   // In flight the body rises on each down-stroke of the wings and sinks on each up-stroke.
   const flightLift = fl * (p.dogFlightHeight - Math.min(1, clamp(p.dogFlap / 40, 0, 1.5)) * 0.07 * Math.sin(flapPhase));
-  const P = [c('pelvis.x'), heights.hip + c('pelvis.y') + flightLift, c('pelvis.z')];
+  const P = [c('pelvis.x'), heights.hip + c('pelvis.y') + flightLift + gHind, c('pelvis.z')];
   const Rp = seg(c('pelvis.yaw'), c('pelvis.pitch') + baseTilt, c('pelvis.roll'));
   const R1 = mm(Rp, seg(c('spine1.yaw'), c('spine1.pitch'), c('spine1.roll')));
   const R2 = mm(R1, seg(c('spine2.yaw'), c('spine2.pitch'), c('spine2.roll')));
@@ -196,9 +217,9 @@ export function poseDog(params, motion, u, extra = null) {
     const f = p.dogGait === 'gallop' ? gallopPawPath(w, g.duty, Dp, g.lift, front) : p.dogGait === 'run' ? runPawPath(w, g.duty, Dp, g.lift) : pawPath(w, g.duty, Dp, g.lift);
     const ang = front ? PASTERN_LEAN : HOCK_LEAN;
     const bone = (front ? L.pastern : L.meta) * leg;
-    const pitch = f.theta + k('paw.pitch');
+    const pitch = f.theta + k('paw.pitch') + (tG[leg4]?.slope ?? 0);
     const lean = ang - 0.6 * pitch;
-    const pawC = [(front ? shoulderRestX : 0) + f.x + k('paw.x'), L.paw + f.y + k('paw.y'), s * k('paw.z')];
+    const pawC = [(front ? shoulderRestX : 0) + f.x + k('paw.x'), L.paw + f.y + k('paw.y') + (tG[leg4]?.y ?? 0), s * k('paw.z')];
     const targetWalk = add(pawC, [-bone * Math.sin(lean), bone * Math.cos(lean), 0]);
     const target = !front && fl > 0 ? mixv(targetWalk, add(P, apply(Rp, [-0.32 * leg, -0.2 * leg, s * 0.05])), fl) : targetWalk;
     // Front leg: the shoulder blade is a bone of its own. Its top rides on the ribs by the withers (it slides and drops there),
@@ -243,7 +264,7 @@ export function poseDog(params, motion, u, extra = null) {
     }
     legs[leg4] = { front, side, s, top, root, mid: ik.knee, wrist: ik.ankle, paw: pawF, toe, reached: ik.reached, stance: f.stance && fl < 0.5, w, theta: pitch };
   }
-  return { u: uw, pelvisX: extra?.worldX ?? uw * p.dogStride, params: p, pelvis: P, Rp, R1, R2, R3, Rn, Rh, Rj, j1, j2, j3, neckBase, neckTop, neck, headC, noseTip, hinge, jawEnd, ears, tail, legs, heights, baseTilt };
+  return { u: uw, pelvisX: extra?.worldX ?? uw * p.dogStride, params: p, groundY: gHind, pelvis: P, Rp, R1, R2, R3, Rn, Rh, Rj, j1, j2, j3, neckBase, neckTop, neck, headC, noseTip, hinge, jawEnd, ears, tail, legs, heights, baseTilt };
 }
 
 /** Where each paw lands during a performance, for the footprint guide. s is the result of integrate(). */

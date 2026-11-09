@@ -55,6 +55,16 @@ check('and undo brings it back', (await ev(() => window.__walkBase.S.scene.actor
 // a second figure keeps in step: its place relative to the main figure is the same on the last frame of the cycle as on the first
 const drift = await ev(() => { const w = window.__walkBase; const at = (f) => { w.setFrame(f); w.render(); const h = w.S.last.sceneHits[0].shapes.find((x) => x.part === 'spine.mid'); const m = w.S.last.shapes.find((x) => x.part === 'spine.mid'); return h.pts.reduce((t, q) => t + q[0], 0) / h.pts.length - m.pts.reduce((t, q) => t + q[0], 0) / m.pts.length; }; const n = w.S.p.cycleFrames; return [at(0), at(n - 1), at(1)]; });
 check('a second figure does not creep ahead and snap back round the loop', Math.abs(drift[1] - drift[0]) < 40 && Math.abs(drift[2] - drift[0]) < 40, drift);
+// dragging a figure and a piece of scenery along the ground
+await ev(() => { const w = window.__walkBase; w.S.s.camYaw = -30; w.S.s.camPitch = 35; w.S.scene.actors[0].x = 2; w.S.scene.actors[0].z = 0.8; w.setFrame(3); w.render(); }); await wait(150);
+const centre = (id) => ev((i) => { const w = window.__walkBase; const hit = w.S.last.sceneHits.find((h) => h.id === i); const sh = hit.shapes.find((x) => x.part === 'spine.mid') || hit.shapes[0]; const cx = sh.pts.reduce((t, q) => t + q[0], 0) / sh.pts.length; const cy = sh.pts.reduce((t, q) => t + q[1], 0) / sh.pts.length; const m = w.S.map; const r = document.querySelector('[data-testid="stage"]').getBoundingClientRect(); return { x: r.left + (m.x0 + (cx / m.fcw) * m.zw) / m.d, y: r.top + (m.y0 + (cy / m.fch) * m.zh) / m.d }; }, id);
+const before = await ev(() => { const a = window.__walkBase.S.scene.actors[0]; return [a.x, a.z]; });
+const c0 = await centre(tap.id);
+await page.mouse.move(c0.x, c0.y); await page.mouse.down(); await page.mouse.move(c0.x + 60, c0.y + 30, { steps: 6 }); await page.mouse.move(c0.x + 120, c0.y + 60, { steps: 6 }); await page.mouse.up(); await wait(250);
+const after = await ev(() => { const a = window.__walkBase.S.scene.actors[0]; return [a.x, a.z]; });
+check('dragging a figure moves it along the ground', Math.abs(after[0] - before[0]) > 0.2 || Math.abs(after[1] - before[1]) > 0.2, { before, after });
+check('and it stays selected', (await ev(() => window.__walkBase.S.sceneSel)) === (await ev(() => window.__walkBase.S.scene.actors[0].id)), await ev(() => ({ sel: window.__walkBase.S.sceneSel, a0: window.__walkBase.S.scene.actors[0].id, tap: null })));
+const orbit = await ev(() => window.__walkBase.S.s.camYaw); check('dragging a figure does not orbit the camera', orbit === -30, orbit);
 // scenery
 for (const k of ['tree', 'wall', 'box', 'ball', 'step', 'pillar', 'lamp', 'fence', 'rock']) { await q('scene-add-prop').click(); await page.locator(`[data-testid="scene-prop-${k}"]`).click(); await wait(60); }
 const props = await ev(() => window.__walkBase.S.scene.props.map((p) => p.type));

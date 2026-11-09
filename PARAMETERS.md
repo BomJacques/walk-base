@@ -26,11 +26,13 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Far foot lands late | human | cycle | -0.12 to 0.12 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
 | Far foot time on ground | human |  | -0.15 to 0.15 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
 | Far foot lift | human |  | -0.8 to 0.8 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
-| Heading | human | ° | -180 to 180 | 0 | Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends. |
-| Ground | human |  | flat, slope, steps | flat | What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step. |
-| Slope | human | ° | -30 to 30 | 8 | How steeply the ground rises along the slope (negative goes downhill). |
-| Step height | human | legs | -0.3 to 0.3 | 0.14 | Height of each step, in leg lengths (negative goes down). |
-| Step length | human | legs | 0.3 to 2.5 | 1 | Length of the flat top of each step. |
+| Follow-through | human |  | 0 to 1.5 | 0.6 | Hands and swinging feet trail behind the arm or leg they are on and catch up after, so a limb flows instead of moving all at once. 0 is stiff. |
+| Stretchy limbs | human |  | 0 to 1.5 | 0.5 | An arm that reaches, or a leg that swings out, stretches longer, up to half again at 1. 0 keeps every limb the same length. |
+| Heading | both | ° | -180 to 180 | 0 | Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends. |
+| Ground | both |  | flat, slope, steps | flat | What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step. |
+| Slope | both | ° | -30 to 30 | 8 | How steeply the ground rises along the slope (negative goes downhill). |
+| Step height | both | legs | -0.3 to 0.3 | 0.14 | Height of each step, in leg lengths (negative goes down). |
+| Step length | both | legs | 0.3 to 2.5 | 1 | Length of the flat top of each step. |
 | Far arm swing | human |  | -0.8 to 0.8 | 0 | The far arm swings more or less than the near one. |
 | Forward lean | human | ° | -15 to 30 | 4 | Torso tilt. Negative leans back. |
 | Torso rock | human | ° | 0 to 10 | 1.6 | Extra tilt that rocks with each step. |

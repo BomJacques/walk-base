@@ -34,6 +34,8 @@ const RAW_CONTROLS = [
   n('p', 'asymTiming', 'Gait', 'Left and right', 'Far foot lands late', 'cycle', -0.12, 0.12, 0.005, 'Moves the far foot off its half-cycle: the two steps become unequal, one short and one long.'),
   n('p', 'asymDuty', 'Gait', 'Left and right', 'Far foot time on ground', '', -0.15, 0.15, 0.005, 'Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp.'),
   n('p', 'asymLift', 'Gait', 'Left and right', 'Far foot lift', '', -0.8, 0.8, 0.01, 'The far foot lifts more (positive) or less (negative) than the near one.'),
+  n('p', 'hoseFollow', 'Gait', 'Rubber hose', 'Follow-through', '', 0, 1.5, 0.05, 'Hands and swinging feet trail behind the arm or leg they are on and catch up after, so a limb flows instead of moving all at once. 0 is stiff.'),
+  n('p', 'hoseStretch', 'Gait', 'Rubber hose', 'Stretchy limbs', '', 0, 1.5, 0.05, 'An arm that reaches, or a leg that swings out, stretches longer, up to half again at 1. 0 keeps every limb the same length.'),
   n('p', 'heading', 'Gait', 'Direction', 'Heading', '°', -180, 180, 1, 'Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends.'),
   e('p', 'terrain', 'Gait', 'Ground', 'Ground', ['flat', 'slope', 'steps'], 'What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step.'),
   n('p', 'terrainGrade', 'Gait', 'Ground', 'Slope', '°', -30, 30, 0.5, 'How steeply the ground rises along the slope (negative goes downhill).'),
@@ -183,7 +185,7 @@ const RAW_CONTROLS = [
 export const CONTROLS = RAW_CONTROLS.map((c) => (c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : c.tab === 'Look' || c.tab === 'Guides' ? { ...c, tab: 'View', area: c.tab } : { ...c, area: c.tab }));
 
 /** Which figure a control belongs to: 'both', 'human' or 'dog'. Timing, camera, look, guides and export are shared. */
-const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel']);
+const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel', 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading']);
 export const rigOf = (c) => (c.scope === 'p' || c.scope === 'r' ? (SHARED_P.has(c.id) ? 'both' : c.id.startsWith('dog') || (c.scope === 'r' && c.id.length > 1 && c.id[0] === 'd' && c.id[1] === c.id[1].toUpperCase()) ? 'dog' : 'human') : 'both');
 export const shownFor = (c, rig) => rigOf(c) === 'both' || rigOf(c) === rig;
 
@@ -235,6 +237,9 @@ export const PRESETS_DOG = {
   Gallop: { dogGait: 'gallop', dogStride: 2.6, dogDuty: 0.22, dogLift: 0.38, dogBob: 0.2, dogFlex: 3, dogArch: 0, dogCurl: 18, dogTwist: 2, dogShoulder: 0.07, dogWidth: 0.07, dogHeadNod: 6, dogEar: 18, dogTailAngle: 10, dogWag: 6, cycleFrames: 12 },
   Sniffing: { dogStride: 0.55, dogLift: 0.08, dogNeckAngle: 15, dogHeadAngle: 55, dogTailAngle: 8, dogWag: 8, cycleFrames: 32, dogBob: 0.015 },
   Limp: { dogStride: 0.7, dogLift: 0.1, dogDuty: 0.7, dogAsymDuty: -0.14, dogAsymLift: -0.5, dogAsymTiming: 0.04, dogBob: 0.03, dogNeckAngle: 44, dogHeadAngle: 40, dogWag: 4, cycleFrames: 28 },
+  Uphill: { dogStride: 0.85, dogLift: 0.17, dogBob: 0.04, dogDuty: 0.64, terrain: 'slope', terrainGrade: 12, dogNeckAngle: 46, dogHeadAngle: 30, cycleFrames: 24 },
+  Downhill: { dogStride: 0.85, dogLift: 0.12, dogBob: 0.035, dogDuty: 0.66, terrain: 'slope', terrainGrade: -12, dogNeckAngle: 56, dogHeadAngle: 34, cycleFrames: 24 },
+  'Up the steps': { dogStride: 0.8, dogLift: 0.2, dogBob: 0.04, dogDuty: 0.66, terrain: 'steps', terrainRise: 0.12, terrainRun: 0.8, cycleFrames: 28 },
   'Old dog': { dogStride: 0.6, dogLift: 0.06, dogDuty: 0.74, dogBob: 0.012, dogFlex: 3, dogArch: 1, dogTwist: 3, dogShoulder: 0.025, dogNeckAngle: 38, dogHeadAngle: 42, dogTailAngle: 0, dogWag: 6, cycleFrames: 36 },
 };
 /** Presets for the other legged figures. Each one names its species, so choosing it sets the whole figure. Units are the figure's own heights. */
