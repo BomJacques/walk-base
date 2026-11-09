@@ -7,8 +7,8 @@ const FIGS = ['human', 'hose', 'dog', 'theropod', 'bird', 'sauropod', 'ceratopsi
 
 test('every kind of scenery builds, with sensible faces', () => {
   for (const k of PROP_KINDS) {
-    const q = newProp(k.id); const { faces, balls } = propParts(q);
-    assert.ok(faces.length + balls.length > 0, k.id);
+    const q = newProp(k.id); const { faces, balls, image, line } = propParts(q);
+    assert.ok(faces.length + balls.length > 0 || image || line, k.id);
     for (const f of faces) { assert.ok(f.pts.length >= 3 && f.pts.every((p) => p.every(Number.isFinite)), k.id); assert.ok(Math.abs(Math.hypot(...f.normal) - 1) < 1e-6, `${k.id} normal`); }
   }
 });
@@ -53,4 +53,17 @@ test('scenery can be raised off the ground, and a figure has its own colours', (
   assert.deepEqual([s.actors[0].fill, s.actors[0].line, s.actors[0].tint], ['#ff0000', '#00ff00', '#0000ff']);
   assert.deepEqual([s.actors[1].fill, s.actors[1].line], ['', '#123456'], 'a bad colour falls back to the main figure colour');
   assert.equal(s.props[0].y, 8);
+});
+
+test('line-drawn scenery and pictures', () => {
+  for (const id of ['tree', 'pine', 'bush']) { const q = newProp(id, { x: 1, z: 2, y: 0.5 }); const { line } = propParts(q); assert.ok(line && line.kind.startsWith('l') && line.h > 0, id); assert.deepEqual(line.base, [1, 0.5, 2]); }
+  const pic = newProp('picture', { img: 'abc', asp: 0.5, w: 2, x: 0, z: 0, rot: 0 }); const { image } = propParts(pic);
+  assert.equal(image.corners.length, 4); assert.equal(image.img, 'abc');
+  const ys = image.corners.map((c) => c[1]); assert.equal(Math.min(...ys), 0); assert.ok(Math.abs(Math.max(...ys) - 1) < 1e-9, 'its height is its width times its shape');
+  assert.ok(image.corners.every((c) => Math.abs(c[2]) < 1e-9), 'it faces the camera in the side view');
+  const turned = propParts({ ...pic, rot: 90 }).image.corners; assert.ok(turned.some((c) => Math.abs(c[2]) > 0.9), 'turning it swings it round');
+  const flipped = propParts({ ...pic, flip: true }).image.corners; assert.ok(flipped[0][0] > flipped[1][0], 'flipping mirrors it');
+  const s = cleanScene({ props: [pic, { ...pic, img: 5, asp: 999, flip: 1 }, { type: 'picture', img: 'x'.repeat(80) }] }, ['human'], DEFAULTS);
+  assert.equal(s.props[0].img, 'abc'); assert.equal(s.props[1].img, ''); assert.equal(s.props[1].asp, 20); assert.equal(s.props[1].flip, true); assert.equal(s.props[2].img.length, 40);
+  assert.equal(cleanScene({ props: [{ type: 'tree' }] }, ['human'], DEFAULTS).props[0].kind, 'ltree', 'an old saved tree becomes a line-drawn one');
 });

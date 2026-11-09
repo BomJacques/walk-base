@@ -174,6 +174,8 @@ for (const [pre, nm] of [['f', 'front'], ['h', 'hind']]) {
 }
 
 /** Channel ids for R and L: 'arm.pitch' becomes 'arm.pitch.R' and 'arm.pitch.L'. */
+// Room to exaggerate: every channel's offset range is twice as wide, positive and negative.
+for (const c of C) if (Number.isFinite(c.min) && Number.isFinite(c.max)) { c.min = +(c.min * 2).toFixed(4); c.max = +(c.max * 2).toFixed(4); }
 export const CHANNELS = C.flatMap((c) => (c.sided ? [{ ...c, id: `${c.id}.R`, base: c.id, side: 'R', shift: 0 }, { ...c, id: `${c.id}.L`, base: c.id, side: 'L', shift: 0.5 }] : [{ ...c, base: c.id, side: null, shift: 0 }]));
 export const CHANNEL_BY_ID = Object.fromEntries(CHANNELS.map((c) => [c.id, c]));
 

@@ -16,14 +16,17 @@ export const PROP_KINDS = [
   { id: 'pillar', label: 'Pillar', kind: 'cylinder', w: 0.35, d: 0.35, h: 2, color: '#d6d0c4' },
   { id: 'lamp', label: 'Lamp post', kind: 'lamp', w: 0.12, d: 0.12, h: 2.4, color: '#3d4045' },
   { id: 'ball', label: 'Ball', kind: 'ball', w: 0.5, d: 0.5, h: 0.5, color: '#d0504a' },
-  { id: 'tree', label: 'Tree', kind: 'tree', w: 0.22, d: 0.22, h: 2.6, color: '#5c9a5a' },
+  { id: 'tree', label: 'Tree', kind: 'ltree', w: 0.26, d: 0.26, h: 2.6, color: '#8fbf7a' },
+  { id: 'pine', label: 'Pine', kind: 'lpine', w: 0.22, d: 0.22, h: 3.2, color: '#7fae8a' },
+  { id: 'bush', label: 'Bush', kind: 'lbush', w: 1, d: 1, h: 0.75, color: '#9ccc8a' },
+  { id: 'picture', label: 'Picture…', kind: 'image', w: 2.4, d: 0.05, h: 1.4, color: '#ffffff' },
   { id: 'rock', label: 'Rock', kind: 'ball', w: 0.9, d: 0.9, h: 0.55, color: '#8a8d91' },
 ];
 export const PROP_BY_ID = Object.fromEntries(PROP_KINDS.map((k) => [k.id, k]));
 
 export function newProp(id, over = {}) {
   const k = PROP_BY_ID[id] || PROP_KINDS[0];
-  return { id: sceneId(), type: k.id, name: k.label, kind: k.kind, x: 0.8, y: 0, z: -0.9, rot: 0, w: k.w, d: k.d, h: k.h, color: k.color, visible: true, locked: false, ...over };
+  return { id: sceneId(), type: k.id, name: k.label, kind: k.kind, x: 0.8, y: 0, z: -0.9, rot: 0, w: k.w, d: k.d, h: k.h, color: k.color, visible: true, locked: false, img: '', asp: 0.6, flip: false, ...over };
 }
 /** A figure to put in the scene. params is the whole parameter set of its walk (the same keys as the main figure), r its proportions. */
 export function newActor(fig, name, params, proportions, over = {}) {
@@ -48,7 +51,7 @@ export function cleanScene(raw, figs, defaults) {
     if (!q || !PROP_BY_ID[q.type]) continue;
     const k = PROP_BY_ID[q.type];
     out.props.push({ id: String(q.id || sceneId()).slice(0, 40), type: k.id, name: String(q.name || k.label).slice(0, 40), kind: k.kind, x: num(q.x, 0, -12, 12), y: num(q.y, 0, -3, 8), z: num(q.z, 0, -8, 8), rot: num(q.rot, 0, -360, 360),
-      w: num(q.w, k.w, 0.03, 8), d: num(q.d, k.d, 0.03, 8), h: num(q.h, k.h, 0.03, 8), color: col(q.color, k.color), visible: q.visible !== false, locked: Boolean(q.locked) });
+      w: num(q.w, k.w, 0.03, 8), d: num(q.d, k.d, 0.03, 8), h: num(q.h, k.h, 0.03, 8), color: col(q.color, k.color), visible: q.visible !== false, locked: Boolean(q.locked), img: typeof q.img === 'string' ? q.img.slice(0, 40) : '', asp: num(q.asp, 0.6, 0.05, 20), flip: Boolean(q.flip) });
   }
   return out;
 }
@@ -79,6 +82,11 @@ export function prismFaces(q, sides = 4, radiusRatio = 1, y0 = 0, y1 = q.h, w = 
 
 /** Everything a prop is made of, back to front is left to the caller: { faces: [{pts, normal, color}], balls: [{c, r, color}] }. */
 export function propParts(q) {
+  if (q.kind === 'image') { // a flat picture standing on the ground, turned about its middle
+    const w = q.w; const hh = q.w * (q.asp || 0.6); const L = q.flip ? w / 2 : -w / 2; const R = q.flip ? -w / 2 : w / 2;
+    return { faces: [], balls: [], shade: (c) => c, image: { img: q.img, corners: [place(q, L, 0, 0), place(q, R, 0, 0), place(q, R, hh, 0), place(q, L, hh, 0)] } };
+  }
+  if (q.kind === 'ltree' || q.kind === 'lpine' || q.kind === 'lbush') return { faces: [], balls: [], shade: (c) => c, line: { kind: q.kind, base: place(q, 0, 0, 0), h: q.h, w: q.w, color: q.color, id: q.id } };
   const shade = (c, k) => { const n = parseInt(c.slice(1), 16); const f = (v) => Math.max(0, Math.min(255, Math.round(v * k))); return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`; };
   const faces = []; const balls = [];
   const add = (fs, color) => fs.forEach((f) => faces.push({ ...f, color }));

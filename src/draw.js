@@ -18,7 +18,13 @@ import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './a
 import { propParts, faceLight } from './scene.js';
 
 export const STYLE_DEFAULTS = Object.freeze({
-  style: 'mannequin',        // mannequin | outline | stick | silhouette
+  style: 'mannequin',        // mannequin | outline | stick | silhouette | moebius
+  moebiusLight: -135,        // the direction the light comes from, in degrees on the screen (-135 is the top left)
+  moebiusAngle: 50,          // the angle of the hatching, in degrees
+  moebiusDensity: 4.5,       // the gap between hatching lines, in pixels at the 1080 line frame
+  moebiusShade: 0.5,         // how far the shadow reaches round each form (0 none, 1 nearly all)
+  moebiusStipple: 0.4,       // dots along the edge of the shadow
+  moebiusPaper: true,        // the stage is the colour of paper
   lineWidth: 3,
   lineColor: '#26231f',
   fillColor: '#f6f1e7',
@@ -281,6 +287,43 @@ function pivotOf(pz, cam, part, side) {
   return pt ? cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]) : null;
 }
 
+/**
+ * Shading in the manner of a pen drawing: instead of a grey tone the form is hatched with fine parallel lines on the side away from the light, cross-hatched where it is deepest, with a few dots
+ * along the edge of the shadow. The shadow is a half plane across the form, so the hatching reads as a form turning away from the light. Everything is clipped to the shape.
+ */
+function hatchShape(ctx, pts, st, cam, key) {
+  if (pts.length < 3) return;
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+  for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const cx = (x0 + x1) / 2; const cy = (y0 + y1) / 2; const R = Math.hypot(x1 - x0, y1 - y0) / 2;
+  if (R < 6 * cam.k) return;
+  const la = ((st.moebiusLight ?? -135) * Math.PI) / 180; const sx = -Math.cos(la); const sy = -Math.sin(la); const px = -sy; const py = sx; // the shadow side, and across it
+  const reach = Math.max(0, Math.min(1, st.moebiusShade ?? 0.5)); const thr = R * (0.6 - 1.1 * reach);
+  const sp = Math.max(2, (st.moebiusDensity ?? 4.5) * cam.k); const ang = ((st.moebiusAngle ?? 50) * Math.PI) / 180;
+  ctx.save();
+  ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.clip();
+  const halfPlane = (t) => { // everything further along the shadow direction than t
+    const ax = cx + sx * t + px * R * 3; const ay = cy + sy * t + py * R * 3; const bx = cx + sx * t - px * R * 3; const by = cy + sy * t - py * R * 3;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(bx + sx * R * 3, by + sy * R * 3); ctx.lineTo(ax + sx * R * 3, ay + sy * R * 3); ctx.closePath(); ctx.clip();
+  };
+  const hatch = (a, gap) => {
+    const dx = Math.cos(a); const dy = Math.sin(a); const nx = -dy; const ny = dx;
+    ctx.beginPath(); for (let k = -R * 1.5; k <= R * 1.5; k += gap) { ctx.moveTo(cx + nx * k - dx * R * 2, cy + ny * k - dy * R * 2); ctx.lineTo(cx + nx * k + dx * R * 2, cy + ny * k + dy * R * 2); } ctx.stroke();
+  };
+  ctx.strokeStyle = st.lineColor; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(0.6, cam.lw * 0.38);
+  ctx.save(); halfPlane(thr); hatch(ang, sp);
+  ctx.save(); halfPlane(thr + R * 0.5); hatch(ang + 1.2, sp * 1.25); ctx.restore(); ctx.restore();
+  const dots = st.moebiusStipple ?? 0;
+  if (dots > 0) {
+    const rand = rng(key); const n = Math.round(dots * ((R * R) / (sp * sp)) * 0.7); ctx.fillStyle = st.lineColor;
+    for (let i = 0, got = 0; i < n * 6 && got < n; i++) {
+      const a = rand() * Math.PI * 2; const d = R * Math.sqrt(rand()); const x = cx + Math.cos(a) * d; const y = cy + Math.sin(a) * d;
+      const t = (x - cx) * sx + (y - cy) * sy; if (t > thr || t < thr - R * 0.4) continue;
+      ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, cam.lw * 0.3), 0, Math.PI * 2); ctx.fill(); got++;
+    }
+  }
+  ctx.restore();
+}
 function paintShape(ctx, sh, cam, st, ghost) {
   if (sh.pts.length < 3) return;
   const far = sh.role === 'far';
@@ -289,6 +332,10 @@ function paintShape(ctx, sh, cam, st, ghost) {
   ctx.closePath();
   if (st.style === 'silhouette' && !ghost) { ctx.fillStyle = st.lineColor; ctx.fill(); return; }
   // Outline: the whole figure's edge was already drawn in a first pass, so this fill covers every line inside it.
+  if (st.style === 'moebius' && !ghost) { // flat soft colour, then the hatching
+    ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill();
+    hatchShape(ctx, sh.pts, st, cam, `${sh.part}${sh.side}`); return;
+  }
   if (st.style === 'outline' && !ghost) { ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill(); return; }
   if (st.style === 'mannequin') {
     ctx.fillStyle = ghost ? hexA(ghost, 0.1) : sh.fill ?? (far ? hexA(st.farTint, st.farOpacity * 0.55) : hexA(st.fillColor, st.fillOpacity));
@@ -343,8 +390,74 @@ function sceneDrawables(ctx, params, st, cam, env) {
   return out.sort((a, b) => a.d - b.d);
 }
 /** A prop: its faces and balls, back to front, lit from above and the side. */
+/** A small repeatable random number generator, so a line-drawn tree is the same every frame. */
+const rng = (id) => { let h = 2166136261; for (let i = 0; i < String(id).length; i++) { h ^= String(id).charCodeAt(i); h = Math.imul(h, 16777619); } return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; }; };
+/** A picture standing on the ground: its four corners, mapped from the picture with one affine step (the camera does not bend straight lines). */
+function paintImageProp(ctx, im, cam, st) {
+  const c = im.corners.map((w) => cam.p(w)); const info = imageInfo(im.img); const poly = c.map((p) => [p.x, p.y]);
+  ctx.save();
+  if (info) {
+    const iw = info.img.naturalWidth; const ih = info.img.naturalHeight;
+    ctx.setTransform(...(() => { const m = ctx.getTransform(); const q = [(c[2].x - c[3].x) / iw, (c[2].y - c[3].y) / iw, (c[0].x - c[3].x) / ih, (c[0].y - c[3].y) / ih, c[3].x, c[3].y]; return [m.a * q[0] + m.c * q[1], m.b * q[0] + m.d * q[1], m.a * q[2] + m.c * q[3], m.b * q[2] + m.d * q[3], m.a * q[4] + m.c * q[5] + m.e, m.b * q[4] + m.d * q[5] + m.f]; })());
+    ctx.drawImage(info.img, 0, 0);
+  } else { ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw; ctx.beginPath(); c.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.moveTo(c[0].x, c[0].y); ctx.lineTo(c[2].x, c[2].y); ctx.moveTo(c[1].x, c[1].y); ctx.lineTo(c[3].x, c[3].y); ctx.stroke(); }
+  ctx.restore();
+  return [poly];
+}
+/**
+ * A tree, a pine or a bush drawn as line work, the way the figure is: a thick outline round the whole shape with the fill laid over the inside lines, so only the outer edge shows, then a few strokes for
+ * the bark and the leaves. It follows the figure's style (an outline, bare lines, or a solid shape) and is the same every frame. It always faces the camera, as a drawing does.
+ */
+function paintLineProp(ctx, L, cam, st) {
+  const B = cam.p(L.base); const s = cam.scale; const H = L.h * s; const W = Math.max(L.w * s, 4);
+  const rand = rng(L.id); const shapes = []; const marks = []; let x0 = B.x; let x1 = B.x; let y0 = B.y; let y1 = B.y;
+  const grow = (x, y) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
+  const circle = (cx, cy, r, fill) => { shapes.push({ fill, draw: () => ctx.arc(cx, cy, r, 0, TAU) }); grow(cx - r, cy - r); grow(cx + r, cy + r); };
+  const poly = (pts, fill) => { shapes.push({ fill, draw: () => pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))) }); pts.forEach(([x, y]) => grow(x, y)); };
+  const leaf = hexA(L.color, 1); const lit = mixHex(L.color, '#ffffff', 0.55); const wood = st.fillColor;
+  const trunk = (h0, h1, wBase, wTop) => { // a trunk from the ground to h1 of the height, a little wider at the foot
+    const top = B.y - H * h1; const sway = (rand() - 0.5) * W * 0.3;
+    poly([[B.x - wBase / 2, B.y], [B.x - wBase * 0.34, B.y - H * h0], [B.x - wTop / 2 + sway, top], [B.x + wTop / 2 + sway, top], [B.x + wBase * 0.34, B.y - H * h0], [B.x + wBase / 2, B.y]], wood);
+    for (let i = 0; i < 3; i++) { const y = B.y - H * (0.06 + 0.5 * h1 * rand()); const dx = (rand() - 0.5) * wBase * 0.4; marks.push([B.x + dx, y, B.x + dx * 0.7, y - H * 0.06]); }
+  };
+  if (L.kind === 'ltree') {
+    trunk(0.3, 0.55, W, W * 0.62);
+    const cx = B.x; const cy = B.y - H * 0.74; const R = H * 0.2;
+    circle(cx, cy, R * 1.1, lit);
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU + rand() * 0.6; const d = R * (0.75 + 0.3 * rand()); circle(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.85, R * (0.6 + 0.25 * rand()), lit); }
+    for (let i = 0; i < 7; i++) { const a = rand() * TAU; const d = R * 1.1 * Math.sqrt(rand()); const lx = cx + Math.cos(a) * d; const ly = cy + Math.sin(a) * d * 0.85; marks.push([lx - R * 0.12, ly, lx + R * 0.12, ly - R * 0.08, 'leaf']); }
+  } else if (L.kind === 'lpine') {
+    trunk(0.12, 0.2, W * 0.8, W * 0.55);
+    const tiers = 4;
+    for (let t = 0; t < tiers; t++) { // from the bottom tier up; each is a triangle with a toothed foot
+      const base = 0.16 + t * 0.19; const apex = base + 0.34 - t * 0.02; const half = H * 0.2 * (1 - t * 0.2);
+      const yb = B.y - H * base; const ya = B.y - H * apex; const teeth = 4;
+      const pts = [[B.x, ya]]; for (let k = 0; k <= teeth; k++) { pts.push([B.x + half - (2 * half * k) / teeth, yb + (k % 2 ? 0 : H * 0.018)]); }
+      poly(pts, lit);
+      marks.push([B.x - half * 0.3, yb - H * 0.05, B.x + half * 0.1, yb - H * 0.1, 'leaf']);
+    }
+  } else { // a bush
+    const R = H * 0.5; const n = 4;
+    for (let i = 0; i < n; i++) { const dx = (i / (n - 1) - 0.5) * W * 1.1 * (0.9 + 0.2 * rand()); circle(B.x + dx, B.y - R * (0.55 + 0.35 * Math.sin((i / (n - 1)) * Math.PI)), R * (0.6 + 0.2 * rand()), lit); }
+    for (let i = 0; i < 5; i++) { const lx = B.x + (rand() - 0.5) * W; const ly = B.y - R * (0.3 + 0.7 * rand()); marks.push([lx - R * 0.12, ly, lx + R * 0.12, ly - R * 0.08, 'leaf']); }
+  }
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const trace = (sh) => { ctx.beginPath(); sh.draw(); ctx.closePath(); };
+  const style = st.style;
+  if (style === 'stick') { ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw * 1.1; for (const sh of shapes) { trace(sh); ctx.stroke(); } }
+  else {
+    ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw * 2.2; for (const sh of shapes) { trace(sh); ctx.stroke(); }
+    for (const sh of shapes) { trace(sh); ctx.fillStyle = style === 'silhouette' ? st.lineColor : sh.fill; ctx.fill(); }
+  }
+  if (style !== 'silhouette') { ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.8; ctx.beginPath(); for (const m of marks) { ctx.moveTo(m[0], m[1]); if (m[4] === 'leaf') ctx.quadraticCurveTo((m[0] + m[2]) / 2, m[3] - 2 * cam.k, m[2], m[3]); else ctx.lineTo(m[2], m[3]); } ctx.stroke(); }
+  ctx.restore(); void leaf;
+  return [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]]];
+}
+
 function paintProp(ctx, q, cam, st) {
-  const { faces, balls, shade } = propParts(q);
+  const { faces, balls, shade, image, line } = propParts(q);
+  if (image) return paintImageProp(ctx, image, cam, st);
+  if (line) return paintLineProp(ctx, line, cam, st);
   const parts = [];
   for (const f of faces) { const pts = f.pts.map((w) => cam.p(w)); parts.push({ d: pts.reduce((t, p) => t + p.d, 0) / pts.length, face: f, pts }); }
   for (const b of balls) { const c = cam.p(b.c); parts.push({ d: c.d, ball: b, c }); }
@@ -438,9 +551,9 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
   if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (DEPTH_OFF[it.depth] ?? 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);
-  if (st.style === 'outline' && !ghost) {
+  if ((st.style === 'outline' || st.style === 'moebius') && !ghost) {
     // First pass: every limb and the body, stroked twice as thick. The fills that follow leave only the outer edge, so arms, legs and body read as one outline with no lines crossing inside.
-    ctx.save(); ctx.lineWidth = cam.lw * 2.2; ctx.lineJoin = 'round';
+    ctx.save(); ctx.lineWidth = cam.lw * (st.style === 'moebius' ? 1.7 : 2.2); ctx.lineJoin = 'round';
     for (const sh of shapes) {
       ctx.strokeStyle = sh.role === 'far' && !sh.fill ? mixHex(st.lineColor, st.farTint, 0.55) : st.lineColor;
       if (sh.attach || sh.pts.length < 3 || (!ghost && coveredByPicture(sh, st, opts.attach)) || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
@@ -518,6 +631,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   const gyf = terrain ? (x) => groundAt(params, x) : () => 0; // the height of the ground
   const poser = dog ? poseDog : pose3;
   const perf = params.perf || null;
+  const perfLooped = Boolean(perf && perf.T > 1 && perf.x[perf.T] > 0.01 && Math.abs(perf.u[perf.T] - Math.round(perf.u[perf.T])) < 1e-6); // the performance ends where it began
   const ex = Math.max(1, params.exposure ?? 1);
   const t0 = perf ? Math.min(perf.T - 1, Math.floor(frame / ex) * ex) : 0;
   const valuesAt = (t) => perf ? { p: paramsAt(params, perf.lanes, t, perf.live), m: motionAt(params.motion || {}, perf.lanes, t, perf.live) } : { p: params, m: params.motion || {} };
@@ -554,7 +668,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  if (!transparent) { ctx.fillStyle = st.background; ctx.fillRect(0, 0, w, h); }
+  if (!transparent) { ctx.fillStyle = st.style === 'moebius' && st.moebiusPaper ? '#f2ead6' : st.background; ctx.fillRect(0, 0, w, h); }
   // A picture to line the figure up with goes under everything else: the stage passes it in, and an export can too.
   opts.under?.(ctx, w, h, cam);
 
@@ -575,7 +689,8 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       ctx.strokeStyle = hexA(st.guideColor, 0.28);
       ctx.beginPath();
       if (terrain) for (const z of [-0.6, -0.3, 0.3, 0.6]) run(z); else for (const z of [-0.6, -0.3, 0.3, 0.6]) line([x0, 0, z + zc], [x1, 0, z + zc]);
-      const half = step / 2;
+      let half = step / 2;
+      if (perfLooped) { const nT = Math.max(1, Math.round(perf.x[perf.T] / half)); half = perf.x[perf.T] / nT; } // the grid divides the distance walked, so it repeats at the loop join
       const first = Math.floor(x0 / half) * half;
       for (let x = first; x < x1; x += half) line([x, gyf(x), -0.6 + zc], [x, gyf(x), 0.6 + zc]);
       ctx.stroke();
@@ -594,10 +709,12 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     } else if (st.showFootprints && perf) {
       ctx.fillStyle = hexA(st.guideColor, 0.38);
       const z0 = params.stepWidth ?? 0.075;
-      for (const pl of perf.plants) {
-        if (Math.abs(pl.x - target[0]) > 4) continue;
+      const total = perfLooped ? perf.x[perf.T] : 0;
+      for (const lap of perfLooped ? [-1, 0, 1] : [0]) for (const pl of perf.plants) { // a looped walk repeats, so the footprints on either side of it are the same
+        const px = pl.x + lap * total;
+        if (Math.abs(px - target[0]) > 4) continue;
         const z = pl.side === 'R' ? z0 : -z0;
-        const q = [[pl.x - 0.07, z - 0.045], [pl.x + 0.26, z - 0.045], [pl.x + 0.26, z + 0.045], [pl.x - 0.07, z + 0.045]].map(([x, zz]) => cam.p([x, gyf(pl.x), zz]));
+        const q = [[px - 0.07, z - 0.045], [px + 0.26, z - 0.045], [px + 0.26, z + 0.045], [px - 0.07, z + 0.045]].map(([x, zz]) => cam.p([x, gyf(px), zz]));
         ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fill();
       }
     } else if (st.showFootprints) {
@@ -654,7 +771,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     for (const it of sceneItems) if (it.d < dMain) it.paint();
     if (st.showOnion && opts.onion !== false) {
       const ghostStyle = { ...st, style: st.style === 'silhouette' ? 'stick' : st.style };
-      const ghost = (k) => (perf ? poseAt(Math.min(perf.T - 1, Math.max(0, t0 + k * ex))) : poser(params, motion, ph.u + k * ph.step));
+      const ghost = (k) => (perf ? poseAt(Math.min(perf.T - 1, Math.max(0, t0 + k * ex))) : poser(params, motion, ph.u + k * ph.step, { worldX: pz.pelvisX + k * ph.step * strideOf(pz.params ?? params) })); // a ghost over the loop join stays beside the figure instead of a stride away
       for (let k = st.onionBefore; k >= 1; k--) drawFigureShapes(ctx, ghost(-k), camF, ghostStyle, { tint: st.onionBeforeTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
       for (let k = st.onionAfter; k >= 1; k--) drawFigureShapes(ctx, ghost(k), camF, ghostStyle, { tint: st.onionAfterTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
     }

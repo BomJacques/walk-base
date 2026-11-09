@@ -128,6 +128,66 @@ check('Reset the colours puts the colours back', (await ev(() => window.__walkBa
 await q('fig-reset').click(); await q('reset-gait').click(); await wait(200);
 check('Reset the walk puts weight and variety back', (await ev(() => window.__walkBase.S.p.weight)) === 0 && (await ev(() => window.__walkBase.S.p.noiseAmount)) === 0);
 await ev(() => { window.__walkBase.S.p.weight = 0; window.__walkBase.S.p.noiseAmount = 0; window.__walkBase.S.sceneSel = null; window.__walkBase.render(); });
+// ---- a longer performance
+await ev(() => window.__walkBase.setTab('Auto')); await wait(150);
+await q('perf-menu').click(); await wait(100);
+check('the Set length menu goes up to ten minutes', (await page.locator('[data-testid="perf-s600"]').count()) === 1 && (await page.locator('[data-testid="perf-x64"]').count()) === 1);
+const t0 = Date.now(); await q('perf-s300').click(); await wait(800);
+const longInfo = await ev(() => ({ len: window.__walkBase.S.perfLen, fps: window.__walkBase.S.p.fps, cells: document.querySelectorAll('#strip .cell').length, step: window.__walkBase.S.stripStep }));
+check('five minutes is 7200 frames at 24 a second, and the timeline copes', longInfo.len === Math.round((24 * 300) / 24) * 24 && longInfo.cells <= 1300 && longInfo.step > 1, { ...longInfo, ms: Date.now() - t0 });
+await ev(() => { window.__walkBase.setFrame(5000); }); await wait(300);
+check('the playhead is on a cell in the long strip, and the time shows minutes', (await page.locator('#strip .cell.on').count()) === 1 && /^208:/.test(await ev(() => document.getElementById('tc').textContent)), await ev(() => document.getElementById('tc').textContent));
+const png0 = await page.locator('[data-testid="stage"]').screenshot(); await ev(() => window.__walkBase.setFrame(6900)); await wait(200);
+check('the walk plays at the far end', Buffer.compare(png0, await page.locator('[data-testid="stage"]').screenshot()) !== 0);
+await ev(() => { window.__walkBase.S.perfLen = 0; window.__walkBase.S.ver++; window.__walkBase.setFrame(0); }); await q('perf-menu').click().catch(() => {}); await page.keyboard.press('Escape');
+await ev(() => window.__walkBase.setTab('Gait')); await wait(200);
+// ---- the Moebius style, and wider ranges
+await ev(() => { const w = window.__walkBase; w.S.s.camYaw = 0; w.S.s.camPitch = 0; w.setFrame(5); w.setTab('View'); }); await wait(150);
+const darkPixels = () => ev(() => { const c = document.querySelector('[data-testid="stage"]'); const m = window.__walkBase.S.map; const x = Math.round(m.x0); const y = Math.round(m.y0); const w = Math.round(m.zw); const h = Math.round(m.zh); const d = c.getContext('2d').getImageData(x, y, w, h).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] < 330) n++; return n; });
+const cornerPx = () => ev(() => { const c = document.querySelector('[data-testid="stage"]'); const m = window.__walkBase.S.map; const d = c.getContext('2d').getImageData(Math.round(m.x0) + 8, Math.round(m.y0) + 8, 1, 1).data; return [d[0], d[1], d[2]]; });
+await ev(() => { window.__walkBase.S.s.style = 'outline'; window.__walkBase.render(); }); await wait(120);
+const outlineDark = await darkPixels(); const outlineCorner = await cornerPx();
+await page.locator('.segbtn', { hasText: 'moebius' }).first().click(); await wait(300);
+check('choosing the Moebius style sets the style and brings its colours', (await ev(() => window.__walkBase.S.s.style)) === 'moebius' && (await ev(() => window.__walkBase.S.s.fillColor)) === '#efe3c6');
+const mbCorner = await cornerPx();
+check('the stage is paper-coloured', mbCorner.join() === '242,234,214' && mbCorner.join() !== outlineCorner.join(), mbCorner);
+const mbDark = await darkPixels();
+await ev(() => { window.__walkBase.S.s.moebiusShade = 0; window.__walkBase.render(); }); await wait(100);
+const none = await darkPixels();
+await ev(() => { window.__walkBase.S.s.moebiusShade = 1; window.__walkBase.render(); }); await wait(100);
+const full = await darkPixels();
+check('the form is shaded with hatching and dots, and Shadow reach controls how much', none < mbDark && mbDark < full && full > none * 1.15, { none, mbDark, full, outlineDark });
+await ev(() => { window.__walkBase.S.s.moebiusShade = 0.5; window.__walkBase.S.s.moebiusPaper = false; window.__walkBase.render(); }); await wait(100);
+check('and Paper-coloured stage can be turned off', (await cornerPx()).join() !== '242,234,214');
+for (const part of [0, 1]) { await ev((hose) => { const w = window.__walkBase; w.setFigure(hose ? 'hose' : 'dog'); w.render(); }, part === 1); await wait(150); }
+check('the style draws the dog and the rubber hose figure without errors', errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.s.style = 'mannequin'; w.S.s.moebiusPaper = true; w.S.s.fillColor = '#f6f3ec'; w.S.s.lineColor = '#26231f'; w.S.s.farTint = '#8c9db5'; w.render(); w.setTab('Gait'); }); await wait(150);
+check('the sliders reach further: arm swing to 120 degrees, a lean of minus 30 to plus 60', await ev(() => { const a = document.querySelector('[data-testid="rng-armSwing"]'); const l = document.querySelector('[data-testid="rng-lean"]'); return a && l && Number(a.max) === 120 && Number(l.min) === -30 && Number(l.max) === 60; }));
+// ---- loops that are seamless in the drawing, not only in the numbers
+const wrapRatio = () => ev(() => {
+  const w = window.__walkBase; const T = w.S.perfLen > 0 ? w.S.perfLen : Math.round(w.S.p.cycleFrames); const ex = w.S.p.exposure || 1;
+  const cv = document.querySelector('[data-testid="stage"]'); const ctx = cv.getContext('2d'); const mp = w.S.map;
+  const grab = (f) => { w.setFrame(f); w.render(); return ctx.getImageData(Math.round(mp.x0), Math.round(mp.y0), Math.round(mp.zw), Math.round(mp.zh)).data; };
+  const diff = (a, b) => { let t = 0; for (let i = 0; i < a.length; i += 16) t += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); return t; };
+  const fr = []; for (let f = 0; f < T; f += ex) fr.push(grab(f)); const steps = []; for (let i = 1; i < fr.length; i++) steps.push(diff(fr[i - 1], fr[i]));
+  return diff(fr[fr.length - 1], fr[0]) / Math.max(1, Math.max(...steps));
+});
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.motion = {}; w.S.s.camYaw = 0; w.S.s.camPitch = 0; w.S.s.showOnion = true; w.S.p.travel = 'follow'; w.S.ver++; w.setFrame(0); w.render(); }); await wait(200);
+const onionRatio = await wrapRatio();
+check('with onion skin on, the loop join is no bigger than any other step (ghosts do not jump a stride)', onionRatio <= 1.15, onionRatio);
+await ev(() => { const w = window.__walkBase; w.S.s.showOnion = false; w.S.s.showFootprints = true; w.S.lanes = { 'p:stepLength': { interp: 'smooth', pts: [{ t: 0, v: 0.5 }, { t: 70, v: 0.95 }] }, 'p:bob': { interp: 'smooth', pts: [{ t: 0, v: 0.04 }, { t: 90, v: 0.11 }] } }; w.S.perfLen = 100; w.S.ver++; w.makeLoop(); }); await wait(300);
+const perfRatio = await wrapRatio();
+check('a performance made into a loop, with footprints and the ground, joins smoothly', perfRatio <= 1.15, perfRatio);
+await ev(() => { const w = window.__walkBase; w.selectPart({ part: 'spine.upper' }, { openTab: false }); w.addAttach('strip'); w.S.ver++; w.makeLoop(); }); await wait(300);
+const capeRatio = await wrapRatio();
+check('and with a cape attached', capeRatio <= 1.15, capeRatio);
+await ev(() => { const w = window.__walkBase; w.S.attach.human = []; w.S.attachSel = null; w.S.lanes = {}; w.S.perfLen = 0; w.S.s.showFootprints = false; w.S.p.travel = 'across'; w.S.ver++; w.makeLoop(); }); await wait(200);
+check('across the screen cannot loop, so the Loop button makes the camera follow the figure', (await ev(() => window.__walkBase.S.p.travel)) === 'follow');
+await ev(() => { const w = window.__walkBase; w.applyPreset('Bouncy'); w.setFigure('hose'); }); await wait(100);
+await ev(() => { const w = window.__walkBase; w.setFigure('hose'); w.S.p.exposure = 2; }); 
+await ev(() => { const e = document.querySelector('[data-testid="rng-cycleFrames"]'); if (e) { e.value = 13; e.dispatchEvent(new Event('input', { bubbles: true })); } }); await wait(200);
+check('with drawings held for two frames, the cycle stays a whole number of drawings', (await ev(() => window.__walkBase.S.p.cycleFrames)) % 2 === 0, await ev(() => window.__walkBase.S.p.cycleFrames));
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.p.exposure = 1; });
 // ---- the seamless loop
 await ev(() => window.__walkBase.setTab('Gait')); await wait(200);
 await ev(() => { const w = window.__walkBase; w.S.lanes = { 'p:stepLength': { interp: 'smooth', pts: [{ t: 0, v: 0.5 }, { t: 60, v: 0.9 }, { t: 100, v: 0.9 }] }, 'p:bob': { interp: 'smooth', pts: [{ t: 0, v: 0.04 }, { t: 100, v: 0.12 }] } }; w.S.perfLen = 100; w.S.ver++; w.render(); const r = document.querySelector('[data-testid="rng-bob"]'); if (r) { r.value = 0.08; r.dispatchEvent(new Event('input', { bubbles: true })); } }); await wait(500);

@@ -178,7 +178,7 @@ function adopt(raw) {
   S.motion = cleanMotion(raw.motion);
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
-  S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(2400, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
+  S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
   adoptSampler(raw.sampler);
   if (raw.preset) S.preset = raw.preset;
   { const a = adoptArcs('human', raw.s?.arcs); if (a) S.s.arcs = a; const d = adoptArcs('dog', raw.s?.arcsDog); if (d) S.s.arcsDog = d; }
@@ -211,6 +211,8 @@ function load() {
 
 // ---------- attachments ----------
 const ATT_IMG_KEY = 'walkbase.attachimgs';
+/** The longest a performance can be, in frames: ten minutes at 24 frames a second. */
+const MAX_FRAMES = 14400;
 const figKey = (p = S.p) => (p.rig === 'dog' ? (SPECIES[p.dogSpecies] ? p.dogSpecies : 'dog') : p.model === 'hose' ? 'hose' : 'human');
 const wd = (s) => wordsFor(figKey())(s);
 const attachList = () => S.attach[figKey()] || (S.attach[figKey()] = []);
@@ -219,6 +221,7 @@ const attachItem = (id = S.attachSel) => (id ? attachList().find((a) => a.id ===
 function usedImages() {
   const urls = imageUrls(); const out = {};
   for (const rig of FIGS) for (const a of S.attach[rig] || []) if (a.img && urls[a.img]) out[a.img] = urls[a.img];
+  for (const q of S.scene?.props || []) if (q.img && urls[q.img]) out[q.img] = urls[q.img]; // scenery pictures too
   return out;
 }
 function saveAttachImages() {
@@ -229,6 +232,7 @@ function loadAttachImages() {
   try {
     const raw = JSON.parse(localStorage.getItem(ATT_IMG_KEY) || '{}');
     const want = new Set(); for (const rig of FIGS) for (const a of S.attach[rig] || []) if (a.img) want.add(a.img);
+    for (const q of S.scene?.props || []) if (q.img) want.add(q.img);
     Promise.all(Object.entries(raw).filter(([id, url]) => want.has(id) && typeof url === 'string' && url.startsWith('data:image/')).map(([id, url]) => registerImage(id, url))).then(() => render());
   } catch { /* none kept */ }
 }
@@ -630,6 +634,40 @@ function addActor(fig) {
   const a = newActor(fig, FIG_LABELS[fig], actorParams(fig, name), fig === 'hose' ? { ...HOSE_PROPORTIONS } : {}, { preset: name, x: 1.3 + n * 0.9, z: n % 2 ? 0.55 : -0.55, phase: (0.25 + 0.2 * n) % 1 });
   S.scene.actors.push(a); S.sceneSel = a.id; sceneChanged(true); setMessage(`${FIG_LABELS[fig]} added behind and beside the main figure. Pick its walk and place it below.`);
 }
+/** A JPG, PNG or similar from the device, made into a flat piece of scenery that stands on the ground. */
+async function pickScenePicture(file) {
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That file is not a picture this browser can open.')); i.src = url; });
+    const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const data = c.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.88); // a PNG keeps its transparency, a photo is kept as a JPEG
+    const id = freshId(); await registerImage(id, data);
+    const asp = c.height / c.width; const w = Math.min(4, Math.max(1.2, 1.5 / Math.max(0.3, asp)));
+    const q = newProp('picture', { img: id, asp, w, h: w * asp, name: file.name.replace(/\.[^.]+$/, '').slice(0, 32) || 'Picture', x: 0.9 + S.scene.props.length * 0.5, z: -1.4 });
+    S.scene.props.push(q); S.sceneSel = q.id; saveAttachImages(); sceneChanged(true); setMessage('Picture added to the scene. It stands on the ground: set Along, Depth, Raise, Width and Turn, and Cut out the background if it has a plain one.');
+  } catch (e) { setMessage(e.message); } finally { URL.revokeObjectURL(url); }
+}
+/** Makes the plain background of a scenery picture transparent: whatever is close to the colour in its corners goes, with a soft edge. */
+async function cutOutBackground(q, tol) {
+  const info = imageInfo(q.img); if (!info) return;
+  const im = info.img; const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height); const px = d.data; const w = c.width; const h = c.height;
+  const at = (x, y) => { const i = (y * w + x) * 4; return [px[i], px[i + 1], px[i + 2], px[i + 3]]; };
+  const corners = [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)].filter((p) => p[3] > 200);
+  if (!corners.length) { setMessage('This picture already has a transparent background.'); return; }
+  const key = [0, 1, 2].map((k) => corners.reduce((t, p) => t + p[k], 0) / corners.length);
+  const lim = tol * 4.4; const soft = lim * 0.35; let cleared = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const dist = Math.hypot(px[i] - key[0], px[i + 1] - key[1], px[i + 2] - key[2]);
+    if (dist <= lim) { const a = dist <= lim - soft ? 0 : (dist - (lim - soft)) / soft; px[i + 3] = Math.min(px[i + 3], Math.round(255 * a)); if (a < 0.99) cleared++; }
+  }
+  g.putImageData(d, 0, 0);
+  const data = c.toDataURL('image/png'); const id = freshId(); await registerImage(id, data);
+  q.img = id; saveAttachImages(); sceneChanged(true); setMessage(cleared ? `Took out the background (${Math.round((100 * cleared) / (w * h))}% of the picture). Undo brings it back.` : 'Nothing was close enough to the corner colour. Try a higher tolerance.');
+}
 function addProp(type) { const q = newProp(type, { x: 0.9 + S.scene.props.length * 0.7, z: -0.9 }); S.scene.props.push(q); S.sceneSel = q.id; sceneChanged(true); }
 function removeSceneItem(id) { if (findSceneItem(id)?.locked) { setMessage('That one is locked. Unlock it in the Scene list first.'); return; } S.scene.actors = S.scene.actors.filter((a) => a.id !== id); S.scene.props = S.scene.props.filter((q) => q.id !== id); if (S.sceneSel === id) S.sceneSel = null; sceneChanged(true); }
 /** Puts a figure's gait, body or colours back to where they started. what: 'gait' | 'body' | 'colours' | 'all'. target: 'main' or a figure in the scene. */
@@ -657,7 +695,9 @@ const resetMenu = (target) => menuButton({ label: 'Reset', testid: 'fig-reset', 
 function sceneSection() {
   const host = h('div', { testid: 'scene-section' });
   const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIGS.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) })) });
-  const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => addProp(k.id) })) });
+  const sceneFile = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a picture for the scene', testid: 'scene-picture-file', onChange: (e) => { pickScenePicture(e.target.files?.[0]); e.target.value = ''; } });
+  const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => (k.kind === 'image' ? sceneFile.click() : addProp(k.id)) })) });
+  host.append(sceneFile);
   // The list is the layers: the nearest at the top, the furthest at the bottom, so up brings one forward and down sends it back.
   const rows = [{ id: 'main', label: `${FIG_LABELS[figKey()]} (main)`, kind: 'figure', main: true, z: 0, visible: true, locked: false }, ...S.scene.actors.map((a) => ({ id: a.id, label: `${a.name} (${a.preset || 'walk'})`, kind: 'figure', z: a.z, visible: a.visible, locked: a.locked })), ...S.scene.props.map((q) => ({ id: q.id, label: q.name, kind: 'scenery', z: q.z, visible: q.visible, locked: q.locked }))].sort((a, b) => b.z - a.z);
   const layerStep = (id, dz) => { const it = findSceneItem(id); if (!it || it.locked) return; it.z = Math.max(-8, Math.min(8, Math.round((it.z + dz) * 100) / 100)); sceneChanged(true); };
@@ -695,9 +735,13 @@ function sceneSection() {
       h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'scene-colour-reset', onClick: () => set({ fill: '', line: '', tint: '' }, true) }, 'Use the colours from the View tab')),
       h('p', { class: 'hint' }, 'Depth: negative is further back, positive is nearer to you in the side view. Facing 180 walks the other way. Starts at moves the figure round its own cycle, so two figures are not in step. Each figure has its own colours; the ones for the main figure are in the View tab.'));
   } else {
+    const isPic = it.kind === 'image'; const isLine = it.kind === 'ltree' || it.kind === 'lpine' || it.kind === 'lbush';
     body.push(row('Along', 'x', -8, 8, 0.05, 'scene-x'), row('Depth', 'z', -5, 5, 0.05, 'scene-z'), row('Raise', 'y', -1, 5, 0.05, 'scene-y'), row('Turn', 'rot', -180, 180, 1, 'scene-rot'),
-      row(it.kind === 'ball' || it.kind === 'cylinder' || it.kind === 'lamp' || it.kind === 'tree' ? 'Width' : 'Length', 'w', 0.05, 6, 0.01, 'scene-w'),
-      it.kind === 'box' ? row('Depth of it', 'd', 0.05, 4, 0.01, 'scene-d') : null, row('Height', 'h', 0.05, 5, 0.01, 'scene-h'), colour('Colour', 'color', 'scene-color'));
+      isPic ? h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Width'), h('input', { type: 'range', class: 'rng', min: 0.2, max: 10, step: 0.05, value: it.w, testid: 'scene-w', 'aria-label': 'Width', onInput: (e) => { it.w = Number(e.target.value); it.h = it.w * it.asp; sceneChanged(false); const n = e.target.parentElement.querySelector('.num'); if (n) n.value = e.target.value; } }), h('input', { type: 'number', class: 'num', min: 0.2, max: 10, step: 0.05, value: it.w, 'aria-label': 'Width value', onChange: (e) => { it.w = Math.min(10, Math.max(0.2, Number(e.target.value))); it.h = it.w * it.asp; sceneChanged(true); } }))
+        : row(it.kind === 'ball' || it.kind === 'cylinder' || it.kind === 'lamp' || isLine ? 'Width' : 'Length', 'w', 0.05, 6, 0.01, 'scene-w'),
+      it.kind === 'box' ? row('Depth of it', 'd', 0.05, 4, 0.01, 'scene-d') : null, isPic ? null : row('Height', 'h', 0.05, 5, 0.01, 'scene-h'), isPic ? null : colour(isLine ? 'Leaf colour' : 'Colour', 'color', 'scene-color'),
+      isPic ? h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Flip')), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: Boolean(it.flip), testid: 'scene-flip', onChange: (e) => { it.flip = e.target.checked; sceneChanged(true); } }), h('span', null, 'Mirror it'))) : null,
+      isPic ? h('div', { class: 'btnrow' }, h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Tolerance'), h('input', { type: 'range', class: 'rng', min: 5, max: 80, step: 1, value: S.cutTol ?? 30, testid: 'scene-cut-tol', 'aria-label': 'How close to the corner colour counts as background', onInput: (e) => { S.cutTol = Number(e.target.value); } })), h('button', { type: 'button', class: 'btn', testid: 'scene-cut', onClick: () => cutOutBackground(it, S.cutTol ?? 30) }, 'Cut out the background')) : null);
   }
   body.push(h('div', { class: 'btnrow' }, ...(actor ? [resetMenu(it)] : []),
     h('button', { type: 'button', class: 'btn', testid: 'scene-hide', onClick: () => set({ visible: !it.visible }, true) }, it.visible ? 'Hide' : 'Show'),
@@ -786,7 +830,7 @@ function updateHud(info) {
   if (f && document.activeElement !== f) f.value = S.frame + 1;
   const tc = document.getElementById('tc');
   if (tc) { const fps = Math.max(1, S.p.fps); const t = (n) => `${String(Math.floor(n / fps)).padStart(2, '0')}:${String(n % fps).padStart(2, '0')}`; tc.textContent = `${t(S.frame)} / ${t(frames.length)}`; }
-  const cell = document.querySelector(`[data-cell="${S.frame}"]`);
+  const cell = document.querySelector(`[data-cell="${S.stripStep > 1 ? Math.floor(S.frame / S.stripStep) * S.stripStep : S.frame}"]`);
   document.querySelectorAll('.cell.on').forEach((c) => c.classList.remove('on'));
   if (cell) { cell.classList.add('on'); cell.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); }
   editor?.draw(); laneEd?.draw();
@@ -808,7 +852,11 @@ function setParam(c, v) {
   const val = clampTo(c, v);
   S[c.scope][c.id] = val;
   if (c.scope === 'p') { markCustom(); refreshGaitLine(); }
+  // Choosing the Moebius style for the first time brings its colours too: sand, a pale sky grey and a dark ink, unless the colours have been chosen already.
+  if (c.scope === 's' && c.id === 'style' && val === 'moebius' && S.s.fillColor === STYLE_DEFAULTS.fillColor && S.s.lineColor === STYLE_DEFAULTS.lineColor && S.s.farTint === STYLE_DEFAULTS.farTint) { S.s.fillColor = '#efe3c6'; S.s.lineColor = '#1e1b2e'; S.s.farTint = '#8fa9bd'; setMessage('Moebius style: sand, sky grey and dark ink. Change the colours in Figure if you want others.'); if (S.tab === 'View') renderPanel(); }
   if (c.scope === 'x' && (c.id === 'width' || c.id === 'height')) S.x[c.id] = Math.max(c.min, Math.round(val / 2) * 2);
+  // With drawings held for two or three frames, a cycle that is not a whole number of drawings cannot loop evenly: the last drawing is held for less time. Keep it a whole number.
+  if ((c.id === 'cycleFrames' || c.id === 'exposure') && S.perfLen <= 0) { const ex = Math.max(1, Math.round(S.p.exposure || 1)); if (ex > 1) { const fit = Math.max(ex * 2, Math.round(S.p.cycleFrames / ex) * ex); if (fit !== S.p.cycleFrames) { S.p.cycleFrames = fit; if (c.id === 'exposure') setMessage(`The cycle is ${fit} frames, a whole number of drawings at exposure ${ex}, so it loops evenly.`); renderPanel(); } } }
   if (c.id === 'cycleFrames' || c.id === 'exposure') { buildStrip(); if (S.frame >= cycleFrames(P()).frames.length) S.frame = 0; }
   if (c.scope === 'x') refreshSummary();
   render(); save();
@@ -907,15 +955,17 @@ function buildStrip() {
     }
     host.querySelectorAll('.cell').forEach((cell) => { const m = marks.get(Number(cell.dataset.cell)); setKeyLabel(cell, Number(cell.dataset.cell), m || ''); });
   });
+  // A long performance would need thousands of cells: past 1200 frames one cell stands for several, and the label is the time in seconds.
+  const step = Math.max(1, Math.ceil(frames.length / 1200)); S.stripStep = step;
   let lastDrawing = 0;
-  frames.forEach((f) => {
-    const first = f.drawing !== lastDrawing;
+  (step > 1 ? frames.filter((f) => f.frame % step === 0) : frames).forEach((f) => {
+    const first = step > 1 ? true : f.drawing !== lastDrawing;
     lastDrawing = f.drawing;
     host.append(h('button', {
       type: 'button', class: `cell${first ? '' : ' held'}`, 'data-cell': f.frame, testid: `cell-${f.frame}`,
       'aria-label': `Frame ${f.frame + 1}, drawing ${f.drawing}${first ? '' : ', held'}`,
       onClick: () => { pause(); setFrame(f.frame); },
-    }, h('span', { class: 'n' }, first ? String(sampled ? (SM.cuts[f.drawing - 1]?.label ?? f.drawing) : f.drawing) : '·'), h('span', { class: 'k' }, '')));
+    }, h('span', { class: 'n' }, step > 1 ? (f.frame % Math.max(1, Math.round(S.p.fps)) < step ? `${Math.round(f.frame / S.p.fps)}s` : '·') : first ? String(sampled ? (SM.cuts[f.drawing - 1]?.label ?? f.drawing) : f.drawing) : '·'), h('span', { class: 'k' }, '')));
   });
 }
 
@@ -1148,7 +1198,7 @@ function channelCard(c) {
   return h('div', { class: `chan${edited ? ' edited' : ''}`, testid: `chan-${c.id}` },
     h('div', { class: 'chan-head' }, h('span', { class: 'name' }, wd(c.label)), h('span', { class: 'read', 'data-readout': c.id }, fmtUnit(c, liveValue(c.id))), edited ? h('span', { class: 'badge' }, 'changed') : null),
     sparkline(c.id),
-    mk('amount', 'Amount ×', 0, 3, 0.05, id, id),
+    mk('amount', 'Amount ×', 0, 6, 0.05, id, id),
     h('div', { class: 'chan-more', id: `more-${c.id}`, hidden: !(s.offset || s.phase || s.free || (s.freq ?? 1) !== 1) },
       h('div', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Repeats ×'),
         h('div', { class: 'seg', role: 'group', 'aria-label': `${c.label} repeats per cycle` }, allowedFrequencies(c.id, S.motion).map((f) => h('button', {
@@ -1243,9 +1293,11 @@ function autoSection() {
   host.append(h('section', { class: 'group' }, h('h3', null, 'Length'),
     h('p', { class: 'hint' }, `The performance is ${T} frames (${(T / S.p.fps).toFixed(1)} s). One walk cycle is ${n} frames. Make it longer to give movements room.`),
     h('div', { class: 'btnrow' },
-      numField('Frames', S.perfLen > 0 ? S.perfLen : n, n, 2400, (v) => { S.perfLen = Math.min(2400, Math.max(n, Math.round(v) || n)); if (S.perfLen === n && !hasLanes(S.lanes)) S.perfLen = 0; S.ver++; buildStrip(); renderPanel(); render(); save(); }, 'perf-len'),
+      numField('Frames', S.perfLen > 0 ? S.perfLen : n, n, MAX_FRAMES, (v) => { S.perfLen = Math.min(MAX_FRAMES, Math.max(n, Math.round(v) || n)); if (S.perfLen === n && !hasLanes(S.lanes)) S.perfLen = 0; S.ver++; buildStrip(); renderPanel(); render(); save(); }, 'perf-len'),
       menuButton({ label: 'Set length', testid: 'perf-menu', items: () => [
-        ...[2, 4, 6, 8].map((k) => ({ label: `${k} cycles`, testid: `perf-x${k}`, onClick: () => { S.perfLen = n * k; S.ver++; buildStrip(); renderPanel(); render(); save(); } })),
+        ...[2, 4, 6, 8, 16, 32, 64].map((k) => ({ label: `${k} cycles`, testid: `perf-x${k}`, onClick: () => { S.perfLen = Math.min(MAX_FRAMES, n * k); S.ver++; buildStrip(); renderPanel(); render(); save(); } })),
+        { separator: true },
+        ...[[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes']].map(([sec, label]) => ({ label, testid: `perf-s${sec}`, onClick: () => { S.perfLen = Math.min(MAX_FRAMES, Math.max(n, Math.round((S.p.fps * sec) / n) * n)); S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage(`The performance is ${S.perfLen} frames, ${(S.perfLen / S.p.fps).toFixed(1)} seconds, a whole number of cycles.`); } })),
         { separator: true },
         { label: 'One cycle', testid: 'perf-one', onClick: () => { S.perfLen = 0; S.frame = Math.min(S.frame, n - 1); S.ver++; buildStrip(); renderPanel(); render(); save(); } },
       ] }))));
@@ -1269,7 +1321,7 @@ function autoSection() {
     })(),
     h('p', { class: 'hint' }, wd(clip.help)),
     h('div', { class: 'btnrow' },
-      numField('Starts at frame', S.clipStart + 1, 1, 2400, (v) => { S.clipStart = Math.max(0, Math.round(v) - 1); }, 'clip-start'),
+      numField('Starts at frame', S.clipStart + 1, 1, MAX_FRAMES, (v) => { S.clipStart = Math.max(0, Math.round(v) - 1); }, 'clip-start'),
       h('button', { type: 'button', class: 'btn', testid: 'clip-playhead', onClick: () => { S.clipStart = S.frame; renderPanel(); } }, 'Use playhead'),
       numField('Lasts (frames)', D, 6, 600, (v) => { S.clipLen = Math.max(6, Math.round(v)); }, 'clip-len')),
     h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Strength'), h('input', { type: 'range', class: 'rng', min: 0.3, max: 1.5, step: 0.05, value: S.clipK, testid: 'clip-k', 'aria-label': 'Movement strength', onInput: (e) => { S.clipK = Number(e.target.value); } })),
@@ -1305,7 +1357,7 @@ function addClip(clip, start, D, k) {
   S.lanes = applyClip(S.lanes, clip, S.p, start, D, k); S.ver++;
   const n = Math.max(2, Math.round(S.p.cycleFrames));
   const need = start + D + n * 2;
-  if (S.perfLen < need) S.perfLen = Math.min(2400, need);
+  if (S.perfLen < need) S.perfLen = Math.min(MAX_FRAMES, need);
   for (const id of clip.free || []) if (CHANNEL_BY_ID[id] && !S.motion[id]?.free) setMotion(id, { ...(S.motion[id] || {}), free: true });
   markCustom(); S.frame = Math.min(start, S.perfLen - 1);
   setMessage(`Added ${clip.label.toLowerCase()} at frame ${start + 1}.`);
@@ -1340,7 +1392,7 @@ function openLaneEditor(target) {
   else {
     const c = CHANNEL_BY_ID[k.id];
     if (k.what === 'fix') { const span = Math.max(Math.abs(c.min), Math.abs(c.max)); view = { lo: -span, hi: span, to: (v) => c.to(v), from: (v) => c.from(v), unit: c.unit, base: () => 0 }; }
-    else if (k.what === 'amount') view = { lo: 0, hi: 3, to: (v) => v, from: (v) => v, unit: '×', base: () => S.motion[k.id]?.amount ?? 1 };
+    else if (k.what === 'amount') view = { lo: 0, hi: 6, to: (v) => v, from: (v) => v, unit: '×', base: () => S.motion[k.id]?.amount ?? 1 };
     else { const span = Math.max(Math.abs(c.min), Math.abs(c.max)); view = { lo: -span, hi: span, to: (v) => c.to(v), from: (v) => c.from(v), unit: c.unit, base: () => S.motion[k.id]?.offset ?? 0 }; }
   }
   const mode = (m, label) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(m === 'handles'), testid: `lane-mode-${m}`, onClick: (e) => { laneEd.setMode(m); dock.querySelectorAll('.segmode .segbtn').forEach((b) => b.setAttribute('aria-pressed', String(b === e.currentTarget))); } }, label);
@@ -1483,7 +1535,7 @@ function buildSpeechNow() {
   if (!text) { setMessage('Type something for the head to say first.'); return; }
   S.speech = buildSpeech(text, { fps: S.p.fps, start: S.speechStart, speed: S.speechSpeed });
   const n = Math.max(2, Math.round(S.p.cycleFrames)); const need = S.speech.end + 6;
-  if (need > n && S.perfLen < need) { S.perfLen = Math.min(2400, need); } // the timeline grows to hold the speech
+  if (need > n && S.perfLen < need) { S.perfLen = Math.min(MAX_FRAMES, need); } // the timeline grows to hold the speech
   S.ver++; S.mouthPreview = null; S.frame = Math.min(S.speech.start, Math.max(0, (S.perfLen > 0 ? S.perfLen : n) - 1));
   buildStrip(); renderPanel(); render(); save();
   setMessage(`${S.speech.keys.length} mouth shapes from frame ${S.speech.start + 1} to ${S.speech.end + 1}.`);
@@ -1531,7 +1583,7 @@ function speechSection() {
     S.p.rig === 'human' ? null : h('p', { class: 'hint' }, 'Mouth shapes are drawn on the human and rubber hose heads for now. Choose one of them in the Figure menu to see them.'),
     h('textarea', { class: 'speechtext', rows: 3, testid: 'speech-text', 'aria-label': 'What the head says', placeholder: 'Type what the head should say', onInput: (e) => { S.speechDraft = e.target.value; } }, S.speechDraft ?? sp?.text ?? ''),
     h('div', { class: 'btnrow' },
-      num('Starts at frame', S.speechStart + 1, 1, 2400, (v) => { S.speechStart = Math.max(0, Math.round(v) - 1); }, 'speech-start'),
+      num('Starts at frame', S.speechStart + 1, 1, MAX_FRAMES, (v) => { S.speechStart = Math.max(0, Math.round(v) - 1); }, 'speech-start'),
       h('button', { type: 'button', class: 'btn', testid: 'speech-playhead', onClick: () => { S.speechStart = S.frame; renderPanel(); } }, 'Use playhead')),
     h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Speed'), h('input', { type: 'range', class: 'rng', min: 0.5, max: 2, step: 0.05, value: S.speechSpeed, testid: 'speech-speed', 'aria-label': 'Speech speed', onInput: (e) => { S.speechSpeed = Number(e.target.value); } })),
     h('div', { class: 'btnrow' },
@@ -1729,6 +1781,7 @@ function makeLoop() {
   const r = makeSeamless({ base: S.p, lanes: S.lanes, perfLen: S.perfLen, cycleFrames: S.p.cycleFrames, exposure: S.p.exposure });
   S.p.cycleFrames = r.cycleFrames; S.lanes = r.lanes; S.perfLen = r.perfLen; S.ver++; S.frame = 0;
   if (S.p.noiseAmount > 0 && S.p.noiseLoop === false) { S.p.noiseLoop = true; r.notes.push('The wobble is set to repeat every cycle.'); }
+  if (S.p.travel === 'across') { S.p.travel = 'follow'; r.notes.push('The camera now follows the figure: crossing the screen cannot join up with its own start.'); }
   const changed = was.n !== S.p.cycleFrames || was.len !== S.perfLen || was.lanes !== JSON.stringify(S.lanes);
   if (changed) markCustom();
   buildStrip(); renderPanel(); render(); save();

@@ -116,7 +116,11 @@ export function stripSims(params, items) {
     const dog = params.rig === 'dog';
     const stride = dog ? params.dogStride : 2 * params.stepLength;
     const world = roots.map((r) => ({ x: r.x + r.pelvisX, y: r.y, dir: r.dir }));
-    const nodes = simulateStrip(world, it.phys, it.h, { fps: params.fps || 24, cycle: Math.max(2, Math.round(params.cycleFrames)), loops: 1, travel: perf ? 0 : stride, warm: perf ? 0 : 30 });
+    // A plain cycle, or a performance that has been made a seamless loop, ends where it begins, so the strip is warmed up through laps of it and the last frame is made to lead into the first.
+    // A performance that does not loop starts the strip at rest, as before.
+    const looped = perf && params.perf.T > 1 && params.perf.x[params.perf.T] > 0.01 && Math.abs(params.perf.u[params.perf.T] - Math.round(params.perf.u[params.perf.T])) < 1e-6;
+    const travel = !perf ? stride : looped ? params.perf.x[params.perf.T] - params.perf.x[0] : 0;
+    const nodes = simulateStrip(world, it.phys, it.h, { fps: params.fps || 24, cycle: Math.max(2, Math.round(params.cycleFrames)), loops: 1, travel, warm: !perf ? 30 : looped ? 4 : 0 });
     const value = { frames: roots.map((r, f) => ({ root: [r.x, r.y, r.z], pelvisX: r.pelvisX, nodes: nodes[f] })) };
     cache.set(it.id, { key, value }); out.set(it.id, value);
   }

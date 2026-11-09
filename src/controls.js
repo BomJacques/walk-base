@@ -132,7 +132,7 @@ const RAW_CONTROLS = [
   b('s', 'showGizmo', 'View', 'Pivot around the figure', 'Axes gizmo', 'Small x, y, z guide: x forward, y up, z the figure right side.'),
   c('s', 'selectColor', 'View', 'Pivot around the figure', 'Selection colour', 'Highlight for the selected part.'),
   // Look
-  e('s', 'style', 'Look', 'Figure', 'Style', ['mannequin', 'outline', 'stick', 'silhouette'], 'Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape.'),
+  e('s', 'style', 'Look', 'Figure', 'Style', ['mannequin', 'outline', 'stick', 'silhouette', 'moebius'], 'Moebius is a pen drawing: a thin ink line round the figure, flat soft colour, and shading by fine hatching, cross-hatching and a few dots on the side away from the light, on a paper-coloured stage. Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape.'),
   n('s', 'lineWidth', 'Look', 'Figure', 'Line width', 'px', 0.5, 12, 0.25, 'At 1080 pixels tall. It scales with the canvas.'),
   n('s', 'hoseLimb', 'Look', 'Rubber hose', 'Limb thickness', '×', 0.5, 2, 0.01, 'How thick the tube arms and legs are.'),
   n('s', 'hoseBend', 'Look', 'Rubber hose', 'Limb curve', '', 0, 1, 0.01, '1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint.'),
@@ -140,6 +140,12 @@ const RAW_CONTROLS = [
   e('s', 'pictureModel', 'Look', 'Pictures', 'Body under pictures', ['hide covered parts', 'hide the model', 'show the model'], 'What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin.'),
   e('s', 'hoseEars', 'Look', 'Rubber hose', 'Ears', ['none', 'round'], 'Round ears on top of the head. Off by default.'),
   e('s', 'hoseEyes', 'Look', 'Rubber hose', 'Eyes', ['pie', 'round', 'dots'], 'Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots.'),
+  n('s', 'moebiusLight', 'Look', 'Moebius style', 'Light direction', '°', -180, 180, 1, 'Where the light comes from, as an angle on the screen. -135 is the top left; the hatching goes on the other side of each form.'),
+  n('s', 'moebiusAngle', 'Look', 'Moebius style', 'Hatch angle', '°', 0, 180, 1, 'The angle of the hatching lines.'),
+  n('s', 'moebiusDensity', 'Look', 'Moebius style', 'Hatch spacing', 'px', 2, 14, 0.5, 'The gap between hatching lines. Smaller is darker and finer.'),
+  n('s', 'moebiusShade', 'Look', 'Moebius style', 'Shadow reach', '', 0, 1, 0.01, 'How far the shadow reaches round each form. 0 is none, 1 is nearly all of it.'),
+  n('s', 'moebiusStipple', 'Look', 'Moebius style', 'Stipple', '', 0, 1, 0.01, 'Dots along the edge of the shadow, for texture.'),
+  b('s', 'moebiusPaper', 'Look', 'Moebius style', 'Paper-coloured stage', 'In the Moebius style the stage is the colour of paper instead of the background colour.'),
   c('s', 'hoseBody', 'Look', 'Rubber hose', 'Body colour', 'The head, body, arms and legs.'),
   c('s', 'hoseFace', 'Look', 'Rubber hose', 'Face colour', 'The face patch on the head.'),
   c('s', 'hoseGlove', 'Look', 'Rubber hose', 'Glove colour', 'The hands.'),
@@ -185,7 +191,21 @@ const RAW_CONTROLS = [
   n('x', 'bitrate', 'Export', 'Names', 'Video bitrate', 'Mbps', 1, 80, 1, 'MP4 only.'),
 ];
 /** Gait and Body are one tab: the walk first, then the body. `area` keeps which it came from, for its colour. */
-export const CONTROLS = RAW_CONTROLS.map((c) => (c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : c.tab === 'Look' || c.tab === 'Guides' ? { ...c, tab: 'View', area: c.tab } : { ...c, area: c.tab }));
+/**
+ * Room to exaggerate. A signed slider (one that already goes below zero) reaches twice as far each way; a slider in degrees, leg lengths or shoulder heights that starts at zero reaches twice as far up;
+ * a proportion goes from a little over half its smallest to nearly twice its largest. Fractions with a natural limit (time on the ground, heel timing and the like), counts, the weight, the
+ * heading and the terrain are left as they are, and the code that uses each value clamps it where the figure would break.
+ */
+const KEEP_RANGE = new Set(['cycleFrames', 'fps', 'exposure', 'weight', 'heading', 'terrainGrade', 'terrainRun', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'dogNeckSegs', 'duty', 'dogDuty', 'headBob', 'legExtend', 'heelDown', 'heelUp', 'liftPeak', 'swingReach', 'downPhase', 'hoseFollow', 'hoseStretch']);
+const widen = (c) => {
+  if (c.type !== 'number' || (c.scope !== 'p' && c.scope !== 'r') || KEEP_RANGE.has(c.id)) return c;
+  const r = (v) => +v.toFixed(4);
+  if (c.scope === 'r') return { ...c, min: r(Math.max(0.1, c.min * 0.6)), max: r(c.max * 1.8) };
+  if (c.min < 0) return { ...c, min: r(c.min * 2), max: r(c.max * 2) };
+  if (c.unit === '°' || c.unit === 'legs' || c.unit === 'heights') return { ...c, max: r(c.max * 2) };
+  return c;
+};
+export const CONTROLS = RAW_CONTROLS.map((c) => widen(c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : c.tab === 'Look' || c.tab === 'Guides' ? { ...c, tab: 'View', area: c.tab } : { ...c, area: c.tab }));
 
 /** Which figure a control belongs to: 'both', 'human' or 'dog'. Timing, camera, look, guides and export are shared. */
 const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel', 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading']);

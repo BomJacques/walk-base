@@ -33,3 +33,22 @@ test('a performance is not forced to loop', () => {
   const out = simulateStrip(roots, STRIP_DEFAULTS, 0.55, { fps: 24, cycle: T, loops: 1, travel: 0, warm: 0 });
   assert.equal(out.length, T);
 });
+
+test('a cape on a looped performance joins its last frame to its first', async () => {
+  const { DEFAULTS } = await import('../src/rig.js');
+  const { integrate } = await import('../src/automation.js');
+  const { makeSeamless } = await import('../src/loop.js');
+  const { newItem } = await import('../src/attach.js');
+  const { stripSims } = await import('../src/physics.js');
+  const base = { ...DEFAULTS, proportions: {}, motion: {} };
+  const lanes0 = { 'p:stepLength': { interp: 'smooth', pts: [{ t: 0, v: 0.5 }, { t: 70, v: 0.95 }] }, 'p:bob': { interp: 'smooth', pts: [{ t: 0, v: 0.04 }, { t: 90, v: 0.11 }] } };
+  const r = makeSeamless({ base, lanes: lanes0, perfLen: 100, cycleFrames: 24, exposure: 1 });
+  const s = integrate(base, r.lanes, r.perfLen, 24, null);
+  const item = newItem('strip', { part: 'spine.upper', seg: null, side: null }); item.visible = true;
+  const params = { ...base, cycleFrames: r.cycleFrames, perf: { T: r.perfLen, u: s.u, x: s.x, lanes: r.lanes, live: null, plants: [] }, attach: [item] };
+  const nodes = stripSims(params, [item]).get(item.id).frames.map((f) => f.nodes);
+  const T = nodes.length; assert.equal(T, r.perfLen);
+  const others = []; for (let f = 1; f < T - 1; f++) others.push(acc(nodes[f - 1], nodes[f], nodes[f + 1]));
+  const joins = [acc(nodes[T - 2], nodes[T - 1], nodes[0]), acc(nodes[T - 1], nodes[0], nodes[1])];
+  for (const j of joins) assert.ok(j <= Math.max(...others) * 1.1 + 1e-9, `the join (${j.toFixed(4)}) is no sharper than elsewhere (${Math.max(...others).toFixed(4)})`);
+});

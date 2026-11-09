@@ -77,22 +77,44 @@ const hidden = await stagePng();
 await ev(() => { window.__walkBase.S.s.showScene = true; window.__walkBase.render(); }); await wait(100);
 check('Show the scene turns it off', Buffer.compare(hidden, await stagePng()) !== 0);
 
+// line-drawn scenery, and a picture of your own
+for (const k of ['pine', 'bush']) { await q('scene-add-prop').click(); await page.locator(`[data-testid="scene-prop-${k}"]`).click(); await wait(80); }
+check('trees, pines and bushes are line-drawn scenery', await ev(() => window.__walkBase.S.scene.props.filter((p) => ['ltree', 'lpine', 'lbush'].includes(p.kind)).length >= 3));
+await ev(() => { const w = window.__walkBase; w.S.s.camYaw = 0; w.S.s.camPitch = 0; const P = w.S.scene.props; P[P.length - 1].x = 0.6; P[P.length - 1].z = 0.8; w.render(); }); await wait(150);
+const bushOn = await stagePng();
+for (const style of ['outline', 'stick', 'silhouette', 'mannequin']) { await ev((st) => { window.__walkBase.S.s.style = st; window.__walkBase.render(); }, style); await wait(80); }
+check('every drawing style draws them', errors.length === 0, errors);
+const png = await ev(() => { const c = document.createElement('canvas'); c.width = 200; c.height = 120; const g = c.getContext('2d'); g.fillStyle = '#d0e8f4'; g.fillRect(0, 0, 200, 120); g.fillStyle = '#a65b44'; g.fillRect(50, 30, 100, 80); return c.toDataURL('image/png').split(',')[1]; });
+await q('scene-add-prop').click(); await wait(80); await page.keyboard.press('Escape');
+await page.locator('[data-testid="scene-picture-file"]').setInputFiles({ name: 'my house.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') }); await wait(600);
+const pic = await ev(() => { const w = window.__walkBase; const p = w.S.scene.props.find((x) => x.kind === 'image'); return p ? { name: p.name, asp: p.asp, img: p.img, w: p.w } : null; });
+check('a JPG or PNG can be added as scenery, keeping its shape and name', pic && pic.name === 'my house' && Math.abs(pic.asp - 0.6) < 0.01 && pic.img, pic);
+check('its panel has Width, Raise and Turn and Cut out the background', (await page.locator('[data-testid="scene-cut"]').count()) === 1 && (await page.locator('[data-testid="scene-w"]').count()) === 1);
+await ev(() => { const w = window.__walkBase; const p = w.S.scene.props.find((x) => x.kind === 'image'); p.x = 1.4; p.z = -0.6; w.S.s.camYaw = 0; w.S.s.camPitch = 0; w.render(); }); await wait(150);
+const beforeCut = await stagePng();
+await q('scene-cut').click(); await wait(500);
+const pic2 = await ev(() => window.__walkBase.S.scene.props.find((x) => x.kind === 'image').img);
+check('Cut out the background makes a new picture with the background taken out', pic2 !== pic.img && Buffer.compare(beforeCut, await stagePng()) !== 0, { was: pic.img, now: pic2 });
+check('and the picture is kept for the next visit', (await ev((i) => (localStorage.getItem('walkbase.attachimgs') || '').includes(i), pic2)) === true);
+await ev(() => { window.__walkBase.S.s.style = 'mannequin'; });
+await wait(350);
 // edit, copy, remove
+const nBase = await ev(() => window.__walkBase.S.scene.props.length);
 await q(`scene-item-${await ev(() => window.__walkBase.S.scene.props[0].id)}`).click();
 const w0 = await ev(() => window.__walkBase.S.scene.props[0].w);
 await ev(() => { const e = document.querySelector('[data-testid="scene-w"]'); e.value = 1.5; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);
 check('a slider resizes scenery', (await ev(() => window.__walkBase.S.scene.props[0].w)) === 1.5 && w0 !== 1.5);
 await wait(350); await q('scene-copy').click(); await wait(350);
-check('Copy adds another', (await ev(() => window.__walkBase.S.scene.props.length)) === 10);
+check('Copy adds another', (await ev(() => window.__walkBase.S.scene.props.length)) === nBase + 1);
 await q('scene-remove').click(); await wait(350);
-check('Remove takes it away', (await ev(() => window.__walkBase.S.scene.props.length)) === 9);
+check('Remove takes it away', (await ev(() => window.__walkBase.S.scene.props.length)) === nBase);
 
 // undo, reload, export
 await ev(() => window.__walkBase.undo()); await wait(200);
-check('undo brings the removed item back', (await ev(() => window.__walkBase.S.scene.props.length)) === 10);
+check('undo brings the removed item back', (await ev(() => window.__walkBase.S.scene.props.length)) === nBase + 1);
 await wait(500); await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(300);
 const back = await ev(() => ({ a: window.__walkBase.S.scene.actors.length, p: window.__walkBase.S.scene.props.length, w: window.__walkBase.S.scene.props[0].w }));
-check('the scene survives a reload', back.a === 2 && back.p === 10 && back.w === 1.5, back);
+check('the scene survives a reload', back.a === 2 && back.p === nBase + 1 && back.w === 1.5, back);
 // context menus: they act on the object that was clicked
 {
   await ev(() => { const w = window.__walkBase; w.S.s.camYaw = -30; w.S.s.camPitch = 35; w.S.scene.actors[0].x = 3.2; w.S.scene.actors[0].z = 1.6; w.setFrame(3); w.render(); }); await wait(150);

@@ -10,22 +10,22 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Camera | both |  | follow, across | follow | Follow keeps the figure in place while the ground scrolls. Across lets it cross the frame. |
 | Cycle length | both | frames | 4 to 96 | 24 | Frames for two steps. 24 at 24 fps is one step every half second. |
 | Frame rate | both | fps | 6 to 60 | 24 | Frames per second. Changing it changes the walking speed. |
-| Step length | human | legs | 0.3 to 1.4 | 0.78 | Contact to contact, in leg lengths. Longer steps at the same timing walk faster. |
+| Step length | human | legs | 0.3 to 2.8 | 0.78 | Contact to contact, in leg lengths. Longer steps at the same timing walk faster. |
 | Time on the ground | human |  | 0.25 to 0.85 | 0.6 | Fraction of the cycle each foot is down. Under 0.5 there is a moment with neither foot down: a run. Set Hip bob and Lowest point to match (the Run preset shows how). |
 | Leg straightness | human |  | 0.85 to 0.999 | 0.985 | How straight the leg is at contact. Lower crouches the whole walk. |
-| Hip bob | human | legs | 0 to 0.3 | 0.075 | Vertical travel of the hips, lowest to highest. |
+| Hip bob | human | legs | 0 to 0.6 | 0.075 | Vertical travel of the hips, lowest to highest. |
 | Down position | human | cycle | 0.03 to 0.22 | 0.125 | When the body is lowest after contact. 0.125 is a quarter of a step. |
-| Foot lift | human | legs | 0 to 0.5 | 0.16 | How high the swing foot clears the ground. |
-| Heel strike | human | ° | 0 to 40 | 14 | Toe-up angle at contact. |
-| Toe off | human | ° | 0 to 60 | 32 | Heel-up angle at push-off. |
-| Swing toe | human | ° | -20 to 40 | 8 | Toe angle while the foot swings through. |
+| Foot lift | human | legs | 0 to 1 | 0.16 | How high the swing foot clears the ground. |
+| Heel strike | human | ° | 0 to 80 | 14 | Toe-up angle at contact. |
+| Toe off | human | ° | 0 to 120 | 32 | Heel-up angle at push-off. |
+| Swing toe | human | ° | -40 to 80 | 8 | Toe angle while the foot swings through. |
 | Heel comes down over | human | stance | 0.04 to 0.4 | 0.18 | How much of the time on the ground the foot takes to roll from heel to flat. Small is a stamp, large is a slow roll. |
 | Heel lifts at | human | stance | 0.35 to 0.85 | 0.52 | When in the time on the ground the heel starts to rise. Early is a long push off the toes, late is a flat-footed walk. |
 | Foot is highest at | human | swing | 0.25 to 0.7 | 0.42 | Where in the swing the foot reaches its highest point. Early is a quick pick-up, late is a high step that stamps down. |
 | Foot reaches forward early | human |  | 0 to 1 | 0.85 | 0 swings the foot at an even pace. 1 brings it forward early and lets it hang before it lands. |
-| Far foot lands late | human | cycle | -0.12 to 0.12 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
-| Far foot time on ground | human |  | -0.15 to 0.15 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
-| Far foot lift | human |  | -0.8 to 0.8 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
+| Far foot lands late | human | cycle | -0.24 to 0.24 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
+| Far foot time on ground | human |  | -0.3 to 0.3 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
+| Far foot lift | human |  | -1.6 to 1.6 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
 | Weight | human |  | -1 to 1 | 0 | How heavy the figure feels. Heavy (positive): longer on the ground, flatter and lower feet, a deeper drop into each step, shorter steps, less arm swing, a forward lean. Light (negative): springy, higher feet, quicker. Use a longer Cycle length for a heavy walk and a shorter one for a light walk. |
 | Noise | human |  | 0 to 1 | 0 | Small wobble added to the bounce, sway, back, head and arms so the walk is not a metronome. 0 is none. |
 | Noise speed | human |  | 1 to 4 | 2 | How quickly the wobble changes: 1 is slow, 4 is busy. |
@@ -36,82 +36,82 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Heading | both | ° | -180 to 180 | 0 | Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends. |
 | Ground | both |  | flat, slope, steps | flat | What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step. |
 | Slope | both | ° | -30 to 30 | 8 | How steeply the ground rises along the slope (negative goes downhill). |
-| Step height | both | legs | -0.3 to 0.3 | 0.14 | Height of each step, in leg lengths (negative goes down). |
+| Step height | both | legs | -0.6 to 0.6 | 0.14 | Height of each step, in leg lengths (negative goes down). |
 | Step length | both | legs | 0.3 to 2.5 | 1 | Length of the flat top of each step. |
-| Far arm swing | human |  | -0.8 to 0.8 | 0 | The far arm swings more or less than the near one. |
-| Forward lean | human | ° | -15 to 30 | 4 | Torso tilt. Negative leans back. |
-| Torso rock | human | ° | 0 to 10 | 1.6 | Extra tilt that rocks with each step. |
+| Far arm swing | human |  | -1.6 to 1.6 | 0 | The far arm swings more or less than the near one. |
+| Forward lean | human | ° | -30 to 60 | 4 | Torso tilt. Negative leans back. |
+| Torso rock | human | ° | 0 to 20 | 1.6 | Extra tilt that rocks with each step. |
 | Head steadiness | human |  | 0 to 1 | 0.35 | 0 lets the head ride the hips, 1 holds it level. |
-| Head nod | human | ° | 0 to 12 | 2.5 | Small nod with each step. |
-| Arm swing | human | ° | 0 to 60 | 26 | Each way, opposite the legs. |
-| Arm lag | human | cycle | -0.2 to 0.3 | 0.07 | How far the arms trail the legs. A little drag reads as natural. |
-| Elbow bend | human | ° | 0 to 80 | 14 | Resting bend. |
-| Elbow bend, forward | human | ° | 0 to 80 | 26 | Extra bend as the arm swings forward. |
-| Hip twist | human | ° | 0 to 25 | 6 | How far the hips turn each way. The right hip leads at contact. |
-| Hip drop | human | ° | 0 to 15 | 3 | The swing-side hip drops this much. |
-| Hip tilt | human | ° | 0 to 15 | 1.5 | Forward and back rock of the pelvis. |
-| Side sway | human | legs | 0 to 0.12 | 0.03 | Hips shift over the supporting foot. |
-| Shoulder counter-twist | human | ° | 0 to 30 | 9 | Shoulders turn against the hips. |
+| Head nod | human | ° | 0 to 24 | 2.5 | Small nod with each step. |
+| Arm swing | human | ° | 0 to 120 | 26 | Each way, opposite the legs. |
+| Arm lag | human | cycle | -0.4 to 0.6 | 0.07 | How far the arms trail the legs. A little drag reads as natural. |
+| Elbow bend | human | ° | 0 to 160 | 14 | Resting bend. |
+| Elbow bend, forward | human | ° | 0 to 160 | 26 | Extra bend as the arm swings forward. |
+| Hip twist | human | ° | 0 to 50 | 6 | How far the hips turn each way. The right hip leads at contact. |
+| Hip drop | human | ° | 0 to 30 | 3 | The swing-side hip drops this much. |
+| Hip tilt | human | ° | 0 to 30 | 1.5 | Forward and back rock of the pelvis. |
+| Side sway | human | legs | 0 to 0.24 | 0.03 | Hips shift over the supporting foot. |
+| Shoulder counter-twist | human | ° | 0 to 60 | 9 | Shoulders turn against the hips. |
 | Head keeps facing | human |  | 0 to 1 | 0.8 | How much the head cancels the twist and tilt of the body below it. |
-| Arms out | human | ° | -10 to 40 | 4 | How far the arms hang from the body. |
-| Knees out | human | ° | -15 to 30 | 3 | Knee direction away from straight ahead. |
-| Feet width | human | legs | 0 to 0.3 | 0.075 | Distance of each foot from the centre line. |
-| Toe out | human | ° | -15 to 40 | 8 | Feet turn outward. |
-| Hip width | human | × | 0.5 to 1.8 | 1 | Scale of the distance between the hips. |
-| Shoulder width | human | × | 0.5 to 1.8 | 1 | Scale of the distance between the shoulders. |
-| Torso length | human | × | 0.6 to 1.5 | 1 | Scale of the spine. |
-| Arm length | human | × | 0.6 to 1.5 | 1 | Scale of both arms. |
-| Neck length | human | × | 0.3 to 2.5 | 1 | Scale of the neck. |
-| Head size | human | × | 0.6 to 2.2 | 1 | Scale of the head. |
-| Waist length | human | × | 0.5 to 1.8 | 1 | Scale of the lower spine, between the hips and the ribs. |
-| Chest length | human | × | 0.5 to 1.8 | 1 | Scale of the upper spine, from the ribs to the shoulders. |
-| Upper arm length | human | × | 0.6 to 1.6 | 1 | Scale of the upper arm only, on top of Arm length. |
-| Forearm length | human | × | 0.6 to 1.6 | 1 | Scale of the forearm only, on top of Arm length. |
-| Hand size | human | × | 0.5 to 2.5 | 1 | Scale of the hand, in length and in the drawing. |
-| Upper leg share | human | × | 0.75 to 1.25 | 1 | How much of the leg is thigh and how much is shin. The leg stays the same total length, so the walk does not change. |
-| Foot size | human | × | 0.6 to 2 | 1 | Scale of the drawn foot. Large for a clown shoe, small for a dancer. |
-| Limb thickness | human | × | 0.5 to 2.2 | 1 | Thickness of the arms and legs in the drawing. |
-| Body thickness | human | × | 0.6 to 1.8 | 1 | Thickness of the hips, waist, chest and neck in the drawing. |
+| Arms out | human | ° | -20 to 80 | 4 | How far the arms hang from the body. |
+| Knees out | human | ° | -30 to 60 | 3 | Knee direction away from straight ahead. |
+| Feet width | human | legs | 0 to 0.6 | 0.075 | Distance of each foot from the centre line. |
+| Toe out | human | ° | -30 to 80 | 8 | Feet turn outward. |
+| Hip width | human | × | 0.3 to 3.24 | 1 | Scale of the distance between the hips. |
+| Shoulder width | human | × | 0.3 to 3.24 | 1 | Scale of the distance between the shoulders. |
+| Torso length | human | × | 0.36 to 2.7 | 1 | Scale of the spine. |
+| Arm length | human | × | 0.36 to 2.7 | 1 | Scale of both arms. |
+| Neck length | human | × | 0.18 to 4.5 | 1 | Scale of the neck. |
+| Head size | human | × | 0.36 to 3.96 | 1 | Scale of the head. |
+| Waist length | human | × | 0.3 to 3.24 | 1 | Scale of the lower spine, between the hips and the ribs. |
+| Chest length | human | × | 0.3 to 3.24 | 1 | Scale of the upper spine, from the ribs to the shoulders. |
+| Upper arm length | human | × | 0.36 to 2.88 | 1 | Scale of the upper arm only, on top of Arm length. |
+| Forearm length | human | × | 0.36 to 2.88 | 1 | Scale of the forearm only, on top of Arm length. |
+| Hand size | human | × | 0.3 to 4.5 | 1 | Scale of the hand, in length and in the drawing. |
+| Upper leg share | human | × | 0.45 to 2.25 | 1 | How much of the leg is thigh and how much is shin. The leg stays the same total length, so the walk does not change. |
+| Foot size | human | × | 0.36 to 3.6 | 1 | Scale of the drawn foot. Large for a clown shoe, small for a dancer. |
+| Limb thickness | human | × | 0.3 to 3.96 | 1 | Thickness of the arms and legs in the drawing. |
+| Body thickness | human | × | 0.36 to 3.24 | 1 | Thickness of the hips, waist, chest and neck in the drawing. |
 | Gait | dog |  | walk, trot, pace, gallop, run, hop | walk | Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between. |
-| Stride | dog | heights | 0.1 to 5 | 0.95 | Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster. |
+| Stride | dog | heights | 0.1 to 10 | 0.95 | Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster. |
 | Time on the ground | dog |  | 0.15 to 0.85 | 0.68 | Fraction of the cycle each paw is down. |
-| Paw lift | dog | heights | 0 to 0.5 | 0.13 | How high the swinging paw clears the ground. |
-| Left paws land late | dog | cycle | -0.12 to 0.12 | 0 | Moves the left paws off their place in the beat, so the steps on the two sides are unequal. |
-| Left paws time on ground | dog |  | -0.15 to 0.15 | 0 | Added to the left paws only. Less is a leg that is hurried off the ground, as when it hurts. |
-| Left paws lift | dog |  | -0.8 to 0.8 | 0 | The left paws lift more (positive) or less (negative) than the right. |
-| Paws width | dog | heights | 0 to 0.3 | 0.11 | Distance of each paw from the centre line. |
-| Elbows and knees out | dog | ° | -15 to 30 | 3 | Direction the elbows and knees point away from straight ahead. |
-| Body bounce | dog | heights | 0 to 0.3 | 0.03 | Up and down travel of the hips. |
-| Spine bend | dog | ° | 0 to 25 | 6 | Side to side bend of the spine as the dog walks. |
-| Back arch | dog | ° | 0 to 12 | 2 | How much the back arches and dips with each footfall. |
-| Squash and stretch | dog | ° | 0 to 30 | 14 | Gallop and run only: the back humps up when the legs gather under the body and stretches out when they reach. A run does it once every step. |
-| Torso twist | dog | ° | 0 to 20 | 6 | How far the shoulders and hips roll against each other along the spine. The shoulder on the side whose paw lands drops. |
-| Shoulder blade | dog | heights | 0 to 0.15 | 0.05 | How far each shoulder blade drops and slides forward as its front paw lands. |
-| Chest raise | dog | ° | -10 to 70 | 0 | Two-legged figures only: how far the chest is raised above level. A theropod is nearly level, a bird is tipped up. |
+| Paw lift | dog | heights | 0 to 1 | 0.13 | How high the swinging paw clears the ground. |
+| Left paws land late | dog | cycle | -0.24 to 0.24 | 0 | Moves the left paws off their place in the beat, so the steps on the two sides are unequal. |
+| Left paws time on ground | dog |  | -0.3 to 0.3 | 0 | Added to the left paws only. Less is a leg that is hurried off the ground, as when it hurts. |
+| Left paws lift | dog |  | -1.6 to 1.6 | 0 | The left paws lift more (positive) or less (negative) than the right. |
+| Paws width | dog | heights | 0 to 0.6 | 0.11 | Distance of each paw from the centre line. |
+| Elbows and knees out | dog | ° | -30 to 60 | 3 | Direction the elbows and knees point away from straight ahead. |
+| Body bounce | dog | heights | 0 to 0.6 | 0.03 | Up and down travel of the hips. |
+| Spine bend | dog | ° | 0 to 50 | 6 | Side to side bend of the spine as the dog walks. |
+| Back arch | dog | ° | 0 to 24 | 2 | How much the back arches and dips with each footfall. |
+| Squash and stretch | dog | ° | 0 to 60 | 14 | Gallop and run only: the back humps up when the legs gather under the body and stretches out when they reach. A run does it once every step. |
+| Torso twist | dog | ° | 0 to 40 | 6 | How far the shoulders and hips roll against each other along the spine. The shoulder on the side whose paw lands drops. |
+| Shoulder blade | dog | heights | 0 to 0.3 | 0.05 | How far each shoulder blade drops and slides forward as its front paw lands. |
+| Chest raise | dog | ° | -20 to 140 | 0 | Two-legged figures only: how far the chest is raised above level. A theropod is nearly level, a bird is tipped up. |
 | Head hold | dog |  | 0 to 1 | 0 | A bird keeps its head still in space while the body moves under it, then thrusts it forward. 0 is off, 1 is fully held. |
-| Arm swing | dog | heights | 0 to 0.15 | 0.02 | Theropod: how far the small arms swing against the legs. |
+| Arm swing | dog | heights | 0 to 0.3 | 0.02 | Theropod: how far the small arms swing against the legs. |
 | Wings open | dog |  | 0 to 1 | 0 | Bird: 0 folds the wings against the body, 1 spreads them. |
-| Wing beat | dog | ° | 0 to 70 | 0 | Bird: how far each wing beats up and down. Open the wings first. |
+| Wing beat | dog | ° | 0 to 140 | 0 | Bird: how far each wing beats up and down. Open the wings first. |
 | In flight | dog |  | 0 to 1 | 0 | Bird: 0 stands on the ground, 1 flies. In flight the feet tuck up under the tail and the body rises on each down-stroke. Open the wings and set a wing beat. |
-| Flight height | dog | heights | 0 to 3 | 1.1 | Bird: how far above the ground the body flies. |
+| Flight height | dog | heights | 0 to 6 | 1.1 | Bird: how far above the ground the body flies. |
 | Frames per wing beat | dog | frames | 0 to 60 | 0 | Bird: how many frames one wing beat takes, on its own clock, so the wings keep beating when the walk slows or stops. 0 ties the beat to the walk cycle (Beats per cycle). |
 | Beats per cycle | dog |  | 1 to 6 | 1 | Bird: wing beats in one cycle. |
 | Neck segments | dog |  | 1 to 12 | 1 | How many bones the neck is made of. A long neck, such as a sauropod's, needs several to bend along its length. |
-| Neck curve | dog | ° | -90 to 90 | 0 | How much the neck bends over its whole length: positive droops at the top like a swan, negative arches back. Needs two or more segments. |
-| Neck wave, nodding | dog | ° | 0 to 20 | 0 | Each bone nods a little after the one below it, so a wave runs up the neck as the animal walks. |
-| Neck wave, sideways | dog | ° | 0 to 20 | 0 | Each bone swings from side to side after the one below it, so the neck snakes as the animal walks. |
-| Neck raise | dog | ° | 0 to 90 | 52 | How steeply the neck rises from the back. |
-| Head tip | dog | ° | -20 to 80 | 34 | How far the head tips down from the neck. |
-| Head nod | dog | ° | 0 to 15 | 3 | Small nod with each footfall. |
-| Tail carry | dog | ° | -60 to 90 | 28 | How far above the back the tail is held. |
-| Tail wag | dog | ° | 0 to 60 | 22 | How far the tail swings each way. Use Repeats on the tail channels for a faster wag. |
-| Ear bounce | dog | ° | 0 to 30 | 7 | How much the ears flop. |
-| Body length | dog | × | 0.7 to 1.4 | 1 | Scale of the back. |
-| Leg length | dog | × | 0.7 to 1.4 | 1 | Scale of all four legs. |
-| Neck length | dog | × | 0.5 to 1.8 | 1 | Scale of the neck. |
-| Head size | dog | × | 0.6 to 1.8 | 1 | Scale of the head and snout. |
-| Tail length | dog | × | 0.3 to 2.5 | 1 | Scale of the tail. |
-| Ear length | dog | × | 0.4 to 2.5 | 1 | Scale of the ears. |
+| Neck curve | dog | ° | -180 to 180 | 0 | How much the neck bends over its whole length: positive droops at the top like a swan, negative arches back. Needs two or more segments. |
+| Neck wave, nodding | dog | ° | 0 to 40 | 0 | Each bone nods a little after the one below it, so a wave runs up the neck as the animal walks. |
+| Neck wave, sideways | dog | ° | 0 to 40 | 0 | Each bone swings from side to side after the one below it, so the neck snakes as the animal walks. |
+| Neck raise | dog | ° | 0 to 180 | 52 | How steeply the neck rises from the back. |
+| Head tip | dog | ° | -40 to 160 | 34 | How far the head tips down from the neck. |
+| Head nod | dog | ° | 0 to 30 | 3 | Small nod with each footfall. |
+| Tail carry | dog | ° | -120 to 180 | 28 | How far above the back the tail is held. |
+| Tail wag | dog | ° | 0 to 120 | 22 | How far the tail swings each way. Use Repeats on the tail channels for a faster wag. |
+| Ear bounce | dog | ° | 0 to 60 | 7 | How much the ears flop. |
+| Body length | dog | × | 0.42 to 2.52 | 1 | Scale of the back. |
+| Leg length | dog | × | 0.42 to 2.52 | 1 | Scale of all four legs. |
+| Neck length | dog | × | 0.3 to 3.24 | 1 | Scale of the neck. |
+| Head size | dog | × | 0.36 to 3.24 | 1 | Scale of the head and snout. |
+| Tail length | dog | × | 0.18 to 4.5 | 1 | Scale of the tail. |
+| Ear length | dog | × | 0.24 to 4.5 | 1 | Scale of the ears. |
 
 ## Speech
 
@@ -131,7 +131,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Turntable speed | both | °/s | -120 to 120 | 24 | Degrees per second. Negative circles the other way. |
 | Axes gizmo | both |  | bool | true | Small x, y, z guide: x forward, y up, z the figure right side. |
 | Selection colour | both |  | color | #e0662e | Highlight for the selected part. |
-| Style | both |  | mannequin, outline, stick, silhouette | mannequin | Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
+| Style | both |  | mannequin, outline, stick, silhouette, moebius | mannequin | Moebius is a pen drawing: a thin ink line round the figure, flat soft colour, and shading by fine hatching, cross-hatching and a few dots on the side away from the light, on a paper-coloured stage. Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
 | Line width | both | px | 0.5 to 12 | 3 | At 1080 pixels tall. It scales with the canvas. |
 | Limb thickness | both | × | 0.5 to 2 | 1 | How thick the tube arms and legs are. |
 | Limb curve | both |  | 0 to 1 | 1 | 1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint. |
@@ -139,6 +139,12 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Body under pictures | both |  | hide covered parts, hide the model, show the model | hide covered parts | What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin. |
 | Ears | both |  | none, round | none | Round ears on top of the head. Off by default. |
 | Eyes | both |  | pie, round, dots | pie | Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots. |
+| Light direction | both | ° | -180 to 180 | -135 | Where the light comes from, as an angle on the screen. -135 is the top left; the hatching goes on the other side of each form. |
+| Hatch angle | both | ° | 0 to 180 | 50 | The angle of the hatching lines. |
+| Hatch spacing | both | px | 2 to 14 | 4.5 | The gap between hatching lines. Smaller is darker and finer. |
+| Shadow reach | both |  | 0 to 1 | 0.5 | How far the shadow reaches round each form. 0 is none, 1 is nearly all of it. |
+| Stipple | both |  | 0 to 1 | 0.4 | Dots along the edge of the shadow, for texture. |
+| Paper-coloured stage | both |  | bool | true | In the Moebius style the stage is the colour of paper instead of the background colour. |
 | Body colour | both |  | color | #2d2a2e | The head, body, arms and legs. |
 | Face colour | both |  | color | #fff8e8 | The face patch on the head. |
 | Glove colour | both |  | color | #ffffff | The hands. |
