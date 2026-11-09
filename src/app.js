@@ -22,6 +22,7 @@ import { findKeyFrames, laneTable, tableCsv } from './keyposes.js';
 import { VISEMES, VISEME_BY_ID, buildSpeech, cleanSpeech, keyOn } from './lipsync.js';
 import { paintMouth } from './mouth.js';
 import { icon } from './icons.js';
+import { makeSeamless, loopGap } from './loop.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
@@ -1690,6 +1691,24 @@ function resetAll() {
 }
 const goTab = (t) => { S.tab = t; renderPanel(); };
 
+// ---------- seamless loop ----------
+/** Adjusts the frame count, the length of a performance, its lanes and its pace so the last frame leads straight back into the first. */
+function makeLoop() {
+  pause();
+  if (S.source === 'sampled') { setMessage('The loop button works on the 3D walk, not on sampled drawings.'); return null; }
+  const was = { n: S.p.cycleFrames, len: S.perfLen, lanes: JSON.stringify(S.lanes) };
+  const before = loopGap(P());
+  const r = makeSeamless({ base: S.p, lanes: S.lanes, perfLen: S.perfLen, cycleFrames: S.p.cycleFrames, exposure: S.p.exposure });
+  S.p.cycleFrames = r.cycleFrames; S.lanes = r.lanes; S.perfLen = r.perfLen; S.ver++; S.frame = 0;
+  const changed = was.n !== S.p.cycleFrames || was.len !== S.perfLen || was.lanes !== JSON.stringify(S.lanes);
+  if (changed) markCustom();
+  buildStrip(); renderPanel(); render(); save();
+  const after = loopGap(P());
+  const bent = S.p.terrain && S.p.terrain !== 'flat' ? ' The ground does not repeat; the figure does.' : (S.p.heading || hasLanes(S.lanes) && S.lanes['p:heading']) ? ' The path turns, so the figure does not return to where it started; its movement repeats.' : '';
+  setMessage(`Seamless loop of ${cycleFrames(P()).frames.length} frames. ${r.notes.join(' ')} The join is ${after.ratio <= 1.1 ? 'no bigger than any other step' : `still ${after.ratio.toFixed(1)} times the biggest step`}${changed || before.ratio > 1.1 ? ` (it was ${before.ratio.toFixed(1)} times).` : '.'}${bent}`);
+  return { before, after, notes: r.notes, changed };
+}
+
 // ---------- copy and paste ----------
 const CLIP_KEY = 'walkbase.clip';
 const findSceneItem = (id) => S.scene.actors.find((a) => a.id === id) || S.scene.props.find((p) => p.id === id) || null;
@@ -1756,7 +1775,7 @@ const openHelpAgain = () => { if (helpEl) openHelp(); };
 function openHelp() {
   const was = Boolean(helpEl); if (helpEl) { helpEl.remove(); helpEl = null; }
   closeMenus();
-  const root = h('div', { class: 'help', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'A quick guide to the screen', testid: 'help-overlay' });
+  const root = h('div', { class: 'help-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'A quick guide to the screen', testid: 'help-overlay' });
   const list = [];
   HELP_STOPS.forEach(([sel, title, text], i) => {
     const t = document.querySelector(sel); const r = t?.getBoundingClientRect(); if (!r || !r.width || !r.height) return;
@@ -1816,6 +1835,8 @@ function menuBar() {
     ]),
     mb('Performance', 'menu-perf', () => [
       { label: S.playing ? 'Pause' : 'Play', testid: 'pm-play', onClick: () => (S.playing ? pause() : play()) },
+      { label: 'Make a seamless loop', testid: 'pm-loop', onClick: makeLoop },
+      { separator: true },
       { label: 'Go to start', testid: 'pm-first', onClick: () => { pause(); setFrame(0); } },
       { label: 'Go to end', testid: 'pm-last', onClick: () => { pause(); setFrame(cycleFrames(P()).frames.length - 1); } },
       { separator: true },
@@ -1893,6 +1914,7 @@ function build() {
         iconBtn('last', 'Last frame', 'last', () => { pause(); setFrame(cycleFrames(P()).frames.length - 1); })),
       h('button', { type: 'button', class: 'btn ghost rec icon', id: 'rec', testid: 'rec', 'aria-pressed': 'false', 'aria-label': 'Record', title: 'Arm recording: moves you make while playing become automation', onClick: () => setArmed(!S.armed) }, icon('rec'), h('span', { class: 'sr' }, 'Rec')),
       h('label', { class: 'field' }, h('span', null, 'Frame'), h('input', { id: 'frameNum', type: 'number', class: 'num', inputmode: 'numeric', min: 1, value: 1, testid: 'frame-input', onChange: (e) => { pause(); setFrame(Number(e.target.value) - 1); } })),
+      h('button', { type: 'button', class: 'btn ghost', testid: 'make-loop', title: 'Make a seamless loop: adjust the frames so the last frame leads straight back into the first', onClick: makeLoop }, icon('loop'), h('span', { class: 'lbl' }, 'Loop')),
       h('span', { class: 'tc', id: 'tc', 'aria-hidden': 'true' })),
     h('div', { id: 'strip', class: 'strip', role: 'group', 'aria-label': 'Frames in the cycle' }));
   const splitter = h('div', { class: 'splitter', role: 'separator', tabindex: '0', 'aria-label': 'Resize the animation window. Drag, or use the arrow keys.', testid: 'splitter' }, h('span', { class: 'grip' }));
@@ -2230,7 +2252,7 @@ render();
 refreshSaveState();
 window.addEventListener('beforeunload', (e) => { if (isDirty() && !LAYOUT.resume) { e.preventDefault(); e.returnValue = ''; } });
 // The guide shows once, on a first visit: nothing kept yet for this browser (an earlier visit leaves its layout, and the automated tests set one).
-try { if (!localStorage.getItem('walkbase.helpSeen') && !localStorage.getItem(LAYOUT_KEY)) setTimeout(openHelp, 600); } catch { /* not shown */ }
+try { if (!navigator.webdriver && !localStorage.getItem('walkbase.helpSeen') && !localStorage.getItem(LAYOUT_KEY)) setTimeout(openHelp, 600); } catch { /* not shown */ }
 window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (!mod || e.altKey) return;
@@ -2241,7 +2263,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
-  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
+  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),

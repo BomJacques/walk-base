@@ -49,6 +49,7 @@ const overlaps = () => {
 const shapes = { landscape: { width: 1180, height: 820 }, portrait: { width: 820, height: 1180 }, narrow: { width: 507, height: 820 }, phone: { width: 390, height: 780 }, short: { width: 1024, height: 520 } };
 for (const [density, touch] of [['comfortable', true], ['compact', false]]) {
   const context = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: touch });
+  if (!touch) await context.addInitScript(() => { try { Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 }); } catch { /* kept */ } }); // a touch screen on the machine must not make a mouse test think it is a tablet
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(url); await page.waitForFunction(() => window.__walkBase);
@@ -77,6 +78,7 @@ for (const [density, touch] of [['comfortable', true], ['compact', false]]) {
 // the figure's own labels do not run under the camera bar
 {
   const context = await browser.newContext({ viewport: { width: 700, height: 600 } });
+  await context.addInitScript(() => { try { Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 }); } catch { /* kept */ } }); // a touch screen on the machine must not make a mouse test think it is a tablet
   const page = await context.newPage();
   await page.goto(url); await page.waitForFunction(() => window.__walkBase); await page.waitForTimeout(300);
   const clash = await page.evaluate(() => {
@@ -93,6 +95,7 @@ for (const [density, touch] of [['comfortable', true], ['compact', false]]) {
 // the audit itself: a deliberate overlap must be reported, or a clean result means nothing
 {
   const context = await browser.newContext({ viewport: { width: 1180, height: 820 } });
+  await context.addInitScript(() => { try { Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 }); } catch { /* kept */ } }); // a touch screen on the machine must not make a mouse test think it is a tablet
   const page = await context.newPage();
   await page.goto(url); await page.waitForFunction(() => window.__walkBase); await page.waitForTimeout(300);
   await page.evaluate(() => { window.__walkBase.LAYOUT.hud = true; window.__walkBase.render(); }); await page.addStyleTag({ content: '.hud { top: 8px !important; left: 8px !important; bottom: auto !important; } .tab { margin-right: -30px; }' });

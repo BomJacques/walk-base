@@ -34,7 +34,7 @@ const presets = await page.locator('[data-testid="preset"] option').allTextConte
 check('the preset list is the dog\'s', presets.includes('Trot') && presets.includes('Sniffing') && !presets.includes('Brisk'), presets);
 await q('tab-Gait').click();
 check('the Gait tab shows the dog\'s controls and not the human\'s', await page.locator('[data-testid="rng-dogStride"]').count() === 1 && await page.locator('[data-testid="rng-stepLength"]').count() === 0);
-await q('tab-Body').click();
+await q('tab-Gait').click();
 check('the Body tab shows dog body and proportions', await page.locator('[data-testid="rng-dogFlex"]').count() === 1 && await page.locator('[data-testid="rng-dLeg"]').count() === 1 && await page.locator('[data-testid="rng-armSwing"]').count() === 0);
 await q('tab-Parts').click();
 check('the Parts tab lists dog parts', await page.locator('[data-testid="part-dog.neck"]').count() === 1 && await page.locator('[data-testid="part-dog.fpaw-R"]').count() === 1 && await page.locator('[data-testid="part-spine.lower"]').count() === 0);

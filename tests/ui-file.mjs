@@ -87,6 +87,19 @@ await q('menu-edit').click(); await wait(100);
 check('the Edit menu has Copy, Paste, Duplicate and Delete', ['menu-copy', 'menu-paste', 'menu-dup', 'menu-delete'].every((id) => true) && (await page.locator('[data-testid="menu-copy"]').count()) === 1 && (await page.locator('[data-testid="menu-dup"]').count()) === 1);
 await page.keyboard.press('Escape');
 if (shots) { await q('help').click(); await wait(250); await page.screenshot({ path: path.join(shots, `wb-help-${name}.png`) }); }
+// ---- the seamless loop
+await ev(() => { const w = window.__walkBase; w.S.lanes = { 'p:stepLength': { interp: 'smooth', pts: [{ t: 0, v: 0.5 }, { t: 60, v: 0.9 }, { t: 100, v: 0.9 }] }, 'p:bob': { interp: 'smooth', pts: [{ t: 0, v: 0.04 }, { t: 100, v: 0.12 }] } }; w.S.perfLen = 100; w.S.ver++; w.render(); const r = document.querySelector('[data-testid="rng-bob"]'); if (r) { r.value = 0.08; r.dispatchEvent(new Event('input', { bubbles: true })); } }); await wait(500);
+const gap0 = await ev(() => window.__walkBase.loopGapNow());
+check('a drifting performance jumps at the join before the button', gap0.ratio > 1.5, gap0);
+check('the Loop button is in the transport bar', (await q('make-loop').count()) === 1);
+await q('make-loop').click(); await wait(400);
+const gap1 = await ev(() => ({ g: window.__walkBase.loopGapNow(), len: window.__walkBase.S.perfLen, n: window.__walkBase.S.p.cycleFrames, msg: window.__walkBase.S.message }));
+check('after it the join is no bigger than any other step, and the length is whole cycles', gap1.g.ratio <= 1.1 && gap1.len % gap1.n === 0, gap1);
+check('and it says what it did', /Seamless loop/.test(gap1.msg || ''), gap1.msg);
+await wait(350); await ev(() => window.__walkBase.undo()); await wait(250);
+check('Undo puts the performance back as it was', (await ev(() => window.__walkBase.S.perfLen)) === 100);
+await q('menu-perf').click(); await wait(100);
+check('the Performance menu has it too', (await page.locator('[data-testid="pm-loop"]').count()) === 1); await page.keyboard.press('Escape');
 check('no page errors', errors.length === 0, errors);
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();

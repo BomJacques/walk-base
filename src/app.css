@@ -402,7 +402,7 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .savestate { font-size: 11px; color: var(--ink-3); margin-right: 4px; white-space: nowrap; }
 .savestate[data-state="dirty"] { color: var(--accent); font-weight: 600; }
 .savestate:empty { display: none; }
-.help { position: fixed; inset: 0; z-index: 300; background: rgba(8, 10, 14, .62); }
+.help-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(8, 10, 14, .62); }
 .help-box { position: fixed; border: 2px solid #ffd15c; border-radius: 8px; box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }
 .help-badge { position: absolute; left: -2px; top: -12px; min-width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 11px; background: #ffd15c; color: #1b1b1f; font-size: 12px; font-weight: 700; padding: 0 5px; }
 .help-card { position: fixed; right: 16px; bottom: 16px; width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
@@ -416,3 +416,5 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .help-card h2, .help-card > .btn { grid-column: 1 / -1; } .help-card > .btn { justify-self: start; margin-top: 6px; }
 .help-keys h3 { margin-top: 0; }
 @media (max-width: 720px) { .help-card { grid-template-columns: 1fr; top: 70px; } }
+
+@media (max-width: 900px) { .brand { display: none; } }

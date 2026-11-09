@@ -479,3 +479,12 @@ Done: a Select tool is the default (one finger taps to select and drags what it 
 - **Save.** File > Save (Ctrl+S) saves under the current name and File > Save as asks for a name (the name is stored in the file and shown in the window title); Open reads a file back under its own name. A small note beside the name says Unsaved changes after an edit and Saved after a save, and a browser that is set to start clean warns before it closes on unsaved changes.
 - **Help.** The ? button (or F1 or ?) draws numbered boxes on the top bar, the stage tools, the stage, the tabs and the timeline with a card that says what each does, the gestures and the keys. It opens by itself once, on a first visit.
 - Not done: copying a lane or a span of frames, and copy and paste between two open pages as text (it goes through the browser's storage, not the system clipboard).
+
+## Phase C done (2026-11-10): seamless loop
+
+A Loop button in the transport bar (and Performance > Make a seamless loop) adjusts the frames so the last frame leads straight back into the first:
+- the cycle is made a whole number of drawings at the current exposure;
+- a performance (automation lanes) is made a whole number of cycles long, every lane eases back to where it started over the last few frames, and the pace (the cadence lane) is trimmed a fraction so the walk arrives back at exactly the same point of its stride;
+- a plain cycle already repeats exactly, so there it only fits the exposure.
+It says what it changed and how smooth the join is: the step from the last frame to the first, as a share of the biggest step between other frames (1 or less is seamless). One Undo puts it back. A test checks that a drifting performance has a jump at the join and none after.
+Limits: terrain and a turning path do not repeat (the figure's movement does, the ground does not, and it says so); a figure that runs free (a channel set to Free running with a frequency that is not a whole number) may still drift; the scene's other figures take a whole number of their own cycles to each of the main figure's, so they loop with it.

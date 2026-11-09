@@ -15,6 +15,7 @@ const errors = [];
 
 async function open(ctxOpts) {
   const context = await browser.newContext(ctxOpts);
+  if (!ctxOpts.hasTouch) await context.addInitScript(() => { try { Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 }); } catch { /* kept */ } }); // a touch screen on the machine must not make a mouse test think it is a tablet
   const page = await context.newPage();
 // these tests reload on purpose and expect the session back, so they opt in to File > Reopen with last session
 await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true, expandAll: true })); });
@@ -106,7 +107,7 @@ await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) l
   await q('tab-Gait').click();
   const rowOf = (id) => page.locator('.row', { has: page.locator(`[data-testid="${id}"]`) });
   const lab = rowOf('rng-stepLength').locator('.lab').first();
-  const lb = await lab.boundingBox();
+  await lab.scrollIntoViewIfNeeded(); const lb = await lab.boundingBox();
   const v0 = await ev(() => window.__walkBase.S.p.stepLength);
   await page.mouse.move(lb.x + 20, lb.y + lb.height / 2); await page.mouse.down(); await page.mouse.move(lb.x + 60, lb.y + lb.height / 2, { steps: 4 }); await page.mouse.move(lb.x + 120, lb.y + lb.height / 2, { steps: 4 }); await page.mouse.up();
   const v1 = await ev(() => window.__walkBase.S.p.stepLength);
@@ -194,6 +195,7 @@ await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) l
 // ================= a visit starts clean unless File > Reopen with last session is on =================
 {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await context.addInitScript(() => { try { Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 }); } catch { /* kept */ } }); // a touch screen on the machine must not make a mouse test think it is a tablet
   const page = await context.newPage(); // no opt-in script here
   page.on('dialog', (d) => d.accept());
   await page.goto(url); await page.waitForFunction(() => window.__walkBase);
