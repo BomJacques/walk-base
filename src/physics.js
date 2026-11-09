@@ -75,6 +75,16 @@ export function simulateStrip(roots, phys, length, { fps = 24, cycle = roots.len
     prev = rootNow;
     if (k >= warm * T) out.push(Array.from({ length: N }, (_, i) => [x[i] - rootNow.x, y[i] - rootNow.y]));
   }
+  // A looping cycle must end where it begins. After the warm-up the chain is almost there; the little that is left is the frame after the last one not matching the first,
+  // which shows as a kink in the loop. Take one more frame, see how far off it is, and spread that over the cycle so the last frame leads exactly into the first.
+  if (warm > 0 && out.length === T) {
+    const rootNext = at(total);
+    for (let s = 0; s < SUB; s++) step(total, rootNext, s);
+    for (let f = 0; f < T; f++) {
+      const w = f / T;
+      for (let i = 0; i < N; i++) { out[f][i][0] -= (x[i] - rootNext.x - out[0][i][0]) * w; out[f][i][1] -= (y[i] - rootNext.y - out[0][i][1]) * w; }
+    }
+  }
   return out;
 }
 
@@ -106,7 +116,7 @@ export function stripSims(params, items) {
     const dog = params.rig === 'dog';
     const stride = dog ? params.dogStride : 2 * params.stepLength;
     const world = roots.map((r) => ({ x: r.x + r.pelvisX, y: r.y, dir: r.dir }));
-    const nodes = simulateStrip(world, it.phys, it.h, { fps: params.fps || 24, cycle: Math.max(2, Math.round(params.cycleFrames)), loops: 1, travel: perf ? 0 : stride, warm: perf ? 0 : 6 });
+    const nodes = simulateStrip(world, it.phys, it.h, { fps: params.fps || 24, cycle: Math.max(2, Math.round(params.cycleFrames)), loops: 1, travel: perf ? 0 : stride, warm: perf ? 0 : 30 });
     const value = { frames: roots.map((r, f) => ({ root: [r.x, r.y, r.z], pelvisX: r.pelvisX, nodes: nodes[f] })) };
     cache.set(it.id, { key, value }); out.set(it.id, value);
   }

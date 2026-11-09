@@ -32,7 +32,7 @@ check('its physics panel is shown', (await page.locator('[data-testid="attach-ph
 
 // it swings as the walk goes round
 const tipsAt = [];
-for (const f of [0, 6, 12, 18]) { await ev((i) => window.__walkBase.setFrame(i), f); await page.waitForTimeout(80); tipsAt.push(await tipOf()); }
+for (const f of [0, 3, 6, 9]) { await ev((i) => window.__walkBase.setFrame(i), f); await page.waitForTimeout(80); tipsAt.push(await tipOf()); }
 const rel = tipsAt.map((t) => [Math.round(t.x - t.ax), Math.round(t.y - t.ay)]);
 check('the tip swings relative to the anchor through the cycle', new Set(rel.map((r) => r.join())).size >= 3, rel);
 check('the strip is the same at the same frame every time', await (async () => { await ev(() => window.__walkBase.setFrame(7)); const a = await tipOf(); await ev(() => window.__walkBase.setFrame(3)); await ev(() => window.__walkBase.setFrame(7)); const b = await tipOf(); return Math.hypot(a.x - b.x, a.y - b.y) < 0.01; })());
