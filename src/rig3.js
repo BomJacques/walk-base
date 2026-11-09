@@ -192,7 +192,9 @@ export function hoseLimbs(sd, p) {
   const grow = (root, pts, ext, flat) => pts.map((q) => { const v = sub(q, root); return add(root, flat ? [v[0] * (1 + ext), v[1], v[2] * (1 + ext)] : mul(v, 1 + ext)); });
   const armL = len(sub(sd.elbow, sd.shoulder)) + len(sub(wrist, sd.elbow)); const eA = clamp01((len(sub(wrist, sd.shoulder)) / armL - 0.7) / 0.3);
   const [elbow, wrist2, hand2] = grow(sd.shoulder, [sd.elbow, wrist, hand], k * 0.5 * eA * eA, false);
-  const legL = len(sub(sd.knee, sd.hip)) + len(sub(sd.ankle, sd.knee)); const eL = sd.stance ? 0 : clamp01((len(sub(sd.ankle, sd.hip)) / legL - 0.8) / 0.2);
+  const legL = len(sub(sd.knee, sd.hip)) + len(sub(sd.ankle, sd.knee)); // a leg only stretches while it swings, and eases in and out, so it does not jump when the foot lands or leaves the ground (that jump was a pop at the loop join)
+  const g = sideGait(p, sd.s > 0 ? 'R' : 'L'); const kSwing = sd.w >= g.p.duty ? Math.sin(Math.PI * ((sd.w - g.p.duty) / Math.max(1e-6, 1 - g.p.duty))) : 0;
+  const eL = kSwing * clamp01((len(sub(sd.ankle, sd.hip)) / legL - 0.8) / 0.2);
   const [knee, ankle] = grow(sd.hip, [sd.knee, sd.ankle], k * 0.5 * eL * eL, true);
   return { ...sd, elbow, wrist: wrist2, hand: hand2, knee, ankle };
 }

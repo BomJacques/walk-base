@@ -498,3 +498,7 @@ Limits: terrain and a turning path do not repeat (the figure's movement does, th
 ## Fix (2026-11-10): a kink at the loop join when a cape or hair is attached
 
 A swinging strip (cape or hair) was simulated through six warm-up cycles, which left it a little off from where the next cycle would start, so the join between the last and first frame had a small kink. It now warms up through thirty cycles and then spreads what is left over the cycle so the last frame leads exactly into the first. Pictures and shapes follow the body directly and always loop. A test checks the join is no sharper than the sharpest bend elsewhere, for three kinds of strip.
+
+## Fix (2026-11-10): a pop at the loop join on the rubber hose figure
+
+The rubber hose leg stretched only while the foot was off the ground, and the stretch was switched on and off at the moment a foot landed or left it. The loop starts at a foot landing, so the leg (and anything attached to it) jumped by about a seventh of a leg length at the join. The stretch now fades in and out over the swing. A test samples every walk at 960 steps a cycle and checks that no joint jumps.
