@@ -466,3 +466,9 @@ Both lists are fitted into the lettered phases above.
 ## Phase A started (2026-11-10): touch, pivot, attach fix, scenery height, figure colours
 
 Done: a Select tool is the default (one finger taps to select and drags what it touches; only two fingers pan and zoom, and the Orbit and Pan tools stay for one-finger camera moves); on a mouse the middle button pivots the camera and Shift with it pans; pictures attached to the rubber hose figure now go with its stretched arms, trailing hands and feet (they were left behind when the limbs stretched, which is why attaching to a hose hand or arm seemed not to work); a selected shoulder carries a picture on the upper arm; scenery can be raised and lowered (Raise); each scene figure has its own fill, line and far-side tint. Still to do in A: context menus on the selected object, and the main figure's colours as a per-figure setting.
+
+## Phase A finished (2026-11-10): menus on the selected object, and colours for every figure
+
+- **Context menus.** Right-click, or press and hold a finger still (about half a second; moving first cancels it), opens a menu for whatever is under the pointer, and every item acts on that object: a picture (Edit, Duplicate, Copy to the other side, the four layers, Hide, Delete), a part of the main figure (select and open its settings, attach a shape here, attach a picture here), a figure or piece of scenery in the scene (Select, Duplicate, Raise and Lower for scenery, Hide, Remove) or the empty stage (Fit to the window, Look at the head, Hide the scene).
+- **Colours for every figure.** The main figure is the first row of the Scene list, with its own fill, line and far-side tint; each other figure has its own. A hint on each row.
+- Phase A is done apart from judging touch on a real iPad. Next phases in order: B (copy and paste, save, help overlay), C (seamless loop), D (menu clean-up), E (gait: weight, stumble, noise).

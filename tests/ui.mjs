@@ -41,6 +41,8 @@ const cx = stageBox.x + stageBox.width / 2; const cy = stageBox.y + stageBox.hei
 if (cdp) {
   check('the Select tool is the default, so one finger does not move the camera', (await ev(() => window.__walkBase.S.tool)) === 'select');
   { const yS = await ev(() => window.__walkBase.S.s.camYaw); await touch('touchStart', [[cx - 100, cy]]); for (let i = 1; i <= 10; i++) await touch('touchMove', [[cx - 100 + i * 12, cy]]); await touch('touchEnd', []); check('with Select a one-finger drag leaves the camera alone', (await ev(() => window.__walkBase.S.s.camYaw)) === yS); }
+  { await touch('touchStart', [[cx - 150, cy + 150]]); await page.waitForTimeout(750); await touch('touchEnd', []); await page.waitForTimeout(150); check('holding a finger still opens a menu for what is under it', (await page.locator('[data-testid="context-menu-list"]').count()) === 1); await page.keyboard.press('Escape'); await page.waitForTimeout(100);
+    await touch('touchStart', [[cx - 150, cy + 150]]); for (let i = 1; i <= 6; i++) await touch('touchMove', [[cx - 150 + i * 6, cy + 150]]); await page.waitForTimeout(700); await touch('touchEnd', []); await page.waitForTimeout(100); check('moving the finger first cancels the long press', (await page.locator('[data-testid="context-menu-list"]').count()) === 0); }
   await ev(() => { window.__walkBase.S.tool = 'orbit'; });
   const y0 = await ev(() => window.__walkBase.S.s.camYaw);
   await touch('touchStart', [[cx - 100, cy]]);

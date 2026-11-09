@@ -25,7 +25,7 @@ import { icon } from './icons.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
-import { menuButton, closeMenus, menuOwner } from './menu.js';
+import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
 
 const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -631,12 +631,20 @@ function sceneSection() {
   const host = h('div', { testid: 'scene-section' });
   const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIGS.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) })) });
   const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => addProp(k.id) })) });
-  const rows = [...S.scene.actors.map((a) => ({ id: a.id, label: `${a.name} (${a.preset || 'walk'})`, kind: 'figure' })), ...S.scene.props.map((q) => ({ id: q.id, label: q.name, kind: 'scenery' }))];
-  host.append(h('section', { class: 'group', 'data-area': 'Scene' }, h('h3', null, rows.length ? `Scene (${rows.length})` : 'Scene'),
+  const rows = [{ id: 'main', label: `${FIG_LABELS[figKey()]} (main)`, kind: 'figure', main: true }, ...S.scene.actors.map((a) => ({ id: a.id, label: `${a.name} (${a.preset || 'walk'})`, kind: 'figure' })), ...S.scene.props.map((q) => ({ id: q.id, label: q.name, kind: 'scenery' }))];
+  host.append(h('section', { class: 'group', 'data-area': 'Scene' }, h('h3', null, rows.length > 1 ? `Scene (${rows.length - 1})` : 'Scene'),
     h('div', { class: 'btnrow' }, addFig, addPr),
+    rows.length === 1 ? h('p', { class: 'hint' }, 'Add more figures, each with its own walk and colours, and scenery to stand them in. Tap a figure on the stage to select it, or press and hold (right-click on a mouse) for a menu.') : null,
     rows.length ? h('div', { class: 'scene-list', role: 'listbox', 'aria-label': 'Scene items' }, rows.map((r) => h('div', { class: 'scene-line' },
       h('button', { type: 'button', class: 'scene-row', role: 'option', 'aria-selected': String(r.id === S.sceneSel), testid: `scene-item-${r.id}`, onClick: () => { S.sceneSel = r.id; renderPanel(); } }, h('span', null, r.label), h('small', null, r.kind)),
-      h('button', { type: 'button', class: 'btn icon scene-del', 'aria-label': `Remove ${r.label}`, title: 'Remove', testid: `scene-del-${r.id}`, onClick: () => removeSceneItem(r.id) }, icon('close', 14))))) : h('p', { class: 'hint' }, 'Add more figures, each with its own walk, and scenery to stand them in. Tap a figure on the stage to select it.')));
+      r.main ? null : h('button', { type: 'button', class: 'btn icon scene-del', 'aria-label': `Remove ${r.label}`, title: 'Remove', testid: `scene-del-${r.id}`, onClick: () => removeSceneItem(r.id) }, icon('close', 14))))) : h('p', { class: 'hint' }, 'Add more figures, each with its own walk, and scenery to stand them in. Tap a figure on the stage to select it.')));
+  if (S.sceneSel === 'main') {
+    const set1 = (k, v) => { S.s[k] = v; render(); save(); };
+    const c1 = (label, k, tid) => h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, label)), h('input', { type: 'color', class: 'color', value: S.s[k], 'aria-label': label, testid: tid, onInput: (e) => set1(k, e.target.value) }));
+    host.append(h('section', { class: 'group', 'data-area': 'Scene' }, h('h3', null, 'This figure'), c1('Fill colour', 'fillColor', 'main-fill'), c1('Line colour', 'lineColor', 'main-line'), c1('Far-side tint', 'farTint', 'main-tint'),
+      h('p', { class: 'hint' }, 'The main figure keeps its colours with the stage settings. The other figures in the scene each have their own.')));
+    return host;
+  }
   const it = sceneItem(); if (!it) return host;
   const actor = S.scene.actors.includes(it);
   const set = (patch, panel = false) => { Object.assign(it, patch); sceneChanged(panel); };
@@ -1870,6 +1878,48 @@ function gestures() {
     const cx = (clientX - m.left) * m.d; const cy = (clientY - m.top) * m.d;
     return { x: ((cx - m.x0) / m.zw) * m.fcw, y: ((cy - m.y0) / m.zh) * m.fch };
   };
+  // A menu for whatever is under the pointer: a right-click, or holding a finger still. Every item acts on that object.
+  const sceneRow = (id) => S.scene.actors.find((a) => a.id === id) || S.scene.props.find((p) => p.id === id) || null;
+  const contextMenuFor = (cx, cy) => {
+    const q = toFrame(cx, cy); if (!q || !S.last) return false;
+    const front = pickAttachment(q, 'front'); const part = !front ? pickPart(S.last.shapes.filter((s) => !s.attach), q.x, q.y) : null;
+    const back = !front && !part ? pickAttachment(q, 'behind') : null;
+    const sceneHit = !front && !part && !back ? [...(S.last.sceneHits || [])].reverse().find((h) => pickPart(h.shapes, q.x, q.y)) : null;
+    let items; let label;
+    if (front || back) {
+      const it = (front || back).it; label = it.name; const sidedTarget = attachTargets(S.p.rig).find((t) => t.key === targetKey(it))?.side;
+      items = [{ heading: it.name }, { label: 'Edit', testid: 'ctx-edit', onClick: () => selectAttach(it.id) },
+        { label: 'Duplicate', testid: 'ctx-dup', onClick: () => { const c = cloneItem(it); c.x += 0.04; c.y += 0.04; attachList().push(c); selectAttach(c.id); save(); } },
+        ...(sidedTarget ? [{ label: 'Copy to the other side', testid: 'ctx-mirror', onClick: () => { const fr = (front || back).f; const m = mirroredItem(it, fr.L, fr.r); attachList().push(m); selectAttach(m.id); save(); } }] : []),
+        { separator: true }, { heading: 'Layer' },
+        ...[['back', 'Send to the back'], ['behind', 'Behind its part'], ['front', 'In front of its part'], ['top', 'Bring to the top']].map(([v, l]) => ({ label: l, testid: `ctx-layer-${v}`, radio: true, checked: it.depth === v, onClick: () => patchAttach(it.id, { depth: v }, { panel: true }) })),
+        { separator: true }, { label: it.visible ? 'Hide' : 'Show', testid: 'ctx-hide', onClick: () => patchAttach(it.id, { visible: !it.visible }, { panel: true }) },
+        { label: 'Delete', testid: 'ctx-del', onClick: () => { S.attach[figKey()] = attachList().filter((a) => a.id !== it.id); S.attachSel = null; renderPanel(); render(); save(); } }];
+    } else if (part) {
+      label = wd(partLabel(part.part, part.side));
+      items = [{ heading: label }, { label: 'Select and open its settings', testid: 'ctx-part', onClick: () => selectPart({ part: part.part, side: part.side }, { openTab: true }) },
+        { label: 'Attach a shape here', testid: 'ctx-attach-shape', onClick: () => { selectPart({ part: part.part, side: part.side }, { openTab: false }); addAttach('rect'); } },
+        { label: 'Attach a picture here…', testid: 'ctx-attach-pic', onClick: () => { selectPart({ part: part.part, side: part.side }, { openTab: false }); S.tab = 'Attach'; renderPanel(); setMessage('Choose Add > Picture in the Attach tab. The picture goes on the selected part.'); } }];
+    } else if (sceneHit) {
+      const it = sceneRow(sceneHit.id); if (!it) return false; label = it.name; const isActor = S.scene.actors.includes(it);
+      items = [{ heading: it.name }, { label: 'Select', testid: 'ctx-scene-select', onClick: () => { S.sceneSel = it.id; S.tab = 'Gait'; selectPart(null, { openTab: false }); renderPanel(); } },
+        { label: 'Duplicate', testid: 'ctx-scene-dup', onClick: () => { const c = JSON.parse(JSON.stringify(it)); c.id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`; c.name = `${it.name} copy`; c.x += 0.8; (isActor ? S.scene.actors : S.scene.props).push(c); S.sceneSel = c.id; sceneChanged(true); } },
+        ...(isActor ? [] : [{ label: 'Raise', testid: 'ctx-scene-up', onClick: () => { it.y = Math.min(8, (it.y || 0) + 0.25); sceneChanged(true); } }, { label: 'Lower', testid: 'ctx-scene-down', onClick: () => { it.y = Math.max(-3, (it.y || 0) - 0.25); sceneChanged(true); } }]),
+        { label: it.visible ? 'Hide' : 'Show', testid: 'ctx-scene-hide', onClick: () => { it.visible = !it.visible; sceneChanged(true); } },
+        { separator: true }, { label: 'Remove', testid: 'ctx-scene-del', onClick: () => removeSceneItem(it.id) }];
+    } else {
+      label = 'Stage';
+      items = [{ heading: 'Stage' }, { label: 'Fit to the window', testid: 'ctx-fit', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } },
+        { label: S.s.focus === 'head' ? 'Back to the whole figure' : 'Look at the head', testid: 'ctx-head', onClick: () => { S.s.focus = S.s.focus === 'head' ? 'body' : 'head'; S.zoom = 1; S.panX = S.panY = 0; refreshViewbar(); render(); save(); } },
+        { label: S.s.showScene === false ? 'Show the scene' : 'Hide the scene', testid: 'ctx-scene-toggle', onClick: () => { S.s.showScene = S.s.showScene === false; render(); save(); } }];
+    }
+    openMenuAt(cx, cy, items, label, 'context-menu'); return true;
+  };
+  let press = null;
+  const cancelPress = () => { if (press) { clearTimeout(press.t); press = null; } };
+  let ctxAt = 0;
+  stage.addEventListener('contextmenu', (e) => { e.preventDefault(); if (performance.now() - ctxAt < 600) return; ctxAt = performance.now(); contextMenuFor(e.clientX, e.clientY); });
+
   // On a computer the middle button pivots the camera about the figure (Ctrl or not), and Shift with it pans, as in Blender; the wheel zooms.
   let mid = null;
   stage.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
@@ -1877,6 +1927,8 @@ function gestures() {
   stage.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button === 1) { e.preventDefault(); stage.setPointerCapture(e.pointerId); mid = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: S.s.camYaw, pitch: S.s.camPitch, panX: S.panX, panY: S.panY, pan: e.shiftKey }; return; }
     stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    cancelPress();
+    if (ptrs.size === 1 && e.pointerType !== 'mouse') press = { x: e.clientX, y: e.clientY, t: setTimeout(() => { press = null; ctxAt = performance.now(); drag = null; down = null; start = null; contextMenuFor(e.clientX, e.clientY); }, 550) };
     if (ptrs.size === 1) { drag = attachDragStart(e, toFrame) || fixDragStart(e, toFrame) || arcDragStart(e, toFrame) || sceneDragStart(e, toFrame); if (drag) { down = null; start = null; return; } }
     start = snap();
     down = ptrs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false, yaw: S.s.camYaw, pitch: S.s.camPitch } : null;
@@ -1888,6 +1940,7 @@ function gestures() {
       render(); return;
     }
     if (!ptrs.has(e.pointerId)) return;
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) cancelPress();
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (drag) { (drag.arc ? arcDragMove : drag.fix ? fixDragMove : drag.scene ? sceneDragMove : attachDragMove)(drag, e, toFrame); return; }
     const pts = [...ptrs.values()];
@@ -1911,6 +1964,7 @@ function gestures() {
   });
   const up = (e) => {
     if (mid && e.pointerId === mid.id) { mid = null; if (S.tab === 'View') renderPanel(); save(); return; }
+    cancelPress();
     if (drag) { if (drag.arc || drag.fix) { renderPanel(); save(); } else if (drag.scene) sceneDragEnd(drag); else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     const was = down; const had = ptrs.has(e.pointerId);
     ptrs.delete(e.pointerId);

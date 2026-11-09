@@ -24,6 +24,15 @@ const el = (tag, attrs = {}, ...kids) => {
   return e;
 };
 
+/** Opens a menu at a point on the screen (a right-click or a long press), made of the same items as any menu. */
+export function openMenuAt(x, y, items, label = 'Menu', testid = 'context-menu') {
+  closeMenus();
+  document.querySelectorAll('.ctx-anchor').forEach((a) => a.remove());
+  const t = menuButton({ label: null, testid, items, ariaLabel: label, caret: false, className: 'ctx-anchor' });
+  t.style.cssText = `position:fixed;left:${Math.round(x)}px;top:${Math.round(y)}px;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none;`;
+  document.body.append(t); t.click();
+}
+
 /**
  * items: array, or a function returning an array, of
  *   { label, testid, onClick, shortcut, disabled, checked, radio, separator, heading }

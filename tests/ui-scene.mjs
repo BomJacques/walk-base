@@ -24,6 +24,7 @@ const q = (id) => page.locator(`[data-testid="${id}"]:visible`).first();
 await ev(() => window.__walkBase.setTab('Scene')); await wait(150);
 check('there is a Scene tab with Add figure and Add scenery', (await q('scene-add-figure').count()) === 1 && (await q('scene-add-prop').count()) === 1);
 const empty = await stagePng();
+const box0 = await page.locator('[data-testid="stage"]').boundingBox();
 
 // figures
 await q('scene-add-figure').click(); await page.locator('[data-testid="scene-add-hose"]').click(); await wait(200);
@@ -92,6 +93,38 @@ check('undo brings the removed item back', (await ev(() => window.__walkBase.S.s
 await wait(500); await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(300);
 const back = await ev(() => ({ a: window.__walkBase.S.scene.actors.length, p: window.__walkBase.S.scene.props.length, w: window.__walkBase.S.scene.props[0].w }));
 check('the scene survives a reload', back.a === 2 && back.p === 10 && back.w === 1.5, back);
+// context menus: they act on the object that was clicked
+{
+  await ev(() => { const w = window.__walkBase; w.S.s.camYaw = -30; w.S.s.camPitch = 35; w.S.scene.actors[0].x = 3.2; w.S.scene.actors[0].z = 1.6; w.setFrame(3); w.render(); }); await wait(150);
+  const where = (id) => ev((i) => { const w = window.__walkBase; const hit = w.S.last.sceneHits.find((h) => h.id === i); const sh = hit.shapes.find((x) => x.part === 'spine.mid') || hit.shapes[0]; const cx = sh.pts.reduce((t, q) => t + q[0], 0) / sh.pts.length; const cy = sh.pts.reduce((t, q) => t + q[1], 0) / sh.pts.length; const m = w.S.map; const r = document.querySelector('[data-testid="stage"]').getBoundingClientRect(); return { x: r.left + (m.x0 + (cx / m.fcw) * m.zw) / m.d, y: r.top + (m.y0 + (cy / m.fch) * m.zh) / m.d }; }, id);
+  const aid = await ev(() => window.__walkBase.S.scene.actors[0].id); const w1 = await where(aid);
+  await page.mouse.click(w1.x, w1.y, { button: 'right' }); await wait(200);
+  check('a right-click on a scene figure opens a menu for it', (await page.locator('[data-testid="context-menu-list"]').count()) === 1 && /Remove/.test(await page.locator('[data-testid="context-menu-list"]').innerText()), await page.locator('[data-testid="context-menu-list"]').innerText().catch(() => ''));
+  const n0 = await ev(() => window.__walkBase.S.scene.actors.length);
+  await page.locator('[data-testid="ctx-scene-dup"]').click(); await wait(200);
+  check('Duplicate in that menu copies that figure', (await ev(() => window.__walkBase.S.scene.actors.length)) === n0 + 1);
+  await wait(350);
+  const cid = await ev(() => window.__walkBase.S.sceneSel);
+  await ev((i) => { const a = window.__walkBase.S.scene.actors.find((x) => x.id === i); a.x = -1.8; a.z = 1.6; window.__walkBase.render(); }, cid); await wait(150);
+  const w2 = await where(cid);
+  await page.mouse.click(w2.x, w2.y, { button: 'right' }); await wait(200);
+  await page.locator('[data-testid="ctx-scene-del"]').click(); await wait(200);
+  check('Remove in the menu removes that figure and no other', (await ev(() => window.__walkBase.S.scene.actors.length)) === n0 && (await ev((i) => window.__walkBase.S.scene.actors.some((a) => a.id === i), aid)));
+  await wait(350);
+  await page.mouse.click(box0.x + 8, box0.y + box0.height - 8, { button: 'right' }); await wait(200);
+  check('a right-click on empty stage gives the stage menu', /Fit to the window/.test(await page.locator('[data-testid="context-menu-list"]').innerText()));
+  await page.keyboard.press('Escape'); await wait(100);
+  check('Escape closes it', (await page.locator('[data-testid="context-menu-list"]').count()) === 0);
+}
+// the main figure has its own colours, in the scene list
+await ev(() => { window.__walkBase.S.sceneSel = 'main'; window.__walkBase.setTab('Gait'); }); await wait(150);
+{
+  const f0 = await stagePng();
+  await ev(() => { const e = document.querySelector('[data-testid="main-fill"]'); e.value = '#aa3355'; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(150);
+  check('the main figure is in the list and has its own colours', (await ev(() => window.__walkBase.S.s.fillColor)) === '#aa3355' && Buffer.compare(f0, await stagePng()) !== 0);
+  await ev(() => { const e = document.querySelector('[data-testid="main-fill"]'); e.value = '#f6f3ec'; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);
+}
+await wait(350);
 // raising scenery and a figure's own colours
 await q(`scene-item-${await ev(() => window.__walkBase.S.scene.props[0].id)}`).click();
 await ev(() => { const e = document.querySelector('[data-testid="scene-y"]'); e.value = 1.2; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);
