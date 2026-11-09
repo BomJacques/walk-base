@@ -92,6 +92,18 @@ check('undo brings the removed item back', (await ev(() => window.__walkBase.S.s
 await wait(500); await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(300);
 const back = await ev(() => ({ a: window.__walkBase.S.scene.actors.length, p: window.__walkBase.S.scene.props.length, w: window.__walkBase.S.scene.props[0].w }));
 check('the scene survives a reload', back.a === 2 && back.p === 10 && back.w === 1.5, back);
+// raising scenery and a figure's own colours
+await q(`scene-item-${await ev(() => window.__walkBase.S.scene.props[0].id)}`).click();
+await ev(() => { const e = document.querySelector('[data-testid="scene-y"]'); e.value = 1.2; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);
+check('scenery can be raised off the ground', (await ev(() => window.__walkBase.S.scene.props[0].y)) === 1.2);
+await wait(350);
+await q(`scene-item-${await ev(() => window.__walkBase.S.scene.actors[0].id)}`).click();
+const before2 = await stagePng();
+await ev(() => { for (const [id, v] of [['scene-fill', '#c03030'], ['scene-line', '#2030c0']]) { const e = document.querySelector(`[data-testid="${id}"]`); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); } }); await wait(150);
+check('a figure can have its own colours', (await ev(() => { const a = window.__walkBase.S.scene.actors[0]; return [a.fill, a.line]; })).join() === '#c03030,#2030c0' && Buffer.compare(before2, await stagePng()) !== 0);
+await q('scene-colour-reset').click(); await wait(100);
+check('and go back to the main figure colours', (await ev(() => window.__walkBase.S.scene.actors[0].fill)) === '');
+await wait(350);
 const frame = await ev(async () => { const r = await window.__walkBase.frame(3); return r?.blob?.size ?? r?.size ?? 1; }).catch(() => 0);
 check('a frame exports with the scene in it', frame > 0);
 await ev(() => { const w = window.__walkBase; w.S.s.camYaw = -35; w.S.s.camPitch = 8; w.setFrame(5); w.render(); }); await wait(150);

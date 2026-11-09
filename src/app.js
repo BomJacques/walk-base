@@ -36,7 +36,7 @@ const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, stageOnly: false,
-  source: 'walk', tool: 'orbit', sel: null, link: true, edit: null, busy: null, message: '', video: null, last: null, map: null,
+  source: 'walk', tool: 'select', sel: null, link: true, edit: null, busy: null, message: '', video: null, last: null, map: null,
   // Automation: lanes change a value over a longer performance. perfLen 0 means the performance is just one cycle.
   fixMode: false, fixSpread: 10, lanes: {}, perfLen: 0, bank: { human: null, dog: null }, perfs: { human: {}, dog: {} }, perfName: '', attach: { human: [], dog: [] }, attachSel: null, ver: 0, recMode: 'touch', armed: false, recording: false, laneEdit: null, clip: 'stop', clipStart: 0, clipLen: null, clipK: 1,
   // Speech: the text becomes key mouth shapes on the timeline. speechDraft is what is typed but not built yet.
@@ -254,7 +254,7 @@ function cleanAttach(raw) {
 /** Where a new attachment goes: the selected part if it can carry one, otherwise the chest or the mid back. */
 function defaultTarget() {
   const rig = S.p.rig; const targets = attachTargets(rig);
-  if (S.sel) { const t = targets.find((q) => q.part === S.sel.part && q.side === (S.sel.side ?? null) && (q.seg ?? 0) === 0); if (t) return t; }
+  if (S.sel) { const sp = S.sel.part === 'girdle' ? 'arm' : S.sel.part; const t = targets.find((q) => q.part === sp && q.side === (S.sel.side ?? null) && (q.seg ?? 0) === 0); if (t) return t; }
   return targets.find((t) => t.part === (rig === 'dog' ? 'dog.spine2' : 'spine.upper')) || targets[0];
 }
 function addAttach(kind, over = {}, target = null) {
@@ -649,10 +649,11 @@ function sceneSection() {
     const presets = Object.keys(presetsForFigure(it.fig));
     body.push(h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Walk'), h('select', { class: 'select', 'aria-label': 'Walk', testid: 'scene-preset', onChange: (e) => { it.preset = e.target.value; it.p = actorParams(it.fig, it.preset); sceneChanged(true); } }, presets.map((n) => h('option', { value: n, selected: n === it.preset }, n)))),
       row('Along', 'x', -6, 6, 0.05, 'scene-x'), row('Depth', 'z', -4, 4, 0.05, 'scene-z'), row('Facing', 'yaw', -180, 180, 1, 'scene-yaw'), row('Size', 'scale', 0.3, 2.5, 0.01, 'scene-scale'), row('Starts at', 'phase', 0, 1, 0.01, 'scene-phase'),
-      colour('Fill colour', 'fill', 'scene-fill'),
-      h('p', { class: 'hint' }, 'Depth: negative is further back, positive is nearer to you in the side view. Facing 180 walks the other way. Starts at moves the figure round its own cycle, so two figures are not in step.'));
+      colour('Fill colour', 'fill', 'scene-fill'), colour('Line colour', 'line', 'scene-line'), colour('Far-side tint', 'tint', 'scene-tint'),
+      h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'scene-colour-reset', onClick: () => set({ fill: '', line: '', tint: '' }, true) }, 'Use the colours from the View tab')),
+      h('p', { class: 'hint' }, 'Depth: negative is further back, positive is nearer to you in the side view. Facing 180 walks the other way. Starts at moves the figure round its own cycle, so two figures are not in step. Each figure has its own colours; the ones for the main figure are in the View tab.'));
   } else {
-    body.push(row('Along', 'x', -8, 8, 0.05, 'scene-x'), row('Depth', 'z', -5, 5, 0.05, 'scene-z'), row('Turn', 'rot', -180, 180, 1, 'scene-rot'),
+    body.push(row('Along', 'x', -8, 8, 0.05, 'scene-x'), row('Depth', 'z', -5, 5, 0.05, 'scene-z'), row('Raise', 'y', -1, 5, 0.05, 'scene-y'), row('Turn', 'rot', -180, 180, 1, 'scene-rot'),
       row(it.kind === 'ball' || it.kind === 'cylinder' || it.kind === 'lamp' || it.kind === 'tree' ? 'Width' : 'Length', 'w', 0.05, 6, 0.01, 'scene-w'),
       it.kind === 'box' ? row('Depth of it', 'd', 0.05, 4, 0.01, 'scene-d') : null, row('Height', 'h', 0.05, 5, 0.01, 'scene-h'), colour('Colour', 'color', 'scene-color'));
   }
@@ -1751,6 +1752,7 @@ function build() {
   const views = [['Side', 0, 0, 'view-side'], ['¾ front', -40, 12, 'view-34'], ['Front', -90, 0, 'view-front'], ['Back', 90, 0, 'view-back'], ['Top', 0, 80, 'view-top']];
   const viewMenu = menuButton({ label: 'View', testid: 'view-menu', className: 'btn vb cam', title: 'Camera view', items: () => views.map(([l, y, p, id]) => ({ label: l, testid: id, radio: true, checked: S.s.camYaw === y && S.s.camPitch === p, onClick: () => setView(y, p) })) });
   const viewbar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': 'Camera' },
+    vb('select', 'Select: tap to select, drag to move what you touch. Two fingers pan and zoom.', 'tool-select', () => { S.tool = 'select'; refreshViewbar(); }, { 'data-tool': 'select' }),
     vb('orbit', 'Orbit', 'tool-orbit', () => { S.tool = 'orbit'; refreshViewbar(); }, { 'data-tool': 'orbit' }),
     vb('pan', 'Pan', 'tool-pan', () => { S.tool = 'pan'; refreshViewbar(); }, { 'data-tool': 'pan' }),
     h('span', { class: 'vsep cam', role: 'presentation' }), viewMenu,
@@ -1868,13 +1870,23 @@ function gestures() {
     const cx = (clientX - m.left) * m.d; const cy = (clientY - m.top) * m.d;
     return { x: ((cx - m.x0) / m.zw) * m.fcw, y: ((cy - m.y0) / m.zh) * m.fch };
   };
+  // On a computer the middle button pivots the camera about the figure (Ctrl or not), and Shift with it pans, as in Blender; the wheel zooms.
+  let mid = null;
+  stage.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+  stage.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
   stage.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button === 1) { e.preventDefault(); stage.setPointerCapture(e.pointerId); mid = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: S.s.camYaw, pitch: S.s.camPitch, panX: S.panX, panY: S.panY, pan: e.shiftKey }; return; }
     stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.size === 1) { drag = attachDragStart(e, toFrame) || fixDragStart(e, toFrame) || arcDragStart(e, toFrame) || sceneDragStart(e, toFrame); if (drag) { down = null; start = null; return; } }
     start = snap();
     down = ptrs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false, yaw: S.s.camYaw, pitch: S.s.camPitch } : null;
   });
   stage.addEventListener('pointermove', (e) => {
+    if (mid && e.pointerId === mid.id) {
+      const dx = e.clientX - mid.x; const dy = e.clientY - mid.y;
+      if (mid.pan) { S.panX = mid.panX + dx; S.panY = mid.panY + dy; } else { S.s.camYaw = ((mid.yaw - dx * 0.45 + 540) % 360) - 180; S.s.camPitch = Math.max(-85, Math.min(85, mid.pitch + dy * 0.35)); }
+      render(); return;
+    }
     if (!ptrs.has(e.pointerId)) return;
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (drag) { (drag.arc ? arcDragMove : drag.fix ? fixDragMove : drag.scene ? sceneDragMove : attachDragMove)(drag, e, toFrame); return; }
@@ -1892,11 +1904,13 @@ function gestures() {
       if (S.tool === 'orbit') {
         S.s.camYaw = ((down.yaw - dx * 0.45 + 540) % 360) - 180;
         S.s.camPitch = Math.max(-85, Math.min(85, down.pitch + dy * 0.35));
-      } else { S.panX = start.panX + dx; S.panY = start.panY + dy; }
+      } else if (S.tool === 'pan') { S.panX = start.panX + dx; S.panY = start.panY + dy; }
+      // with the Select tool one finger never moves the camera: two fingers pan and zoom
     }
     render();
   });
   const up = (e) => {
+    if (mid && e.pointerId === mid.id) { mid = null; if (S.tab === 'View') renderPanel(); save(); return; }
     if (drag) { if (drag.arc || drag.fix) { renderPanel(); save(); } else if (drag.scene) sceneDragEnd(drag); else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     const was = down; const had = ptrs.has(e.pointerId);
     ptrs.delete(e.pointerId);
@@ -1912,7 +1926,7 @@ function gestures() {
     } else if (had && was?.moved && S.tool === 'orbit') { if (S.tab === 'View') renderPanel(); save(); }
     down = null; start = ptrs.size ? snap() : null;
   };
-  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
+  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { if (mid && e.pointerId === mid.id) mid = null; ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
   stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.25, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); render(); }, { passive: false });
   stage.addEventListener('dblclick', () => { S.zoom = 1; S.panX = S.panY = 0; render(); });
   function snap() {

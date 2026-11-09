@@ -23,11 +23,11 @@ export const PROP_BY_ID = Object.fromEntries(PROP_KINDS.map((k) => [k.id, k]));
 
 export function newProp(id, over = {}) {
   const k = PROP_BY_ID[id] || PROP_KINDS[0];
-  return { id: sceneId(), type: k.id, name: k.label, kind: k.kind, x: 0.8, z: -0.9, rot: 0, w: k.w, d: k.d, h: k.h, color: k.color, visible: true, ...over };
+  return { id: sceneId(), type: k.id, name: k.label, kind: k.kind, x: 0.8, y: 0, z: -0.9, rot: 0, w: k.w, d: k.d, h: k.h, color: k.color, visible: true, ...over };
 }
 /** A figure to put in the scene. params is the whole parameter set of its walk (the same keys as the main figure), r its proportions. */
 export function newActor(fig, name, params, proportions, over = {}) {
-  return { id: sceneId(), fig, name: name || fig, preset: '', p: params, r: proportions || {}, x: 1.2, z: -0.5, yaw: 0, scale: 1, phase: 0.25, fill: '', visible: true, ...over };
+  return { id: sceneId(), fig, name: name || fig, preset: '', p: params, r: proportions || {}, x: 1.2, z: -0.5, yaw: 0, scale: 1, phase: 0.25, fill: '', line: '', tint: '', visible: true, ...over };
 }
 
 export const EMPTY_SCENE = () => ({ actors: [], props: [] });
@@ -42,12 +42,12 @@ export function cleanScene(raw, figs, defaults) {
     for (const [k, v] of Object.entries(a.p && typeof a.p === 'object' ? a.p : {})) if (k in defaults && (typeof v === typeof defaults[k])) p[k] = typeof v === 'number' ? (Number.isFinite(v) ? v : defaults[k]) : v;
     const r = {}; for (const [k, v] of Object.entries(a.r && typeof a.r === 'object' ? a.r : {})) if (Number.isFinite(Number(v))) r[k] = num(v, 1, 0.1, 4);
     out.actors.push({ id: String(a.id || sceneId()).slice(0, 40), fig: a.fig, name: String(a.name || a.fig).slice(0, 40), preset: String(a.preset || '').slice(0, 40), p, r,
-      x: num(a.x, 1.2, -12, 12), z: num(a.z, -0.5, -8, 8), yaw: num(a.yaw, 0, -360, 360), scale: num(a.scale, 1, 0.2, 3), phase: num(a.phase, 0, 0, 1), fill: col(a.fill, ''), visible: a.visible !== false });
+      x: num(a.x, 1.2, -12, 12), z: num(a.z, -0.5, -8, 8), yaw: num(a.yaw, 0, -360, 360), scale: num(a.scale, 1, 0.2, 3), phase: num(a.phase, 0, 0, 1), fill: col(a.fill, ''), line: col(a.line, ''), tint: col(a.tint, ''), visible: a.visible !== false });
   }
   for (const q of Array.isArray(raw.props) ? raw.props.slice(0, 40) : []) {
     if (!q || !PROP_BY_ID[q.type]) continue;
     const k = PROP_BY_ID[q.type];
-    out.props.push({ id: String(q.id || sceneId()).slice(0, 40), type: k.id, name: String(q.name || k.label).slice(0, 40), kind: k.kind, x: num(q.x, 0, -12, 12), z: num(q.z, 0, -8, 8), rot: num(q.rot, 0, -360, 360),
+    out.props.push({ id: String(q.id || sceneId()).slice(0, 40), type: k.id, name: String(q.name || k.label).slice(0, 40), kind: k.kind, x: num(q.x, 0, -12, 12), y: num(q.y, 0, -3, 8), z: num(q.z, 0, -8, 8), rot: num(q.rot, 0, -360, 360),
       w: num(q.w, k.w, 0.03, 8), d: num(q.d, k.d, 0.03, 8), h: num(q.h, k.h, 0.03, 8), color: col(q.color, k.color), visible: q.visible !== false });
   }
   return out;
@@ -57,7 +57,7 @@ export function cleanScene(raw, figs, defaults) {
 // Props as faces
 // ---------------------------------------------------------------------------------------------------------------
 /** The place a point of a prop goes in the world: turned about its own middle, then moved to x, z. */
-const place = (q, lx, y, lz) => { const a = rad(q.rot); const c = Math.cos(a); const s = Math.sin(a); return [q.x + c * lx + s * lz, y, q.z - s * lx + c * lz]; };
+const place = (q, lx, y, lz) => { const a = rad(q.rot); const c = Math.cos(a); const s = Math.sin(a); return [q.x + c * lx + s * lz, y + (q.y || 0), q.z - s * lx + c * lz]; };
 
 /** A box or an upright prism as faces, each { pts: world points, normal: world vector }. */
 export function prismFaces(q, sides = 4, radiusRatio = 1, y0 = 0, y1 = q.h, w = q.w, d = q.d) {

@@ -2,7 +2,7 @@
 // World: x forward, y up, z the figure's right. Camera: yaw orbits about the vertical through the figure, pitch lifts it above (positive) or below.
 // Yaw 0 and pitch 0 is the side view, with the figure's right side toward you.
 import { cycleFrames, keyPhases, sideGait, groundAt } from './rig.js';
-import { pose3, footCorners, footShape, footMarks, add, mul, sub, len, apply } from './rig3.js';
+import { pose3, footCorners, footShape, footMarks, add, mul, apply, hoseLimbs } from './rig3.js';
 import { paramsAt, motionAt } from './automation.js';
 import { drawSampled } from './sampler.js';
 import { hull, circlePts } from './geom.js';
@@ -187,21 +187,6 @@ function headMap(pz, cam) {
     return W(add(pz.headC, apply(pz.Rh, [0.95 * hr * Math.sqrt(Math.max(0.02, 1 - r2)) + 0.004 * hr, yy, zz])));
   };
 }
-/**
- * The limbs of the rubber hose figure as they are drawn: the wrist and hand trail behind the arm (follow-through), and an arm that reaches, or a leg that swings out,
- * stretches. Stretch grows each limb about its root as it straightens, up to half again as long at full strength; a leg stretches along the ground, not down through it.
- */
-function hoseLimbs(sd, p) {
-  const wrist = sd.wristF || sd.wrist; const hand = sd.handF || sd.hand; const k = Math.max(0, p?.hoseStretch ?? 0);
-  if (!k) return { ...sd, wrist, hand };
-  const clamp01 = (v) => Math.max(0, Math.min(1, v));
-  const grow = (root, pts, ext, flat) => pts.map((q) => { const v = sub(q, root); return add(root, flat ? [v[0] * (1 + ext), v[1], v[2] * (1 + ext)] : mul(v, 1 + ext)); });
-  const armL = len(sub(sd.elbow, sd.shoulder)) + len(sub(wrist, sd.elbow)); const eA = clamp01((len(sub(wrist, sd.shoulder)) / armL - 0.7) / 0.3);
-  const [elbow, wrist2, hand2] = grow(sd.shoulder, [sd.elbow, wrist, hand], k * 0.5 * eA * eA, false);
-  const legL = len(sub(sd.knee, sd.hip)) + len(sub(sd.ankle, sd.knee)); const eL = sd.stance ? 0 : clamp01((len(sub(sd.ankle, sd.hip)) / legL - 0.8) / 0.2);
-  const [knee, ankle] = grow(sd.hip, [sd.knee, sd.ankle], k * 0.5 * eL * eL, true);
-  return { ...sd, elbow, wrist: wrist2, hand: hand2, knee, ankle };
-}
 function buildHoseShapes(pz, cam, st) {
   const shapes = [];
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
@@ -346,7 +331,8 @@ function sceneDrawables(ctx, params, st, cam, env) {
     const extra = { worldX: perf ? perf.x[t0] + a.phase * sA : cyc * sA, ...(perf ? { freeU: t0 / Math.max(2, Math.round(a.p.cycleFrames)) } : {}) };
     const pzA = poser({ ...pA, proportions: a.r, motion: {}, attach: [], speech: null }, {}, u, extra);
     const cA = actorCam(cam, a);
-    const st2 = a.fill ? { ...st, fillColor: a.fill, hoseBody: a.fill } : st;
+    // each figure can have its own colours; one with none set uses the ones in the View tab
+    const st2 = a.fill || a.line || a.tint ? { ...st, ...(a.fill ? { fillColor: a.fill, hoseBody: a.fill, hoseShorts: a.fill } : {}), ...(a.line ? { lineColor: a.line } : {}), ...(a.tint ? { farTint: a.tint } : {}) } : st;
     out.push({ d: cA.p([pzA.pelvisX, 0, 0]).d, paint: () => { const r = drawFigureShapes(ctx, pzA, cA, st2, {}); hits.push({ id: a.id, shapes: r.shapes || [] }); } });
   }
   for (const q of sc.props || []) {

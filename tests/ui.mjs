@@ -39,6 +39,9 @@ const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchP
 const stageBox = await page.locator('[data-testid="stage"]').boundingBox();
 const cx = stageBox.x + stageBox.width / 2; const cy = stageBox.y + stageBox.height * 0.62;
 if (cdp) {
+  check('the Select tool is the default, so one finger does not move the camera', (await ev(() => window.__walkBase.S.tool)) === 'select');
+  { const yS = await ev(() => window.__walkBase.S.s.camYaw); await touch('touchStart', [[cx - 100, cy]]); for (let i = 1; i <= 10; i++) await touch('touchMove', [[cx - 100 + i * 12, cy]]); await touch('touchEnd', []); check('with Select a one-finger drag leaves the camera alone', (await ev(() => window.__walkBase.S.s.camYaw)) === yS); }
+  await ev(() => { window.__walkBase.S.tool = 'orbit'; });
   const y0 = await ev(() => window.__walkBase.S.s.camYaw);
   await touch('touchStart', [[cx - 100, cy]]);
   for (let i = 1; i <= 10; i++) await touch('touchMove', [[cx - 100 + i * 12, cy]]);

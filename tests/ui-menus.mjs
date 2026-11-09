@@ -84,7 +84,7 @@ await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) l
 
   // camera views are one dropdown
   const viewButtons = await page.locator('.viewbar button').count();
-  check('the camera tools are a compact bar: tools, the View menu, five quick angles and three icons', viewButtons <= 11, viewButtons);
+  check('the camera tools are a compact bar: tools, the View menu, the Select tool, five quick angles and three icons', viewButtons <= 12, viewButtons);
   await q('view-menu').click(); await q('view-front').click();
   check('the View dropdown changes the camera', await ev(() => window.__walkBase.S.s.camYaw === -90));
   await q('view-menu').click();

@@ -3,7 +3,7 @@
 // own units, so it follows every channel, curve and automation on the part, and stays put when the camera orbits.
 // An anchor is where it is fixed: a point that slides around the edge of the part (a capsule around the bone), or a free point.
 // Pure logic plus canvas painting; no DOM.
-import { add, mul, sub, len } from './rig3.js';
+import { add, mul, sub, len, hoseLimbs } from './rig3.js';
 import { STRIP_DEFAULTS } from './stripdefs.js';
 
 const TAU = Math.PI * 2;
@@ -57,7 +57,8 @@ export function partBone(pz, part, seg = null, side = null) {
       default: return null;
     }
   }
-  const sd = side ? pz.sides?.[side] : null;
+  const sd0 = side ? pz.sides?.[side] : null;
+  const sd = sd0 && pz.params?.model === 'hose' ? hoseLimbs(sd0, pz.params) : sd0; // the rubber hose figure's limbs stretch and trail, and a picture goes with them
   switch (part) {
     case 'pelvis': return [pz.pelvis, pz.base0];
     case 'spine.lower': return [pz.base0, pz.j1];

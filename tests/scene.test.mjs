@@ -43,3 +43,14 @@ test('a saved scene is cleaned on the way back in', () => {
   assert.deepEqual(cleanScene(null, FIGS, DEFAULTS), { actors: [], props: [] });
   assert.equal(cleanScene({ actors: Array.from({ length: 50 }, () => actor) }, FIGS, DEFAULTS).actors.length, 12);
 });
+
+test('scenery can be raised off the ground, and a figure has its own colours', () => {
+  const q = newProp('box', { x: 0, z: 0, rot: 0, w: 1, d: 1, h: 1, y: 2 });
+  const ys = prismFaces(q, 4).flatMap((f) => f.pts.map((p) => p[1])); assert.equal(Math.min(...ys), 2); assert.equal(Math.max(...ys), 3);
+  const ball = propParts(newProp('ball', { y: 1.5 })).balls[0]; assert.ok(ball.c[1] > 1.5);
+  const a = newActor('human', 'Walker', { ...DEFAULTS }, {}, { fill: '#ff0000', line: '#00ff00', tint: '#0000ff' });
+  const s = cleanScene(JSON.parse(JSON.stringify({ actors: [a, { ...a, fill: 'red', line: '#123456' }], props: [newProp('box', { y: 99 })] })), FIGS, DEFAULTS);
+  assert.deepEqual([s.actors[0].fill, s.actors[0].line, s.actors[0].tint], ['#ff0000', '#00ff00', '#0000ff']);
+  assert.deepEqual([s.actors[1].fill, s.actors[1].line], ['', '#123456'], 'a bad colour falls back to the main figure colour');
+  assert.equal(s.props[0].y, 8);
+});

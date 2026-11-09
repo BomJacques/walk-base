@@ -180,3 +180,19 @@ export function footCorners(pz, side) {
   }
   return pts;
 }
+
+/**
+ * The limbs of the rubber hose figure as they are drawn: the wrist and hand trail behind the arm (follow-through), and an arm that reaches, or a leg that swings out,
+ * stretches. Stretch grows each limb about its root as it straightens, up to half again as long at full strength; a leg stretches along the ground, not down through it.
+ */
+export function hoseLimbs(sd, p) {
+  const wrist = sd.wristF || sd.wrist; const hand = sd.handF || sd.hand; const k = Math.max(0, p?.hoseStretch ?? 0);
+  if (!k) return { ...sd, wrist, hand };
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const grow = (root, pts, ext, flat) => pts.map((q) => { const v = sub(q, root); return add(root, flat ? [v[0] * (1 + ext), v[1], v[2] * (1 + ext)] : mul(v, 1 + ext)); });
+  const armL = len(sub(sd.elbow, sd.shoulder)) + len(sub(wrist, sd.elbow)); const eA = clamp01((len(sub(wrist, sd.shoulder)) / armL - 0.7) / 0.3);
+  const [elbow, wrist2, hand2] = grow(sd.shoulder, [sd.elbow, wrist, hand], k * 0.5 * eA * eA, false);
+  const legL = len(sub(sd.knee, sd.hip)) + len(sub(sd.ankle, sd.knee)); const eL = sd.stance ? 0 : clamp01((len(sub(sd.ankle, sd.hip)) / legL - 0.8) / 0.2);
+  const [knee, ankle] = grow(sd.hip, [sd.knee, sd.ankle], k * 0.5 * eL * eL, true);
+  return { ...sd, elbow, wrist: wrist2, hand: hand2, knee, ankle };
+}

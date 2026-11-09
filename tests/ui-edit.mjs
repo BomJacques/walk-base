@@ -35,6 +35,22 @@ for (const [w, h] of [[1366, 900], [1024, 768], [820, 1180], [390, 844]]) {
 }
 await page.setViewportSize({ width: 1280, height: 820 }); await wait(150);
 
+// ---- a mouse: the middle button pivots the camera, Shift with it pans
+{
+  const box = await page.locator('[data-testid="stage"]').boundingBox(); const mx = box.x + box.width / 2; const my = box.y + box.height * 0.3;
+  const y0 = await ev(() => window.__walkBase.S.s.camYaw);
+  await page.mouse.move(mx, my); await page.mouse.down({ button: 'middle' }); await page.mouse.move(mx + 60, my + 10, { steps: 5 }); await page.mouse.up({ button: 'middle' }); await wait(100);
+  const y1 = await ev(() => window.__walkBase.S.s.camYaw);
+  check('dragging with the middle button pivots the camera', Math.abs(y1 - y0) > 10, { y0, y1 });
+  const p0 = await ev(() => window.__walkBase.S.panX);
+  await page.keyboard.down('Shift'); await page.mouse.move(mx, my); await page.mouse.down({ button: 'middle' }); await page.mouse.move(mx + 50, my, { steps: 5 }); await page.mouse.up({ button: 'middle' }); await page.keyboard.up('Shift'); await wait(100);
+  check('Shift with the middle button pans', (await ev(() => window.__walkBase.S.panX)) - p0 > 20);
+  const yb = await ev(() => window.__walkBase.S.s.camYaw);
+  await page.mouse.move(mx, my); await page.mouse.down(); await page.mouse.move(mx + 80, my + 10, { steps: 5 }); await page.mouse.up(); await wait(100);
+  check('a plain mouse drag on empty space leaves the camera alone with the Select tool', (await ev(() => window.__walkBase.S.s.camYaw)) === yb);
+  await ev(() => { window.__walkBase.S.s.camYaw = 0; window.__walkBase.S.panX = 0; window.__walkBase.render(); });
+}
+
 // ---- proportional editing in the curve editor
 await ev(() => { const w = window.__walkBase; w.selectPart({ part: 'forearm', side: 'R' }); w.openEditor('elbow.flex.R'); }); await wait(300);
 check('the curve editor has the proportional controls', (await page.locator('[data-testid="prop-toggle"]:visible').count()) === 1 && (await page.locator('[data-testid="prop-radius"]:visible').count()) === 1 && (await page.locator('[data-testid="prop-falloff"]:visible').count()) === 1);
