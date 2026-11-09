@@ -43,6 +43,8 @@ const S = {
   speech: null, speechDraft: null, speechStart: 0, speechSpeed: 1, mouthPreview: null,
   // The scene: other figures with walks of their own, and scenery. sceneSel is the one being edited.
   scene: { actors: [], props: [] }, sceneSel: null,
+  // The file: its name, the state when it was last saved (to tell what has changed since), and the clipboard for Copy and Paste.
+  fileName: 'walk-settings', savedState: null, everSaved: false, clipboard: null,
 };
 const rec = new Recorder();
 // A picture to compare against, shown under the figure. It is a view aid, so it is kept out of undo and the settings file.
@@ -91,6 +93,7 @@ const snapState = () => JSON.stringify({
   perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene,
 });
 function refreshHistory() {
+  refreshSaveState();
   for (const [id, ok] of [['undo', hist.canUndo], ['redo', hist.canRedo]]) { const b = document.querySelector(`[data-testid="${id}"]`); if (b) b.disabled = !ok; }
 }
 function applySnapshot(json) {
@@ -1642,9 +1645,22 @@ async function runLaneData(kind) {
 async function runSheet() {
   try { const r = await contactSheet(P(), S.s); await deliver(r.blob, r.name); setMessage('Saved the contact sheet.'); } catch (e) { setMessage(`Contact sheet failed: ${e.message}`); }
 }
+const isDirty = () => S.savedState != null && S.savedState !== snapState();
+function refreshSaveState() {
+  const el = document.getElementById('savestate'); if (!el) return;
+  const dirty = isDirty(); el.textContent = dirty ? 'Unsaved changes' : S.everSaved ? 'Saved' : ''; el.dataset.state = dirty ? 'dirty' : S.everSaved ? 'saved' : 'none';
+  document.title = `${dirty ? '• ' : ''}${S.fileName} · Walk Base`;
+}
+const fileSafe = (n) => String(n || '').replace(/\.json$/i, '').replace(/[^\w \-]/g, '').trim().slice(0, 60);
+/** Save under a new name: asks for the name, then saves. */
+function saveAs() {
+  const n = typeof prompt === 'function' ? prompt('Name this file', S.fileName) : S.fileName;
+  const name = fileSafe(n); if (!name) return;
+  S.fileName = name; saveSettings();
+}
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, images: usedImages() }, null, 1)], { type: 'application/json' });
-  deliver(blob, 'walk-settings.json').then(() => setMessage('Saved walk-settings.json.'));
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, images: usedImages() }, null, 1)], { type: 'application/json' });
+  deliver(blob, `${S.fileName}.json`).then(() => { S.savedState = snapState(); S.everSaved = true; refreshSaveState(); setMessage(`Saved ${S.fileName}.json.`); });
 }
 async function loadSettings(e) {
   const f = e.target.files?.[0];
@@ -1653,7 +1669,8 @@ async function loadSettings(e) {
     const raw = JSON.parse(await f.text());
     if (raw.format !== 'walk-base-settings') throw new Error('This is not a Walk Base settings file.');
     adopt(raw); if (raw.images && typeof raw.images === 'object') for (const [id, url] of Object.entries(raw.images)) if (typeof url === 'string' && url.startsWith('data:image/')) await registerImage(id, url);
-    saveAttachImages(); if (!attachItem()) S.attachSel = null; buildStrip(); renderPanel(); render(); save(); setMessage('Settings loaded.');
+    saveAttachImages(); if (!attachItem()) S.attachSel = null; buildStrip(); renderPanel(); render(); save();
+    S.fileName = fileSafe(raw.name || f.name) || 'walk-settings'; S.savedState = snapState(); S.everSaved = true; refreshSaveState(); setMessage(`Loaded ${S.fileName}.`);
   } catch (err) { setMessage(`Could not load it: ${err.message}`); }
   e.target.value = '';
 }
@@ -1672,6 +1689,89 @@ function resetAll() {
   S.ver++; pause(); setArmed(false); S.sel = null; S.preset = 'Normal'; S.zoom = 1; S.panX = S.panY = 0; S.frame = 0; build(); render(); save();
 }
 const goTab = (t) => { S.tab = t; renderPanel(); };
+
+// ---------- copy and paste ----------
+const CLIP_KEY = 'walkbase.clip';
+const findSceneItem = (id) => S.scene.actors.find((a) => a.id === id) || S.scene.props.find((p) => p.id === id) || null;
+const jclone = (v) => JSON.parse(JSON.stringify(v));
+function loadClip() {
+  if (S.clipboard) return S.clipboard;
+  try { const c = JSON.parse(localStorage.getItem(CLIP_KEY) || 'null'); if (c?.kind) { S.clipboard = c; return c; } } catch { /* none */ }
+  return null;
+}
+function setClip(clip, what) {
+  S.clipboard = clip; try { localStorage.setItem(CLIP_KEY, JSON.stringify(clip)); } catch { /* kept for this visit only */ }
+  setMessage(`Copied ${what}. Paste with Ctrl+V or Edit > Paste.`);
+}
+const clipOfAttach = (it) => ({ kind: 'attach', item: jclone(it) });
+const clipOfScene = (it) => ({ kind: S.scene.actors.includes(it) ? 'actor' : 'prop', item: jclone(it) });
+const clipOfMain = () => ({ kind: 'figure', fig: figKey(), preset: S.preset, p: jclone(S.p), r: jclone(S.r), colours: { fill: S.s.fillColor, line: S.s.lineColor, tint: S.s.farTint } });
+/** Copies what is selected: a picture or shape, a figure or scenery in the scene, otherwise the main figure. */
+function copySelection() {
+  const a = attachItem(); const sc = S.sceneSel && S.sceneSel !== 'main' ? findSceneItem(S.sceneSel) : null;
+  if (a) setClip(clipOfAttach(a), `"${a.name}"`);
+  else if (sc) setClip(clipOfScene(sc), `"${sc.name}"`);
+  else setClip(clipOfMain(), 'the main figure');
+}
+/** Puts the clipboard into the scene, or on the figure for a picture or shape. Pictures go on the selected part, or the part they came from. */
+function pasteClipboard() {
+  const clip = loadClip(); if (!clip) { setMessage('Nothing has been copied yet.'); return; }
+  if (clip.kind === 'attach') {
+    const it = cloneItem(clip.item); const targets = attachTargets(S.p.rig);
+    if (S.sel || !targets.some((t) => t.key === targetKey(it))) { const t = defaultTarget(); it.part = t.part; it.seg = t.seg ?? null; it.side = t.side ?? null; }
+    it.x += 0.04; it.y += 0.04; attachList().push(it); selectAttach(it.id); save(); setMessage(`Pasted "${it.name}".`); return;
+  }
+  const stamp = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  if (clip.kind === 'actor' || clip.kind === 'prop') {
+    const c = jclone(clip.item); c.id = stamp(); c.name = `${c.name} copy`; c.x = Math.min(12, c.x + 0.8);
+    (clip.kind === 'actor' ? S.scene.actors : S.scene.props).push(c); S.sceneSel = c.id; S.tab = 'Gait'; sceneChanged(true); setMessage(`Pasted "${c.name}".`); return;
+  }
+  if (clip.kind === 'figure') {
+    const n = S.scene.actors.length;
+    const a = newActor(clip.fig, FIG_LABELS[clip.fig] || clip.fig, jclone(clip.p), jclone(clip.r), { preset: clip.preset, x: 1.3 + n * 0.9, z: n % 2 ? 0.55 : -0.55, phase: (0.25 + 0.2 * n) % 1, fill: clip.colours?.fill || '', line: clip.colours?.line || '', tint: clip.colours?.tint || '' });
+    S.scene.actors.push(a); S.sceneSel = a.id; S.tab = 'Gait'; sceneChanged(true); setMessage('Pasted the figure into the scene.');
+  }
+}
+function duplicateSelection() { copySelection(); pasteClipboard(); }
+const deletableSelection = () => Boolean(attachItem() || (S.sceneSel && S.sceneSel !== 'main' && findSceneItem(S.sceneSel)));
+function deleteSelection() {
+  const a = attachItem();
+  if (a) { S.attach[figKey()] = attachList().filter((x) => x.id !== a.id); S.attachSel = null; renderPanel(); render(); save(); return; }
+  if (S.sceneSel && S.sceneSel !== 'main' && findSceneItem(S.sceneSel)) removeSceneItem(S.sceneSel);
+}
+
+// ---------- the help overlay ----------
+const HELP_STOPS = [
+  ['.menubar', 'Menus', 'File saves, opens and exports. Edit has undo, copy, paste and delete. View sets the theme and layout. Performance plays and records.'],
+  ['.bar-fields', 'The figure and its walk', 'Choose the figure, its walk (the preset), the preview speed, and whether the stage shows the 3D walk or your own drawings.'],
+  ['.viewbar', 'Stage tools', 'Select is for tapping and moving things. Orbit and Pan move the camera with one finger. View and the angle buttons jump to a view; the face button looks at the head.'],
+  ['[data-testid="stage"]', 'The stage', 'Tap a part, a picture or a figure to select it. Press and hold (right-click on a mouse) for a menu for what is under your finger. Two fingers pan and zoom. Mouse: middle button pivots, Shift with it pans, the wheel zooms.'],
+  ['.tabs', 'Tabs', 'Body: the scene, the walk, the body and the proportions. Parts: every joint and its curve. Attach: shapes and pictures. Auto: moves, recording and lanes. Speech, View, Sampler and Export.'],
+  ['.timeline', 'The timeline', 'Play, step and scrub the frames. Letters under a frame mark the key poses. Tap a frame to go there.'],
+];
+let helpEl = null;
+function closeHelp() { if (!helpEl) return; helpEl.remove(); helpEl = null; window.removeEventListener('resize', openHelpAgain); document.removeEventListener('keydown', helpKey, true); try { localStorage.setItem('walkbase.helpSeen', '1'); } catch { /* not kept */ } }
+const helpKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeHelp(); } };
+const openHelpAgain = () => { if (helpEl) openHelp(); };
+function openHelp() {
+  const was = Boolean(helpEl); if (helpEl) { helpEl.remove(); helpEl = null; }
+  closeMenus();
+  const root = h('div', { class: 'help', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'A quick guide to the screen', testid: 'help-overlay' });
+  const list = [];
+  HELP_STOPS.forEach(([sel, title, text], i) => {
+    const t = document.querySelector(sel); const r = t?.getBoundingClientRect(); if (!r || !r.width || !r.height) return;
+    root.append(h('div', { class: 'help-box', style: `left:${r.left - 3}px;top:${r.top - 3}px;width:${r.width + 6}px;height:${r.height + 6}px` }, h('span', { class: 'help-badge' }, String(i + 1))));
+    list.push(h('li', null, h('span', { class: 'help-badge' }, String(i + 1)), h('div', null, h('strong', null, title), h('p', null, text))));
+  });
+  const keys = [['Space', 'play or pause'], ['Left and right arrows', 'one frame'], ['Ctrl+Z, Shift+Ctrl+Z', 'undo, redo'], ['Ctrl+C, Ctrl+V, Ctrl+D', 'copy, paste, duplicate'], ['Delete', 'delete the selection'], ['Ctrl+S', 'save'], ['Esc', 'deselect, or close this'], ['F1 or ?', 'this guide']];
+  root.append(h('div', { class: 'help-card', testid: 'help-card' }, h('h2', null, 'A quick guide'), h('ol', null, list),
+    h('div', { class: 'help-keys' }, h('h3', null, 'Keys'), h('dl', null, keys.flatMap(([k, d]) => [h('dt', null, k), h('dd', null, d)]))),
+    h('button', { type: 'button', class: 'btn primary', testid: 'help-close', onClick: closeHelp }, 'Got it')));
+  root.addEventListener('pointerdown', (e) => { if (e.target === root) closeHelp(); });
+  document.body.append(root); helpEl = root;
+  if (!was) { window.addEventListener('resize', openHelpAgain); document.addEventListener('keydown', helpKey, true); }
+  root.querySelector('[data-testid="help-close"]')?.focus();
+}
 function menuBar() {
   const mb = (label, testid, items) => menuButton({ label, testid, items, bar: 'main', className: 'btn mb', caret: false });
   return h('nav', { class: 'menubar', role: 'menubar', 'aria-label': 'Menus' },
@@ -1679,8 +1779,9 @@ function menuBar() {
       { label: 'New: clear everything', testid: 'file-new', onClick: newSession },
       { label: 'Reopen with last session', testid: 'file-resume', radio: true, checked: LAYOUT.resume, onClick: () => { LAYOUT.resume = !LAYOUT.resume; layoutSave(); render(); setMessage(LAYOUT.resume ? 'The next visit reopens where you left off.' : 'The next visit starts clean.'); } },
       { separator: true },
-      { label: 'Save settings…', testid: 'file-save', onClick: saveSettings },
-      { label: 'Load settings…', testid: 'file-load', onClick: () => document.querySelector('[data-testid="settings-load"]')?.click() },
+      { label: 'Save', testid: 'file-save', shortcut: 'Ctrl+S', onClick: saveSettings },
+      { label: 'Save as…', testid: 'file-save-as', onClick: saveAs },
+      { label: 'Open…', testid: 'file-load', onClick: () => document.querySelector('[data-testid="settings-load"]')?.click() },
       { separator: true },
       { label: 'Export frames…', testid: 'file-export', onClick: () => goTab('Export') },
       { label: 'Contact sheet', testid: 'file-sheet', onClick: runSheet },
@@ -1691,6 +1792,11 @@ function menuBar() {
     mb('Edit', 'menu-edit', () => [
       { label: 'Undo', testid: 'menu-undo', shortcut: 'Ctrl+Z', disabled: !hist.canUndo, onClick: undo },
       { label: 'Redo', testid: 'menu-redo', shortcut: 'Shift+Ctrl+Z', disabled: !hist.canRedo, onClick: redo },
+      { separator: true },
+      { label: 'Copy', testid: 'menu-copy', shortcut: 'Ctrl+C', onClick: copySelection },
+      { label: 'Paste', testid: 'menu-paste', shortcut: 'Ctrl+V', disabled: !loadClip(), onClick: pasteClipboard },
+      { label: 'Duplicate', testid: 'menu-dup', shortcut: 'Ctrl+D', onClick: duplicateSelection },
+      { label: 'Delete', testid: 'menu-delete', shortcut: 'Del', disabled: !deletableSelection(), onClick: deleteSelection },
       { separator: true },
       { label: 'Reset all settings…', testid: 'reset-all', onClick: resetAll },
     ]),
@@ -1741,10 +1847,12 @@ function build() {
   const settingsFile = h('input', { type: 'file', accept: '.json,application/json', class: 'sr', tabindex: '-1', 'aria-label': 'Load settings file', testid: 'settings-load', onChange: loadSettings });
   const header = h('header', { class: 'bar' },
     h('div', { class: 'brand' }, 'Walk Base'),
+    h('span', { class: 'savestate', id: 'savestate', testid: 'savestate', role: 'status', 'aria-live': 'polite' }),
     menuBar(),
     h('span', { class: 'bar-sep', role: 'presentation' }),
     iconBtn('undo', 'Undo', 'undo', undo, { disabled: !hist.canUndo, title: 'Undo (Ctrl or Cmd + Z)' }),
     iconBtn('redo', 'Redo', 'redo', redo, { disabled: !hist.canRedo, title: 'Redo (Shift + Ctrl or Cmd + Z)' }),
+    iconBtn('help', 'Help: a quick guide to the screen', 'help', openHelp, { title: 'Help (F1 or ?)' }),
     h('div', { class: 'bar-fields' },
       h('label', { class: 'pillfield' }, h('small', null, 'Figure'), h('select', { id: 'rig', class: 'select', 'aria-label': 'Which figure', testid: 'rig', onChange: (e) => setFigure(e.target.value) },
         FIGS.map((f) => h('option', { value: f, selected: f === figKey() }, FIG_LABELS[f])))),
@@ -1889,6 +1997,7 @@ function gestures() {
     if (front || back) {
       const it = (front || back).it; label = it.name; const sidedTarget = attachTargets(S.p.rig).find((t) => t.key === targetKey(it))?.side;
       items = [{ heading: it.name }, { label: 'Edit', testid: 'ctx-edit', onClick: () => selectAttach(it.id) },
+        { label: 'Copy', testid: 'ctx-copy', onClick: () => setClip(clipOfAttach(it), `"${it.name}"`) },
         { label: 'Duplicate', testid: 'ctx-dup', onClick: () => { const c = cloneItem(it); c.x += 0.04; c.y += 0.04; attachList().push(c); selectAttach(c.id); save(); } },
         ...(sidedTarget ? [{ label: 'Copy to the other side', testid: 'ctx-mirror', onClick: () => { const fr = (front || back).f; const m = mirroredItem(it, fr.L, fr.r); attachList().push(m); selectAttach(m.id); save(); } }] : []),
         { separator: true }, { heading: 'Layer' },
@@ -1903,13 +2012,14 @@ function gestures() {
     } else if (sceneHit) {
       const it = sceneRow(sceneHit.id); if (!it) return false; label = it.name; const isActor = S.scene.actors.includes(it);
       items = [{ heading: it.name }, { label: 'Select', testid: 'ctx-scene-select', onClick: () => { S.sceneSel = it.id; S.tab = 'Gait'; selectPart(null, { openTab: false }); renderPanel(); } },
+        { label: 'Copy', testid: 'ctx-scene-copy', onClick: () => setClip(clipOfScene(it), `"${it.name}"`) },
         { label: 'Duplicate', testid: 'ctx-scene-dup', onClick: () => { const c = JSON.parse(JSON.stringify(it)); c.id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`; c.name = `${it.name} copy`; c.x += 0.8; (isActor ? S.scene.actors : S.scene.props).push(c); S.sceneSel = c.id; sceneChanged(true); } },
         ...(isActor ? [] : [{ label: 'Raise', testid: 'ctx-scene-up', onClick: () => { it.y = Math.min(8, (it.y || 0) + 0.25); sceneChanged(true); } }, { label: 'Lower', testid: 'ctx-scene-down', onClick: () => { it.y = Math.max(-3, (it.y || 0) - 0.25); sceneChanged(true); } }]),
         { label: it.visible ? 'Hide' : 'Show', testid: 'ctx-scene-hide', onClick: () => { it.visible = !it.visible; sceneChanged(true); } },
         { separator: true }, { label: 'Remove', testid: 'ctx-scene-del', onClick: () => removeSceneItem(it.id) }];
     } else {
       label = 'Stage';
-      items = [{ heading: 'Stage' }, { label: 'Fit to the window', testid: 'ctx-fit', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } },
+      items = [{ heading: 'Stage' }, { label: 'Paste', testid: 'ctx-paste', disabled: !loadClip(), onClick: pasteClipboard }, { label: 'Fit to the window', testid: 'ctx-fit', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } },
         { label: S.s.focus === 'head' ? 'Back to the whole figure' : 'Look at the head', testid: 'ctx-head', onClick: () => { S.s.focus = S.s.focus === 'head' ? 'body' : 'head'; S.zoom = 1; S.panX = S.panY = 0; refreshViewbar(); render(); save(); } },
         { label: S.s.showScene === false ? 'Show the scene' : 'Hide the scene', testid: 'ctx-scene-toggle', onClick: () => { S.s.showScene = S.s.showScene === false; render(); save(); } }];
     }
@@ -1991,7 +2101,13 @@ function gestures() {
 }
 
 window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveSettings(); return; }
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); copySelection(); return; }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteClipboard(); return; }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelection(); return; }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && deletableSelection()) { e.preventDefault(); deleteSelection(); return; }
+  if (e.key === 'F1' || e.key === '?') { e.preventDefault(); openHelp(); return; }
   if (e.key === ' ') { e.preventDefault(); S.playing ? pause() : play(); }
   else if (e.key === 'ArrowRight') { pause(); setFrame(S.frame + 1); }
   else if (e.key === 'ArrowLeft') { pause(); setFrame(S.frame - 1); }
@@ -2108,8 +2224,13 @@ if (LAYOUT.resume) {
 } else { try { for (const k of [KEY, REF_KEY, ATT_IMG_KEY]) localStorage.removeItem(k); } catch { /* storage unavailable */ } }
 loadProp();
 hist.reset(snapState());
+S.savedState = snapState();
 build();
 render();
+refreshSaveState();
+window.addEventListener('beforeunload', (e) => { if (isDirty() && !LAYOUT.resume) { e.preventDefault(); e.returnValue = ''; } });
+// The guide shows once, on a first visit: nothing kept yet for this browser (an earlier visit leaves its layout, and the automated tests set one).
+try { if (!localStorage.getItem('walkbase.helpSeen') && !localStorage.getItem(LAYOUT_KEY)) setTimeout(openHelp, 600); } catch { /* not shown */ }
 window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (!mod || e.altKey) return;
