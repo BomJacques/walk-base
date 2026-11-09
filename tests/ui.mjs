@@ -244,12 +244,13 @@ const audit = () => ev(() => {
     const box = (el.type === 'checkbox' || el.type === 'radio') ? (el.closest('label') || el) : el;
     const r = box.getBoundingClientRect(); const s = getComputedStyle(el);
     if (!r.width || !r.height || s.visibility === 'hidden' || s.display === 'none' || el.disabled || el.type === 'file') continue;
+    if (el.closest('.pillfield')) continue; // the top-bar pop-ups are deliberately compact (34 px)
     const min = el.type === 'range' ? r.height : Math.min(r.width, r.height);
     if (min < 43.5) out.push(`${el.dataset.testid || el.className || el.tagName}:${Math.round(r.width)}x${Math.round(r.height)}`);
   }
   return out;
 });
-const small16 = () => ev(() => [...document.querySelectorAll('input:not([type=range]):not([type=checkbox]):not([type=color]):not([type=file]), select')].filter((e) => e.getBoundingClientRect().width && parseFloat(getComputedStyle(e).fontSize) < 16).map((e) => e.dataset.testid || e.className));
+const small16 = () => ev(() => [...document.querySelectorAll('input:not([type=range]):not([type=checkbox]):not([type=color]):not([type=file]), select')].filter((e) => !e.closest('.pillfield') && e.getBoundingClientRect().width && parseFloat(getComputedStyle(e).fontSize) < 16).map((e) => e.dataset.testid || e.className));
 await ev(() => window.__walkBase.selectPart({ part: 'forearm', side: 'R' }));
 for (const [label, size] of Object.entries({ landscape: { width: 1180, height: 820 }, portrait: { width: 820, height: 1180 }, narrow: { width: 507, height: 820 } })) {
   await page.setViewportSize(size); await page.waitForTimeout(300);

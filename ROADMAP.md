@@ -378,3 +378,12 @@ Done:
 - **Left and right gait for the dog and the animals**: left paws land late, stay down for a different time, lift differently; a Limp preset for the dog; the gait chart and footprints follow each paw.
 
 Not done (still open): a real human run with a flight phase (the walk rig keeps one foot down, min time on ground 0.52); more movements (run, jog, sit, jump); heading and path (turning a corner, walking a curve); rubber hose stretchy limbs and follow-through; terrain for the dog and animals; scenery that the figure can touch (props to reach for, a hand on a rail); dragging figures and scenery on the stage (sliders only today); a picture bending over joints other than the knee and elbow.
+
+## Later the same day (2026-11-10): menus merged, neck segments, hose colour, quick views
+
+- **One Body tab** (id Gait) holds the scene, the gait chart, the walk, the body and the proportions. Section colours say which part: violet scene, blue walk, amber body, sage proportions. The separate Scene tab is gone; each scene row has a remove button, and tapping a figure on the stage selects it. Not done: the other tabs (View, Look, Guides) are not merged yet, and a scene figure cannot be made the main figure.
+- **Second figure glitch fixed.** A second walker used its own stride and snapped back at the start of each loop. It now goes a whole number of its own cycles to each of the main figure's, with its stride set to cover the same ground.
+- **Sauropod neck segments** (1 to 12 bones, Neck curve, a nodding wave and a sideways wave running up the neck); any dog-rig figure can use them. The sauropod presets use 7.
+- **Rubber hose** is one colour (body, shorts, legs, arms) with white outlined gloves and feet and the cream face. Squash and stretch now changes the height as well as the width, about the ground, so the legs and arms stretch at the top of the bounce; the strength control goes up to 2.
+- **Outline style** tints the far side (line and fill) with the far-side tint.
+- **Top bar** pop-ups are smaller, and Side, Three-quarter, Front, Back and Top are buttons next to the View menu.

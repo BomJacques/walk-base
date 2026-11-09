@@ -76,7 +76,7 @@ await ev(() => window.__walkBase.setTab('Body')); await page.waitForTimeout(250)
 const bodyTxt = await page.locator('#panel-body').innerText().catch(() => '');
 check('the bird Body tab has no ear controls and no dog wording', !/ear bounce|ear length/i.test(bodyTxt) && !/\bdog\b/i.test(bodyTxt), (bodyTxt.match(/.{0,20}\b(dog|ear bounce)\b.{0,20}/i) || [''])[0]);
 await pick('dog'); await ev(() => window.__walkBase.setTab('Body')); await page.waitForTimeout(250);
-check('the dog keeps its own words, and does not show wing controls', (await page.locator('[data-testid="rng-dogWingOpen"]').count()) === 0 && (await page.locator('[data-testid="rng-dogEar"]').count()) === 1 && /dog/i.test(await page.locator('section.group h3').first().innerText()));
+check('the dog keeps its own words, and does not show wing controls', (await page.locator('[data-testid="rng-dogWingOpen"]').count()) === 0 && (await page.locator('[data-testid="rng-dogEar"]').count()) === 1 && /dog/i.test((await page.locator('section.group h3').allInnerTexts()).join(' ')));
 await pick('bird');
 
 // parts and controls

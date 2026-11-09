@@ -386,3 +386,14 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .scene-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: var(--h); padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--ctl); color: var(--ink); text-align: left; cursor: pointer; }
 .scene-row small { color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; font-size: 10px; }
 .scene-row[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+/* smaller top-bar pop-ups */
+.pillfield { height: 34px; gap: 5px; padding-left: 8px; }
+.pillfield small { font-size: 9px; }
+.pillfield .select { font-size: 14px; padding-right: 22px; background-position: right 6px center; }
+.bar-fields { gap: 4px; }
+
+.viewbar .qv { font-size: 12px; padding: 0 6px; min-width: var(--target, 44px); }
+.scene-line { display: flex; gap: 4px; align-items: stretch; }
+.scene-line .scene-row { flex: 1; min-width: 0; }
+.scene-del { flex: none; }

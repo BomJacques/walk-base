@@ -5,7 +5,7 @@ import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from '.
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
 import { EXPORT_DEFAULTS, exportPngZip, exportKeyFrames, exportMp4, videoSupport, contactSheet, deliver, summary, renderFrame, exportTimeline, manifest } from './export.js';
-import { CONTROLS, TABS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor, HOSE_PROPORTIONS } from './controls.js';
+import { CONTROLS, TABS, TAB_LABELS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor, HOSE_PROPORTIONS } from './controls.js';
 import { SPECIES } from './dogdefaults.js';
 import { wordsFor } from './words.js';
 import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
@@ -606,12 +606,12 @@ function sceneSection() {
   const host = h('div', { testid: 'scene-section' });
   const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIGS.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) })) });
   const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => addProp(k.id) })) });
-  host.append(h('section', { class: 'group' }, h('h3', null, 'Scene'),
-    h('p', { class: 'hint' }, 'Put more figures on the stage, each with its own walk, size and place, and stand them among simple scenery. They keep step with the playhead, so they work in a cycle, in a performance and in every export. The main figure is the one you edit in the other tabs.'),
-    h('div', { class: 'btnrow' }, addFig, addPr)));
   const rows = [...S.scene.actors.map((a) => ({ id: a.id, label: `${a.name} (${a.preset || 'walk'})`, kind: 'figure' })), ...S.scene.props.map((q) => ({ id: q.id, label: q.name, kind: 'scenery' }))];
-  host.append(h('section', { class: 'group' }, h('h3', null, `In the scene (${rows.length})`),
-    rows.length ? h('div', { class: 'scene-list', role: 'listbox', 'aria-label': 'Scene items' }, rows.map((r) => h('button', { type: 'button', class: 'scene-row', role: 'option', 'aria-selected': String(r.id === S.sceneSel), testid: `scene-item-${r.id}`, onClick: () => { S.sceneSel = r.id; renderPanel(); } }, h('span', null, r.label), h('small', null, r.kind)))) : h('p', { class: 'hint' }, 'Nothing added yet.')));
+  host.append(h('section', { class: 'group', 'data-area': 'Scene' }, h('h3', null, rows.length ? `Scene (${rows.length})` : 'Scene'),
+    h('div', { class: 'btnrow' }, addFig, addPr),
+    rows.length ? h('div', { class: 'scene-list', role: 'listbox', 'aria-label': 'Scene items' }, rows.map((r) => h('div', { class: 'scene-line' },
+      h('button', { type: 'button', class: 'scene-row', role: 'option', 'aria-selected': String(r.id === S.sceneSel), testid: `scene-item-${r.id}`, onClick: () => { S.sceneSel = r.id; renderPanel(); } }, h('span', null, r.label), h('small', null, r.kind)),
+      h('button', { type: 'button', class: 'btn icon scene-del', 'aria-label': `Remove ${r.label}`, title: 'Remove', testid: `scene-del-${r.id}`, onClick: () => removeSceneItem(r.id) }, icon('close', 14))))) : h('p', { class: 'hint' }, 'Add more figures, each with its own walk, and scenery to stand them in. Tap a figure on the stage to select it.')));
   const it = sceneItem(); if (!it) return host;
   const actor = S.scene.actors.includes(it);
   const set = (patch, panel = false) => { Object.assign(it, patch); sceneChanged(panel); };
@@ -700,7 +700,7 @@ function fitPills() {
   pillCtx = pillCtx || document.createElement('canvas').getContext('2d');
   document.querySelectorAll('.pillfield select').forEach((sel) => {
     const cs = getComputedStyle(sel); pillCtx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-    const w = Math.max(60, Math.ceil(pillCtx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width) + 30); // the text and the arrow
+    const w = Math.max(60, Math.ceil(pillCtx.measureText(sel.options[sel.selectedIndex]?.text ?? '').width) + 24); // the text and the arrow
     if (sel.dataset.fit !== String(w)) { sel.style.width = `${w}px`; sel.dataset.fit = String(w); }
   });
 }
@@ -1327,7 +1327,9 @@ function collapsible(host) {
   host.querySelectorAll('section.group').forEach((sec) => {
     const hd = sec.firstElementChild;
     if (!hd || hd.tagName !== 'H3') return;
-    sec.dataset.hue = String(hueIx++ % 6); // each section gets its own muted colour, neighbours roughly complementary
+    // On the joined Gait and Body tab the colour says which part a section belongs to: blue for the walk, amber for the body, sage for proportions. Elsewhere each section gets its own muted colour.
+    if (S.tab === 'Gait') sec.dataset.hue = sec.dataset.area === 'Scene' ? '5' : /proportions$/i.test(hd.textContent) ? '4' : sec.dataset.area === 'Body' ? '1' : '0';
+    else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and shoulders, onion skin, colours, names, target app); a choice you make is remembered.
     const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and shoulders$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
@@ -1351,13 +1353,12 @@ function renderPanel() {
   if (S.tab === 'Auto') host.append(autoSection());
   else if (S.tab === 'Parts') host.append(partsSection());
   else if (S.tab === 'Attach') host.append(attachSection());
-  else if (S.tab === 'Scene') host.append(sceneSection());
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
     if (S.tab === 'Speech') host.append(speechSection());
-    if (S.tab === 'Gait') host.append(gaitChartSection());
+    if (S.tab === 'Gait') { host.append(sceneSection()); host.append(gaitChartSection()); }
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
-    for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group' }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
+    for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
     if (S.tab === 'View') host.append(viewExtras());
     if (S.tab === 'Guides') host.append(arcSection(), refSection());
     if (S.tab === 'Export') host.append(exportSection());
@@ -1629,6 +1630,7 @@ function refreshViewbar() {
   const t = document.querySelector('[data-testid="turntable"]');
   if (t) t.setAttribute('aria-pressed', String(S.s.autoOrbit));
   document.querySelector('[data-testid="head-view"]')?.setAttribute('aria-pressed', String(S.s.focus === 'head'));
+  document.querySelectorAll('.viewbar .qv').forEach((b) => b.setAttribute('aria-pressed', String(S.s.camYaw === Number(b.dataset.yaw) && S.s.camPitch === Number(b.dataset.pitch))));
 }
 function resetAll() {
   if (!confirm('Reset every setting to its default?')) return;
@@ -1726,14 +1728,16 @@ function build() {
   const viewbar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': 'Camera' },
     vb('orbit', 'Orbit', 'tool-orbit', () => { S.tool = 'orbit'; refreshViewbar(); }, { 'data-tool': 'orbit' }),
     vb('pan', 'Pan', 'tool-pan', () => { S.tool = 'pan'; refreshViewbar(); }, { 'data-tool': 'pan' }),
-    h('span', { class: 'vsep cam', role: 'presentation' }), viewMenu, h('span', { class: 'vsep cam', role: 'presentation' }),
+    h('span', { class: 'vsep cam', role: 'presentation' }), viewMenu,
+    ...views.map(([l, y, p, id]) => h('button', { type: 'button', class: 'btn vb cam qv', testid: `qv-${id.slice(5)}`, 'data-yaw': y, 'data-pitch': p, 'aria-label': `${l} view`, title: `${l} view`, 'aria-pressed': 'false', onClick: () => setView(y, p) }, { 'Side': 'Side', '¾ front': '¾', Front: 'Front', Back: 'Back', Top: 'Top' }[l])),
+    h('span', { class: 'vsep cam', role: 'presentation' }),
     vb('spin', 'Spin', 'turntable', () => { S.s.autoOrbit = !S.s.autoOrbit; refreshViewbar(); save(); }, { 'aria-pressed': 'false' }),
     vb('face', 'Head view', 'head-view', () => { S.s.focus = S.s.focus === 'head' ? 'body' : 'head'; S.zoom = 1; S.panX = S.panY = 0; refreshViewbar(); if (S.tab === 'Speech') renderPanel(); render(); save(); }, { 'aria-pressed': 'false' }),
     vb('fit', 'Fit', 'fit', () => { S.zoom = 1; S.panX = S.panY = 0; render(); }));
   const back = h('button', { type: 'button', class: 'btn back', testid: 'stage-back', onClick: () => { S.stageOnly = false; document.body.classList.remove('stage-only'); render(); } }, 'Show controls');
   wrapEl = h('section', { class: 'stage-wrap' }, stage, hud, viewbar, back);
   frameCanvas = document.createElement('canvas');
-  const tabs = h('nav', { class: 'tabs', role: 'tablist' }, TABS.map((t) => h('button', { type: 'button', class: 'tab', role: 'tab', 'data-tab': t, testid: `tab-${t}`, onClick: () => { S.tab = t; renderPanel(); } }, t)));
+  const tabs = h('nav', { class: 'tabs', role: 'tablist' }, TABS.map((t) => h('button', { type: 'button', class: 'tab', role: 'tab', 'data-tab': t, testid: `tab-${t}`, onClick: () => { S.tab = t; renderPanel(); } }, TAB_LABELS[t] ?? t)));
   const panel = h('section', { class: 'panel' }, tabs, h('div', { id: 'panel-body', class: 'panel-body' }));
   const popout = h('aside', { id: 'popout', class: 'popout', hidden: true, 'aria-label': 'Curve editor', testid: 'popout' });
   const tl = h('footer', { class: 'timeline' },
@@ -1876,7 +1880,9 @@ function gestures() {
       const front = q && S.last ? pickAttachment(q, 'front') : null;
       const hit = !front && q && S.last ? pickPart(S.last.shapes, q.x, q.y) : null;
       const back = !front && !hit && q && S.last ? pickAttachment(q, 'behind') : null;
-      if (front || back) selectAttach((front || back).it.id);
+      const sceneHit = !front && !hit && !back && q && S.last?.sceneHits ? [...S.last.sceneHits].reverse().find((sh) => pickPart(sh.shapes, q.x, q.y)) : null;
+      if (sceneHit) { S.sceneSel = sceneHit.id; S.tab = 'Gait'; selectPart(null, { openTab: false }); renderPanel(); setMessage('Figure selected. Its walk, place and size are in the Scene section of the Body tab.'); }
+      else if (front || back) selectAttach((front || back).it.id);
       else { S.attachSel = null; selectPart(hit, { openTab: Boolean(hit) }); }
     } else if (had && was?.moved && S.tool === 'orbit') { if (S.tab === 'View') renderPanel(); save(); }
     down = null; start = ptrs.size ? snap() : null;
@@ -2021,7 +2027,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
-  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t; renderPanel(); },
+  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),

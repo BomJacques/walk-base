@@ -57,8 +57,8 @@ export const STYLE_DEFAULTS = Object.freeze({
   guideColor: '#e0662e',
   selectColor: '#e0662e',
   // the rubber hose figure
-  hoseLimb: 1, hoseBend: 1, hoseSquash: 0.6, hoseEars: 'none', hoseEyes: 'pie',
-  hoseBody: '#2d2a2e', hoseFace: '#fff8e8', hoseGlove: '#ffffff', hoseShoe: '#2d2a2e', hoseShorts: '#d6402f',
+  hoseLimb: 1, hoseBend: 1, hoseSquash: 1, hoseEars: 'none', hoseEyes: 'pie',
+  hoseBody: '#2d2a2e', hoseFace: '#fff8e8', hoseGlove: '#ffffff', hoseShoe: '#ffffff', hoseShorts: '#2d2a2e',
 });
 
 const TAU = Math.PI * 2;
@@ -193,7 +193,7 @@ function buildHoseShapes(pz, cam, st) {
   const sc = cam.scale;
   const pr = pz.params?.proportions || {}; const limbK = (st.hoseLimb ?? 1) * (pr.limbGirth ?? 1); const bodyK = pr.torsoGirth ?? 1;
   const sq = Math.max(-1, Math.min(1, -(pz.bobDev || 0) / (Math.max(0.02, pz.params?.bob ?? 0.075) / 2)));
-  const wMul = 1 + 0.16 * (st.hoseSquash ?? 0.6) * sq; // fuller at the bottom of the bounce, thinner at the top
+  const wMul = 1 + 0.3 * (st.hoseSquash ?? 1) * sq; // fuller at the bottom of the bounce, thinner at the top (the height changes the other way, in squashCam)
   const bend = Math.max(0, Math.min(1, st.hoseBend ?? 1));
   const col = (c, role) => (role === 'far' ? mixHex(c, st.farTint, 0.3) : c);
   const add1 = (pts, depth, part, side, role, color, lw = 1.6) => shapes.push({ pts, depth, part, side, role, fill: col(color, role), lw });
@@ -289,7 +289,7 @@ function paintShape(ctx, sh, cam, st, ghost) {
   ctx.closePath();
   if (st.style === 'silhouette' && !ghost) { ctx.fillStyle = st.lineColor; ctx.fill(); return; }
   // Outline: the whole figure's edge was already drawn in a first pass, so this fill covers every line inside it.
-  if (st.style === 'outline' && !ghost) { ctx.fillStyle = sh.fill ?? hexA(st.fillColor, 1); ctx.fill(); return; }
+  if (st.style === 'outline' && !ghost) { ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill(); return; }
   if (st.style === 'mannequin') {
     ctx.fillStyle = ghost ? hexA(ghost, 0.1) : sh.fill ?? (far ? hexA(st.farTint, st.farOpacity * 0.55) : hexA(st.fillColor, st.fillOpacity));
     ctx.fill();
@@ -319,16 +319,20 @@ const strideOf = (p) => (p.rig === 'dog' ? p.dogStride : 2 * p.stepLength);
 /** The other figures and the scenery, each with the depth it sorts at: [{ d, paint }]. Figures use their own walk, started a little apart from the main one. */
 function sceneDrawables(ctx, params, st, cam, env) {
   const out = []; const sc = params.scene; if (!sc) return out;
-  const { ph, perf, t0, sp, pz } = env;
+  const { ph, perf, t0, sp, pz, hits } = env;
   for (const a of sc.actors || []) {
     if (!a.visible) continue;
     const dogA = a.p.rig === 'dog'; const poser = dogA ? poseDog : pose3;
-    const u = (ph.u + a.phase) - Math.floor(ph.u + a.phase);
-    const extra = perf ? { worldX: perf.x[t0] * (strideOf(a.p) / Math.max(0.01, strideOf(sp))), freeU: t0 / Math.max(2, Math.round(a.p.cycleFrames)) } : null;
-    const pzA = poser({ ...a.p, proportions: a.r, motion: {}, attach: [], speech: null }, {}, u, extra);
+    // The figure goes a whole number of its own cycles to each cycle of the main one, with its stride set so the two cover the same ground. That keeps it in step and
+    // stops it creeping ahead and snapping back each time the loop starts again.
+    const sM = Math.max(0.05, strideOf(sp)); const k = Math.max(1, Math.round(sM / Math.max(0.05, strideOf(a.p)))); const sA = sM / k;
+    const pA = dogA ? { ...a.p, dogStride: sA } : { ...a.p, stepLength: sA / 2 };
+    const cyc = k * ph.u + a.phase; const u = cyc - Math.floor(cyc);
+    const extra = { worldX: perf ? perf.x[t0] + a.phase * sA : cyc * sA, ...(perf ? { freeU: t0 / Math.max(2, Math.round(a.p.cycleFrames)) } : {}) };
+    const pzA = poser({ ...pA, proportions: a.r, motion: {}, attach: [], speech: null }, {}, u, extra);
     const cA = actorCam(cam, a);
     const st2 = a.fill ? { ...st, fillColor: a.fill, hoseBody: a.fill } : st;
-    out.push({ d: cA.p([pzA.pelvisX, 0, 0]).d, paint: () => { drawFigureShapes(ctx, pzA, cA, st2, {}); } });
+    out.push({ d: cA.p([pzA.pelvisX, 0, 0]).d, paint: () => { const r = drawFigureShapes(ctx, pzA, cA, st2, {}); hits.push({ id: a.id, shapes: r.shapes || [] }); } });
   }
   for (const q of sc.props || []) {
     if (!q.visible) continue;
@@ -373,7 +377,16 @@ function paintHeadMouth(ctx, pz, cam, st, id) {
   paintMouth(ctx, id, surf, { line: st.lineColor, lw: cam.lw * 0.85 });
 }
 
-function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
+/** For the rubber hose figure: the camera with the figure squashed toward its feet at the bottom of the bounce and stretched up at the top, about the ground it stands on. */
+function squashCam(cam, pz, st) {
+  if (pz.legs || pz.params?.model !== 'hose') return cam;
+  const amt = st.hoseSquash ?? 1; if (!amt) return cam;
+  const sq = Math.max(-1, Math.min(1, -(pz.bobDev || 0) / (Math.max(0.02, pz.params?.bob ?? 0.075) / 2)));
+  const v = 1 - 0.2 * amt * sq; const gy = cam.p([pz.pelvisX, pz.groundY || 0, 0]).y;
+  return { ...cam, p: (pt) => { const r = cam.p(pt); return { x: r.x, y: gy + (r.y - gy) * v, d: r.d }; } };
+}
+function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
+  const cam = squashCam(cam0, pz, st);
   const parts = opts.parts || { far: true, body: true, near: true };
   const ghost = opts.tint || null;
   ctx.save();
@@ -423,8 +436,9 @@ function drawFigureShapes(ctx, pz, cam, st, opts = {}) {
   if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (DEPTH_OFF[it.depth] ?? 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);
   if (st.style === 'outline' && !ghost) {
     // First pass: every limb and the body, stroked twice as thick. The fills that follow leave only the outer edge, so arms, legs and body read as one outline with no lines crossing inside.
-    ctx.save(); ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw * 2.2; ctx.lineJoin = 'round';
+    ctx.save(); ctx.lineWidth = cam.lw * 2.2; ctx.lineJoin = 'round';
     for (const sh of shapes) {
+      ctx.strokeStyle = sh.role === 'far' && !sh.fill ? mixHex(st.lineColor, st.farTint, 0.55) : st.lineColor;
       if (sh.attach || sh.pts.length < 3 || (!ghost && coveredByPicture(sh, st, opts.attach)) || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
       ctx.beginPath(); sh.pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); ctx.stroke();
     }
@@ -621,8 +635,8 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
   }
 
-  let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null;
-  const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz }) : [];
+  let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null; const sceneHits = [];
+  const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz, hits: sceneHits }) : [];
   const dMain = cam.p([pz.pelvisX, 0, 0]).d;
   if (layers.figure) {
     for (const it of sceneItems) if (it.d < dMain) it.paint();
@@ -734,5 +748,5 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
     ctx.restore();
   }
-  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam, pz, attach: placedAttach, handles, arcDots, fixHandle };
+  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam, pz, attach: placedAttach, handles, arcDots, fixHandle, sceneHits };
 }

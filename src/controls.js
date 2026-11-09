@@ -8,9 +8,11 @@ const e = (scope, id, tab, group, label, options, help) => ({ scope, id, tab, gr
 const b = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, label, type: 'bool', help });
 const c = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, label, type: 'color', help });
 
-export const TABS = ['Gait', 'Parts', 'Attach', 'Scene', 'Auto', 'Body', 'Speech', 'View', 'Look', 'Guides', 'Sampler', 'Export'];
+/** What a tab is called on its button. Gait is the one tab for the walk, the body and the scene, and the person using it calls it Body. */
+export const TAB_LABELS = { Gait: 'Body' };
+export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Speech', 'View', 'Look', 'Guides', 'Sampler', 'Export'];
 
-export const CONTROLS = [
+const RAW_CONTROLS = [
   // Gait
   e('p', 'exposure', 'Gait', 'Timing', 'Exposure', [1, 2, 3], 'Frames each drawing is held. 2 is "on twos".'),
   e('p', 'travel', 'Gait', 'Timing', 'Camera', ['follow', 'across'], 'Follow keeps the figure in place while the ground scrolls. Across lets it cross the frame.'),
@@ -98,6 +100,10 @@ export const CONTROLS = [
   n('p', 'dogFlightHeight', 'Body', 'Wings', 'Flight height', 'heights', 0, 3, 0.05, 'Bird: how far above the ground the body flies.'),
   n('p', 'dogFlapFrames', 'Body', 'Wings', 'Frames per wing beat', 'frames', 0, 60, 1, 'Bird: how many frames one wing beat takes, on its own clock, so the wings keep beating when the walk slows or stops. 0 ties the beat to the walk cycle (Beats per cycle).'),
   n('p', 'dogFlapRate', 'Body', 'Wings', 'Beats per cycle', '', 1, 6, 1, 'Bird: wing beats in one cycle.'),
+  n('p', 'dogNeckSegs', 'Body', 'Dog neck', 'Neck segments', '', 1, 12, 1, 'How many bones the neck is made of. A long neck, such as a sauropod\'s, needs several to bend along its length.'),
+  n('p', 'dogNeckCurve', 'Body', 'Dog neck', 'Neck curve', '°', -90, 90, 1, 'How much the neck bends over its whole length: positive droops at the top like a swan, negative arches back. Needs two or more segments.'),
+  n('p', 'dogNeckWave', 'Body', 'Dog neck', 'Neck wave, nodding', '°', 0, 20, 0.5, 'Each bone nods a little after the one below it, so a wave runs up the neck as the animal walks.'),
+  n('p', 'dogNeckSway', 'Body', 'Dog neck', 'Neck wave, sideways', '°', 0, 20, 0.5, 'Each bone swings from side to side after the one below it, so the neck snakes as the animal walks.'),
   n('p', 'dogNeckAngle', 'Body', 'Dog head and tail', 'Neck raise', '°', 0, 90, 1, 'How steeply the neck rises from the back.'),
   n('p', 'dogHeadAngle', 'Body', 'Dog head and tail', 'Head tip', '°', -20, 80, 1, 'How far the head tips down from the neck.'),
   n('p', 'dogHeadNod', 'Body', 'Dog head and tail', 'Head nod', '°', 0, 15, 0.25, 'Small nod with each footfall.'),
@@ -122,15 +128,15 @@ export const CONTROLS = [
   n('s', 'lineWidth', 'Look', 'Figure', 'Line width', 'px', 0.5, 12, 0.25, 'At 1080 pixels tall. It scales with the canvas.'),
   n('s', 'hoseLimb', 'Look', 'Rubber hose', 'Limb thickness', '×', 0.5, 2, 0.01, 'How thick the tube arms and legs are.'),
   n('s', 'hoseBend', 'Look', 'Rubber hose', 'Limb curve', '', 0, 1, 0.01, '1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint.'),
-  n('s', 'hoseSquash', 'Look', 'Rubber hose', 'Squash and stretch', '', 0, 1.5, 0.05, 'The body swells when it is lowest in the step and thins as it rises.'),
+  n('s', 'hoseSquash', 'Look', 'Rubber hose', 'Squash and stretch', '', 0, 2, 0.05, 'At the bottom of the bounce the body squashes down and swells; at the top it stretches up and thins, legs and arms with it. 1 is clear, 2 is cartoon.'),
   e('s', 'pictureModel', 'Look', 'Pictures', 'Body under pictures', ['hide covered parts', 'hide the model', 'show the model'], 'What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin.'),
   e('s', 'hoseEars', 'Look', 'Rubber hose', 'Ears', ['none', 'round'], 'Round ears on top of the head. Off by default.'),
   e('s', 'hoseEyes', 'Look', 'Rubber hose', 'Eyes', ['pie', 'round', 'dots'], 'Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots.'),
   c('s', 'hoseBody', 'Look', 'Rubber hose', 'Body colour', 'The head, body, arms and legs.'),
   c('s', 'hoseFace', 'Look', 'Rubber hose', 'Face colour', 'The face patch on the head.'),
   c('s', 'hoseGlove', 'Look', 'Rubber hose', 'Glove colour', 'The hands.'),
-  c('s', 'hoseShoe', 'Look', 'Rubber hose', 'Foot colour', 'The feet. The same as the body colour by default, so a leg and its foot read as one hose.'),
-  c('s', 'hoseShorts', 'Look', 'Rubber hose', 'Shorts colour', 'The hips.'),
+  c('s', 'hoseShoe', 'Look', 'Rubber hose', 'Foot colour', 'The feet. White by default, like the gloves.'),
+  c('s', 'hoseShorts', 'Look', 'Rubber hose', 'Shorts colour', 'The hips. The same as the body by default, so the figure is one colour.'),
   c('s', 'lineColor', 'Look', 'Figure', 'Line colour', 'Outline and silhouette colour.'),
   c('s', 'fillColor', 'Look', 'Figure', 'Fill colour', 'Mannequin fill.'),
   n('s', 'fillOpacity', 'Look', 'Figure', 'Fill opacity', '', 0, 1, 0.01, 'Lower it to trace through the body.'),
@@ -172,6 +178,8 @@ export const CONTROLS = [
   n('x', 'padding', 'Export', 'Names', 'Frame digits', '', 2, 8, 1, 'Zero padding, so names sort in frame order.'),
   n('x', 'bitrate', 'Export', 'Names', 'Video bitrate', 'Mbps', 1, 80, 1, 'MP4 only.'),
 ];
+/** Gait and Body are one tab: the walk first, then the body. `area` keeps which it came from, for its colour. */
+export const CONTROLS = RAW_CONTROLS.map((c) => (c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : { ...c, area: c.tab }));
 
 /** Which figure a control belongs to: 'both', 'human' or 'dog'. Timing, camera, look, guides and export are shared. */
 const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel']);
@@ -244,8 +252,8 @@ export const PRESETS_SPECIES = {
     Flapping: sp('bird', { dogGait: 'walk', dogStride: 0.2, dogDuty: 0.8, dogLift: 0.05, dogBob: 0.0, dogTilt: 28, dogNeckAngle: 44, dogHeadAngle: 60, dogTailAngle: 12, dogWag: 0, dogHeadHold: 0, dogWingOpen: 1, dogFlap: 48, dogFlapRate: 2, cycleFrames: 24 }),
   },
   sauropod: {
-    Walk: sp('sauropod', { dogGait: 'walk', dogStride: 1.3, dogDuty: 0.74, dogLift: 0.07, dogBob: 0.008, dogFlex: 1.5, dogArch: 0.5, dogTwist: 2, dogShoulder: 0.03, dogWidth: 0.16, dogElbowOut: 1, dogNeckAngle: 48, dogHeadAngle: 36, dogHeadNod: 1.5, dogTailAngle: -2, dogWag: 6, cycleFrames: 44 }),
-    'Neck up': sp('sauropod', { dogGait: 'walk', dogStride: 0.9, dogDuty: 0.78, dogLift: 0.05, dogBob: 0.006, dogTwist: 1.5, dogShoulder: 0.025, dogWidth: 0.16, dogNeckAngle: 74, dogHeadAngle: 52, dogTailAngle: 4, dogWag: 4, cycleFrames: 52 }),
+    Walk: sp('sauropod', { dogNeckSegs: 7, dogNeckCurve: 25, dogNeckWave: 2.5, dogNeckSway: 4, dogGait: 'walk', dogStride: 1.3, dogDuty: 0.74, dogLift: 0.07, dogBob: 0.008, dogFlex: 1.5, dogArch: 0.5, dogTwist: 2, dogShoulder: 0.03, dogWidth: 0.16, dogElbowOut: 1, dogNeckAngle: 48, dogHeadAngle: 36, dogHeadNod: 1.5, dogTailAngle: -2, dogWag: 6, cycleFrames: 44 }),
+    'Neck up': sp('sauropod', { dogNeckSegs: 7, dogNeckCurve: -10, dogNeckWave: 2, dogNeckSway: 3, dogGait: 'walk', dogStride: 0.9, dogDuty: 0.78, dogLift: 0.05, dogBob: 0.006, dogTwist: 1.5, dogShoulder: 0.025, dogWidth: 0.16, dogNeckAngle: 74, dogHeadAngle: 52, dogTailAngle: 4, dogWag: 4, cycleFrames: 52 }),
   },
   ceratopsian: {
     Walk: sp('ceratopsian', { dogGait: 'walk', dogStride: 1.1, dogDuty: 0.7, dogLift: 0.1, dogBob: 0.014, dogFlex: 2, dogArch: 1, dogTwist: 3, dogShoulder: 0.04, dogWidth: 0.13, dogElbowOut: 6, dogNeckAngle: 8, dogHeadAngle: 34, dogHeadNod: 3, dogTailAngle: -4, dogWag: 8, cycleFrames: 32 }),

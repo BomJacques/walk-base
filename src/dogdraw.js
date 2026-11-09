@@ -26,7 +26,7 @@ export function buildDogShapes(pz, cam) {
   tube(pz.pelvis, pz.j1, pz.R1, pz.R1, [0.16 * BO, 0.1 * BO], [0.165 * BO, 0.105 * BO], 'dog.spine1');
   tube(pz.j1, pz.j2, pz.R2, pz.R2, [0.165 * BO, 0.105 * BO], [0.18 * BO, 0.11 * BO], 'dog.spine2');
   tube(pz.j2, pz.j3, pz.R3, pz.R3, [0.18 * BO, 0.11 * BO], [0.2 * BO, 0.115 * BO], 'dog.spine3');
-  capsule(pz.neckBase, pz.neckTop, 0.09 * NK, 0.065 * NK, 'dog.neck', null, 'body');
+  { const nk = pz.neck || [pz.neckBase, pz.neckTop]; const n = nk.length - 1; for (let i = 0; i < n; i++) capsule(nk[i], nk[i + 1], (0.09 - 0.025 * (i / n)) * NK, (0.09 - 0.025 * ((i + 1) / n)) * NK, 'dog.neck', null, 'body'); }
 
   // Head: a skull and a tapering snout, with the jaw under it.
   const skullC = pz.headC;
@@ -89,7 +89,7 @@ export function buildDogShapes(pz, cam) {
 /** Polylines for the stick style: [points, far]. */
 export function dogSticks(pz) {
   const out = [
-    [[pz.pelvis, pz.j1, pz.j2, pz.j3, pz.neckBase, pz.neckTop, pz.noseTip], false],
+    [[pz.pelvis, pz.j1, pz.j2, pz.j3, ...(pz.neck || [pz.neckBase, pz.neckTop]), pz.noseTip], false],
     [[pz.hinge, pz.jawEnd], false],
     [pz.tail, false],
   ];

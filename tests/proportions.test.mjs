@@ -9,10 +9,10 @@ import { wordsFor } from '../src/words.js';
 const pz = (proportions = {}, over = {}, u = 0.3) => pose3({ ...DEFAULTS, proportions, motion: {}, ...over }, {}, u);
 const dist = (a, b) => len(sub(a, b));
 
-test('every new proportion has a control in the Body tab, scaled around 1', () => {
+test('every new proportion has a control in the Body part of the Gait tab, scaled around 1', () => {
   for (const id of ['waist', 'chest', 'upperArm', 'foreArm', 'handSize', 'thighShare', 'footSize', 'limbGirth', 'torsoGirth']) {
     const c = CONTROLS.find((x) => x.scope === 'r' && x.id === id);
-    assert.ok(c, id); assert.equal(c.tab, 'Body'); assert.ok(c.min < 1 && c.max > 1, `${id} range includes 1`);
+    assert.ok(c, id); assert.equal(c.area, 'Body'); assert.equal(c.tab, 'Gait'); assert.ok(c.min < 1 && c.max > 1, `${id} range includes 1`);
   }
 });
 

@@ -154,8 +154,15 @@ export function poseDog(params, motion, u, extra = null) {
     holdShift = ph < H ? -A * ph : -A * H * (1 - smooth((ph - H) / (1 - H)));
   }
   const neckBase = add(add(j3, apply(R3, [0.04, 0.05, 0])), [holdShift, 0, 0]);
-  const Rn = mm(R3, seg(c('neck.yaw'), c('neck.pitch') - rad(p.dogNeckAngle), c('neck.roll')));
-  const neckTop = add(neckBase, apply(Rn, [L.neck * sc('dNeck'), 0, 0]));
+  let Rn = mm(R3, seg(c('neck.yaw'), c('neck.pitch') - rad(p.dogNeckAngle), c('neck.roll')));
+  // The neck is one bone or several. With several, each carries on from the one before with its share of the curve and a wave that runs up the neck as the animal walks.
+  const nSegs = clamp(Math.round(p.dogNeckSegs ?? 1), 1, 12); const segLen = (L.neck * sc('dNeck')) / nSegs;
+  const neck = [neckBase]; let Rk = Rn;
+  for (let i = 0; i < nSegs; i++) {
+    if (i > 0) Rk = mm(Rk, seg(rad(p.dogNeckSway || 0) * Math.sin(TAU * uw - i * 0.6 + 1.2), rad(p.dogNeckCurve || 0) / nSegs + rad(p.dogNeckWave || 0) * Math.sin(TAU * uw - i * 0.7), 0));
+    neck.push(add(neck[i], apply(Rk, [segLen, 0, 0])));
+  }
+  const neckTop = neck[nSegs]; Rn = Rk;
   const hs = sc('dHead');
   const Rh = mm(Rn, seg(c('head.yaw'), c('head.pitch') + rad(p.dogHeadAngle), c('head.roll')));
   const headC = add(neckTop, apply(Rh, [L.skull * 0.5 * hs, 0, 0]));
@@ -236,7 +243,7 @@ export function poseDog(params, motion, u, extra = null) {
     }
     legs[leg4] = { front, side, s, top, root, mid: ik.knee, wrist: ik.ankle, paw: pawF, toe, reached: ik.reached, stance: f.stance && fl < 0.5, w, theta: pitch };
   }
-  return { u: uw, pelvisX: extra?.worldX ?? uw * p.dogStride, params: p, pelvis: P, Rp, R1, R2, R3, Rn, Rh, Rj, j1, j2, j3, neckBase, neckTop, headC, noseTip, hinge, jawEnd, ears, tail, legs, heights, baseTilt };
+  return { u: uw, pelvisX: extra?.worldX ?? uw * p.dogStride, params: p, pelvis: P, Rp, R1, R2, R3, Rn, Rh, Rj, j1, j2, j3, neckBase, neckTop, neck, headC, noseTip, hinge, jawEnd, ears, tail, legs, heights, baseTilt };
 }
 
 /** Where each paw lands during a performance, for the footprint guide. s is the result of integrate(). */

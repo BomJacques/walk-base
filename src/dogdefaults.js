@@ -11,6 +11,10 @@ export const DOG_DEFAULTS = Object.freeze({
   dogFlex: 6,             // degrees the spine bends side to side
   dogArch: 2,             // degrees the back arches with each footfall
   dogWidth: 0.11,         // half the gap between left and right paws
+  dogNeckSegs: 1,         // bones in the neck (a sauropod's is long and bends along its length)
+  dogNeckCurve: 0,        // degrees the neck bends over its length (positive droops, negative arches)
+  dogNeckWave: 0,         // degrees each neck bone nods as a wave runs up it
+  dogNeckSway: 0,         // degrees each neck bone swings sideways as a wave runs up it
   dogNeckAngle: 52,       // degrees the neck rises from the back
   dogHeadAngle: 34,       // degrees the head tips back down from the neck
   dogHeadNod: 3,          // degrees

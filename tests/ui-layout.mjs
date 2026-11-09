@@ -24,7 +24,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
 
   // the top bar: four pop-up buttons, as wide as what they show
   const bar = await ev(() => { const b = document.querySelector('.bar').getBoundingClientRect(); const ps = [...document.querySelectorAll('.pillfield')].map((e) => e.getBoundingClientRect()); return { barH: Math.round(b.height), n: ps.length, minH: Math.min(...ps.map((p) => p.height)), widths: ps.map((p) => Math.round(p.width)), labels: [...document.querySelectorAll('.pillfield small')].map((e) => e.textContent) }; });
-  check(`${label}: the top bar is ${bar.barH}px tall (it was about 96px) with four pop-up buttons ${bar.widths.join(', ')}px wide`, bar.n === 4 && bar.minH >= 44 && bar.widths.every((w) => w < 200) && bar.barH < 70, bar);
+  check(`${label}: the top bar is ${bar.barH}px tall (it was about 96px) with four pop-up buttons ${bar.widths.join(', ')}px wide`, bar.n === 4 && bar.minH >= 32 && bar.widths.every((w) => w < 200) && bar.barH < 70, bar);
   await page.locator('#rig').selectOption('ceratopsian'); await page.waitForTimeout(250);
   const after = await ev(() => { const e = document.querySelector('.pillfield:has(#rig)'); return { w: Math.round(e.getBoundingClientRect().width), text: e.querySelector('select').selectedOptions[0].text }; });
   check('the Figure button grows to fit the figure you pick, and still fits the bar', after.text === 'Ceratopsian' && after.w > bar.widths[0] && after.w < 240, after);
@@ -38,7 +38,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
   const folded = await ev(() => [...document.querySelectorAll('#panel-body section.group')].map((s) => ({ t: s.querySelector('.sec-toggle')?.textContent.trim(), open: s.querySelector('.sec-toggle')?.getAttribute('aria-expanded') === 'true' })));
   check(`${label}: Body starts with Proportions and Hips and shoulders folded`, folded.filter((x) => /proportions|hips and shoulders/i.test(x.t)).every((x) => !x.open) && folded.some((x) => x.open), folded);
   const bodyScreens = await ev(() => document.getElementById('panel-body').scrollHeight / document.getElementById('panel-body').clientHeight);
-  check(`${label}: the Body tab is now about ${bodyScreens.toFixed(1)} screens of scrolling, down from 1.6`, bodyScreens < 1.3, bodyScreens.toFixed(2));
+  check(`${label}: the Body tab is now about ${bodyScreens.toFixed(1)} screens of scrolling (the walk, the body and the scene are one tab now; folded groups keep it manageable)`, bodyScreens < 6, bodyScreens.toFixed(2));
   await page.locator('#panel-body .sec-toggle', { hasText: /proportions/i }).first().click(); await page.waitForTimeout(150);
   check('tapping a folded group opens it and the choice is remembered', await ev(() => [...document.querySelectorAll('#panel-body .sec-toggle')].find((b) => /proportions/i.test(b.textContent))?.getAttribute('aria-expanded')) === 'true');
   await ev(() => window.__walkBase.setTab('Gait')); await tab('Body');

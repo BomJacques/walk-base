@@ -31,20 +31,6 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Step height | human | legs | -0.3 to 0.3 | 0.14 | Height of each step, in leg lengths (negative goes down). |
 | Step length | human | legs | 0.3 to 2.5 | 1 | Length of the flat top of each step. |
 | Far arm swing | human |  | -0.8 to 0.8 | 0 | The far arm swings more or less than the near one. |
-| Gait | dog |  | walk, trot, pace, gallop, run, hop | walk | Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between. |
-| Stride | dog | heights | 0.1 to 5 | 0.95 | Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster. |
-| Time on the ground | dog |  | 0.15 to 0.85 | 0.68 | Fraction of the cycle each paw is down. |
-| Paw lift | dog | heights | 0 to 0.5 | 0.13 | How high the swinging paw clears the ground. |
-| Left paws land late | dog | cycle | -0.12 to 0.12 | 0 | Moves the left paws off their place in the beat, so the steps on the two sides are unequal. |
-| Left paws time on ground | dog |  | -0.15 to 0.15 | 0 | Added to the left paws only. Less is a leg that is hurried off the ground, as when it hurts. |
-| Left paws lift | dog |  | -0.8 to 0.8 | 0 | The left paws lift more (positive) or less (negative) than the right. |
-| Paws width | dog | heights | 0 to 0.3 | 0.11 | Distance of each paw from the centre line. |
-| Elbows and knees out | dog | ° | -15 to 30 | 3 | Direction the elbows and knees point away from straight ahead. |
-
-## Body
-
-| Control | Figure | Unit | Range | Default | What it does |
-|---|---|---|---|---|---|
 | Forward lean | human | ° | -15 to 30 | 4 | Torso tilt. Negative leans back. |
 | Torso rock | human | ° | 0 to 10 | 1.6 | Extra tilt that rocks with each step. |
 | Head steadiness | human |  | 0 to 1 | 0.35 | 0 lets the head ride the hips, 1 holds it level. |
@@ -78,6 +64,15 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Foot size | human | × | 0.6 to 2 | 1 | Scale of the drawn foot. Large for a clown shoe, small for a dancer. |
 | Limb thickness | human | × | 0.5 to 2.2 | 1 | Thickness of the arms and legs in the drawing. |
 | Body thickness | human | × | 0.6 to 1.8 | 1 | Thickness of the hips, waist, chest and neck in the drawing. |
+| Gait | dog |  | walk, trot, pace, gallop, run, hop | walk | Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between. |
+| Stride | dog | heights | 0.1 to 5 | 0.95 | Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster. |
+| Time on the ground | dog |  | 0.15 to 0.85 | 0.68 | Fraction of the cycle each paw is down. |
+| Paw lift | dog | heights | 0 to 0.5 | 0.13 | How high the swinging paw clears the ground. |
+| Left paws land late | dog | cycle | -0.12 to 0.12 | 0 | Moves the left paws off their place in the beat, so the steps on the two sides are unequal. |
+| Left paws time on ground | dog |  | -0.15 to 0.15 | 0 | Added to the left paws only. Less is a leg that is hurried off the ground, as when it hurts. |
+| Left paws lift | dog |  | -0.8 to 0.8 | 0 | The left paws lift more (positive) or less (negative) than the right. |
+| Paws width | dog | heights | 0 to 0.3 | 0.11 | Distance of each paw from the centre line. |
+| Elbows and knees out | dog | ° | -15 to 30 | 3 | Direction the elbows and knees point away from straight ahead. |
 | Body bounce | dog | heights | 0 to 0.3 | 0.03 | Up and down travel of the hips. |
 | Spine bend | dog | ° | 0 to 25 | 6 | Side to side bend of the spine as the dog walks. |
 | Back arch | dog | ° | 0 to 12 | 2 | How much the back arches and dips with each footfall. |
@@ -93,6 +88,10 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Flight height | dog | heights | 0 to 3 | 1.1 | Bird: how far above the ground the body flies. |
 | Frames per wing beat | dog | frames | 0 to 60 | 0 | Bird: how many frames one wing beat takes, on its own clock, so the wings keep beating when the walk slows or stops. 0 ties the beat to the walk cycle (Beats per cycle). |
 | Beats per cycle | dog |  | 1 to 6 | 1 | Bird: wing beats in one cycle. |
+| Neck segments | dog |  | 1 to 12 | 1 | How many bones the neck is made of. A long neck, such as a sauropod's, needs several to bend along its length. |
+| Neck curve | dog | ° | -90 to 90 | 0 | How much the neck bends over its whole length: positive droops at the top like a swan, negative arches back. Needs two or more segments. |
+| Neck wave, nodding | dog | ° | 0 to 20 | 0 | Each bone nods a little after the one below it, so a wave runs up the neck as the animal walks. |
+| Neck wave, sideways | dog | ° | 0 to 20 | 0 | Each bone swings from side to side after the one below it, so the neck snakes as the animal walks. |
 | Neck raise | dog | ° | 0 to 90 | 52 | How steeply the neck rises from the back. |
 | Head tip | dog | ° | -20 to 80 | 34 | How far the head tips down from the neck. |
 | Head nod | dog | ° | 0 to 15 | 3 | Small nod with each footfall. |
@@ -133,15 +132,15 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Line width | both | px | 0.5 to 12 | 3 | At 1080 pixels tall. It scales with the canvas. |
 | Limb thickness | both | × | 0.5 to 2 | 1 | How thick the tube arms and legs are. |
 | Limb curve | both |  | 0 to 1 | 1 | 1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint. |
-| Squash and stretch | both |  | 0 to 1.5 | 0.6 | The body swells when it is lowest in the step and thins as it rises. |
+| Squash and stretch | both |  | 0 to 2 | 1 | At the bottom of the bounce the body squashes down and swells; at the top it stretches up and thins, legs and arms with it. 1 is clear, 2 is cartoon. |
 | Body under pictures | both |  | hide covered parts, hide the model, show the model | hide covered parts | What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin. |
 | Ears | both |  | none, round | none | Round ears on top of the head. Off by default. |
 | Eyes | both |  | pie, round, dots | pie | Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots. |
 | Body colour | both |  | color | #2d2a2e | The head, body, arms and legs. |
 | Face colour | both |  | color | #fff8e8 | The face patch on the head. |
 | Glove colour | both |  | color | #ffffff | The hands. |
-| Foot colour | both |  | color | #2d2a2e | The feet. The same as the body colour by default, so a leg and its foot read as one hose. |
-| Shorts colour | both |  | color | #d6402f | The hips. |
+| Foot colour | both |  | color | #ffffff | The feet. White by default, like the gloves. |
+| Shorts colour | both |  | color | #2d2a2e | The hips. The same as the body by default, so the figure is one colour. |
 | Line colour | both |  | color | #26231f | Outline and silhouette colour. |
 | Fill colour | both |  | color | #f6f1e7 | Mannequin fill. |
 | Fill opacity | both |  | 0 to 1 | 0.55 | Lower it to trace through the body. |
