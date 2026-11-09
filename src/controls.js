@@ -8,7 +8,7 @@ const e = (scope, id, tab, group, label, options, help) => ({ scope, id, tab, gr
 const b = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, label, type: 'bool', help });
 const c = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, label, type: 'color', help });
 
-export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Body', 'Speech', 'View', 'Look', 'Guides', 'Sampler', 'Export'];
+export const TABS = ['Gait', 'Parts', 'Attach', 'Scene', 'Auto', 'Body', 'Speech', 'View', 'Look', 'Guides', 'Sampler', 'Export'];
 
 export const CONTROLS = [
   // Gait
@@ -32,6 +32,10 @@ export const CONTROLS = [
   n('p', 'asymTiming', 'Gait', 'Left and right', 'Far foot lands late', 'cycle', -0.12, 0.12, 0.005, 'Moves the far foot off its half-cycle: the two steps become unequal, one short and one long.'),
   n('p', 'asymDuty', 'Gait', 'Left and right', 'Far foot time on ground', '', -0.15, 0.15, 0.005, 'Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp.'),
   n('p', 'asymLift', 'Gait', 'Left and right', 'Far foot lift', '', -0.8, 0.8, 0.01, 'The far foot lifts more (positive) or less (negative) than the near one.'),
+  e('p', 'terrain', 'Gait', 'Ground', 'Ground', ['flat', 'slope', 'steps'], 'What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step.'),
+  n('p', 'terrainGrade', 'Gait', 'Ground', 'Slope', '°', -30, 30, 0.5, 'How steeply the ground rises along the slope (negative goes downhill).'),
+  n('p', 'terrainRise', 'Gait', 'Ground', 'Step height', 'legs', -0.3, 0.3, 0.005, 'Height of each step, in leg lengths (negative goes down).'),
+  n('p', 'terrainRun', 'Gait', 'Ground', 'Step length', 'legs', 0.3, 2.5, 0.05, 'Length of the flat top of each step.'),
   n('p', 'asymArm', 'Gait', 'Left and right', 'Far arm swing', '', -0.8, 0.8, 0.01, 'The far arm swings more or less than the near one.'),
   // Body
   n('p', 'lean', 'Body', 'Torso', 'Forward lean', '°', -15, 30, 0.5, 'Torso tilt. Negative leans back.'),
@@ -142,6 +146,7 @@ export const CONTROLS = [
   e('s', 'focus', 'Speech', 'Head view', 'Look at', ['body', 'head'], 'Body keeps the whole figure in view. Head fills the stage with the face. Drag to turn the head around, pinch or scroll to zoom in and out, two fingers to move it.'),
   n('s', 'headZoom', 'Speech', 'Head view', 'Head size', '×', 3, 14, 0.1, 'How large the head is when the view is on the head.'),
   b('s', 'showMouthLabel', 'Speech', 'Head view', 'Mouth shape label', 'Names the current mouth shape and the sounds it stands for, in the top corner.'),
+  b('s', 'showScene', 'Guides', 'Scene', 'Show the scene', 'The other figures and the scenery. Off draws the main figure alone.'),
   b('s', 'showFootLabels', 'Guides', 'Poses', 'Foot labels', 'Names the ankle, heel, ball and toe on the near foot.'),
   b('s', 'showArcs', 'Guides', 'Arcs', 'Motion arcs', 'Paths of the points you tick below through the cycle. Drag a dot to reshape the movement.'),
   b('s', 'arcDots', 'Guides', 'Arcs', 'Frame dots', 'One dot on the path for every frame, so the spacing shows speed and ease. Drag a dot to bend the path there.'),
@@ -181,6 +186,10 @@ export const PRESETS = {
   Confident: { stepLength: 0.86, bob: 0.1, armSwing: 32, lean: 0, torsoSway: 2.4, headBob: 0.6, duty: 0.58, footLift: 0.18, elbowSwing: 34 },
   Brisk: { stepLength: 0.95, bob: 0.09, duty: 0.56, armSwing: 34, lean: 6, cycleFrames: 16, footLift: 0.2, elbowBase: 40, elbowSwing: 30 },
   Heavy: { stepLength: 0.66, bob: 0.13, duty: 0.64, footLift: 0.09, lean: 6, armSwing: 14, elbowBase: 20, headNod: 3.5, cycleFrames: 32, heelStrike: 18, torsoSway: 3 },
+  Uphill: { stepLength: 0.5, terrain: 'slope', terrainGrade: 12, lean: 8, bob: 0.07, footLift: 0.2, cycleFrames: 28 },
+  Downhill: { stepLength: 0.55, terrain: 'slope', terrainGrade: -12, lean: -3, bob: 0.06, footLift: 0.12, cycleFrames: 24 },
+  'Up the steps': { stepLength: 0.45, terrain: 'steps', terrainRise: 0.14, terrainRun: 0.9, lean: 5, bob: 0.04, footLift: 0.2, duty: 0.66, cycleFrames: 30 },
+  'Down the steps': { stepLength: 0.45, terrain: 'steps', terrainRise: -0.15, terrainRun: 0.9, lean: -2, bob: 0.06, footLift: 0.2, duty: 0.66, cycleFrames: 28 },
   Limp: { stepLength: 0.6, duty: 0.62, asymDuty: -0.1, asymTiming: 0.05, asymLift: -0.4, asymArm: -0.5, bob: 0.07, lean: 5, headNod: 3, torsoSway: 3, pelvisRoll: 6, cycleFrames: 30, footLift: 0.1 },
   Shuffle: { stepLength: 0.42, duty: 0.68, footLift: 0.03, heelStrike: 4, toeOff: 8, armSwing: 8, lean: 9, bob: 0.03, headNod: 3, cycleFrames: 32, heelDown: 0.35, heelUp: 0.8, liftPeak: 0.5 },
   March: { stepLength: 0.8, duty: 0.56, footLift: 0.3, armSwing: 44, elbowBase: 80, elbowSwing: 6, lean: 0, headBob: 1, bob: 0.05, heelStrike: 18, cycleFrames: 20, liftPeak: 0.5, swingReach: 0.5, torsoSway: 0.5 },

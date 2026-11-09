@@ -39,6 +39,10 @@ export const DEFAULTS = Object.freeze({
   asymDuty: 0,          // far foot time on the ground, added to duty
   asymLift: 0,          // far foot lift, as a fraction more or less
   asymArm: 0,           // far arm swing, as a fraction more or less
+  terrain: 'flat',      // the ground under the walk: flat | slope | steps
+  terrainGrade: 8,      // degrees the ground rises (negative falls) along a slope
+  terrainRise: 0.14,    // height of each step, in leg lengths (negative goes down)
+  terrainRun: 1,        // length of each step's flat top
   // upper body
   lean: 4,              // degrees forward
   torsoSway: 1.6,       // degrees of torso rock per step
@@ -120,6 +124,20 @@ export function foot(w, p, d) {
   const lift = p.footLift * Math.pow(Math.sin(Math.PI * Math.pow(clamp(k, 0, 1), Math.log(0.5) / Math.log(peak))), 1.3);
   const theta = k < 0.5 ? -to + (rad(p.swingToe) + to) * smooth(k / 0.5) : rad(p.swingToe) + (hs - rad(p.swingToe)) * smooth((k - 0.5) / 0.5);
   return { x, y: base + lift, theta };
+}
+
+/** The height of the ground at a world x. A slope rises evenly; steps are flat treads joined by short smooth risers, the first riser comes a tread after x = 0.6. */
+export function groundAt(p, x) {
+  const t = p.terrain;
+  if (t === 'slope') return Math.tan(rad(clamp(p.terrainGrade ?? 0, -30, 30))) * x;
+  if (t === 'steps') {
+    const run = Math.max(0.2, p.terrainRun ?? 1); const q = (x - 0.6) / run;
+    if (q < 0) return 0;
+    const n = Math.floor(q); const f = q - n; const ew = Math.min(0.3, 0.45 / run);
+    const r = clamp((f - (1 - ew)) / ew, 0, 1);
+    return (p.terrainRise ?? 0) * (n + r * r * (3 - 2 * r));
+  }
+  return 0;
 }
 
 /**

@@ -1,7 +1,7 @@
 // 3D walk rig. Joints are in leg lengths: x forward, y up, z to the figure's right (toward the camera in the default side view).
 // The built-in motion is the planar walk from rig.js plus the 3D parts a side view hides: hip twist, hip drop, shoulder counter-rotation,
 // side sway and toe-out. Every moving part is a channel from motion.js, so any of it can be tuned or drawn by hand.
-import { BODY, DEFAULTS, foot, sideGait, LEG_LENGTH } from './rig.js';
+import { BODY, DEFAULTS, foot, sideGait, LEG_LENGTH, groundAt } from './rig.js';
 import { makeEvaluator } from './motion.js';
 
 const wrap = (u) => u - Math.floor(u);
@@ -68,7 +68,19 @@ export function pose3(params, motion, u, extra = null) {
   const phi = p.downPhase + 0.25;
   const meanDev = -(p.bob / 2) * Math.cos(2 * Math.PI * 2 * (0 - phi));
 
-  const P = [c('pelvis.x'), hContact + c('pelvis.y'), c('pelvis.z')];
+  // Uneven ground: each foot stands on the ground at its own place, the swinging foot lifts to clear what is ahead, and the hips ride at the mean height of the two.
+  const tf = {}; let gY = 0;
+  if (p.terrain && p.terrain !== 'flat') {
+    const wx = extra?.worldX ?? uw * 2 * p.stepLength;
+    for (const sideT of ['R', 'L']) {
+      const sgT = sideGait(p, sideT); const fT = foot(wrap(uw - sgT.off), sgT.p, sgT.d);
+      const x = wx + fT.x; const g = groundAt(p, x); const ahead = groundAt(p, x + 0.3);
+      const wT = wrap(uw - sgT.off); const swing = wT < sgT.p.duty ? 0 : clamp((fT.y - BODY.ankleH) / Math.max(0.01, sgT.p.footLift), 0, 1);
+      tf[sideT] = { y: g + Math.max(0, ahead - g) * swing, g, slope: Math.atan2(groundAt(p, x + 0.08) - groundAt(p, x - 0.08), 0.16) * (1 - swing) };
+    }
+    const lo = Math.min(tf.R.g, tf.L.g); gY = lo + 0.12 * (Math.max(tf.R.g, tf.L.g) - lo); // the hips ride near the lower foot, so the higher leg bends and the lower one never overreaches
+  }
+  const P = [c('pelvis.x'), hContact + gY + c('pelvis.y'), c('pelvis.z')];
   const Rp = seg(c('pelvis.yaw'), c('pelvis.pitch'), c('pelvis.roll'));
   const hw = BODY.hipWidth * sc('hipWidth');
 
@@ -82,7 +94,7 @@ export function pose3(params, motion, u, extra = null) {
   const j3 = add(j2, apply(R3, [0, TORSO.upper * tl * sc('chest'), 0]));
 
   // The head's vertical wobble is steadied toward level by headBob.
-  const steady = -(P[1] - hContact - meanDev) * clamp(p.headBob, 0, 1);
+  const steady = -(P[1] - hContact - gY - meanDev) * clamp(p.headBob, 0, 1);
   const neckBase = add(j3, [0, steady, 0]);
   const Rn = mm(R3, seg(c('neck.yaw'), c('neck.pitch'), c('neck.roll')));
   const neckTop = add(neckBase, apply(Rn, [0, BODY.neck * sc('neck'), 0]));
@@ -108,7 +120,7 @@ export function pose3(params, motion, u, extra = null) {
     const sg = sideGait(p, side);
     const w = wrap(uw - sg.off);
     const f = foot(w, sg.p, sg.d);
-    const ankle = [f.x + k('foot.x'), f.y + k('foot.y'), s * k('foot.z')];
+    const ankle = [f.x + k('foot.x'), f.y + k('foot.y') + (tf[side]?.y ?? 0), s * k('foot.z')];
     const hip = add(P, apply(Rp, [0, 0, s * hw]));
     const fwdDir = norm([Rp[0], 0, Rp[2]]);
     const out = k('knee.out');
@@ -118,14 +130,14 @@ export function pose3(params, motion, u, extra = null) {
     const leg = ik3(hip, ankle, l1, LEG_LENGTH - l1, pole);
 
     const psi = -s * k('foot.yaw');
-    const theta = f.theta + k('foot.pitch');
+    const theta = f.theta + k('foot.pitch') + (tf[side]?.slope ?? 0);
     const fHead = [Math.cos(psi), 0, -Math.sin(psi)];
     const lat = [Math.sin(psi), 0, Math.cos(psi)];
     const fx = add(mul(fHead, Math.cos(theta)), [0, Math.sin(theta), 0]);
     const fy = add(mul(fHead, -Math.sin(theta)), [0, Math.cos(theta), 0]);
     sides[side] = { s, shoulder, elbow, wrist, hand, hip, knee: leg.knee, ankle: leg.ankle, reached: leg.reached, stance: w < sg.p.duty, w, foot: { fx, fy, lat, theta }, frames: { Ru, Rf, Rw } };
   }
-  return { u: uw, pelvisX: extra?.worldX ?? uw * 2 * p.stepLength, bobDev: P[1] - hContact - meanDev, params: p, hw, pelvis: P, Rp, R1, R2, R3, Rn, Rh, base0, j1, j2, j3, neckBase, neckTop, headC, headR, sides };
+  return { u: uw, pelvisX: extra?.worldX ?? uw * 2 * p.stepLength, bobDev: P[1] - hContact - gY - meanDev, groundY: gY, params: p, hw, pelvis: P, Rp, R1, R2, R3, Rn, Rh, base0, j1, j2, j3, neckBase, neckTop, headC, headR, sides };
 }
 
 /** A foot's local frame to world: x forward along the sole, y up from the ankle, z across. */

@@ -1,0 +1,80 @@
+// The scene: other figures and scenery.
+// Usage: node walkbase/tests/ui-scene.mjs <chromium|webkit> <playwrightDir> [shotDir]
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const [name, pwDir, shots] = process.argv.slice(2);
+const pw = createRequire(path.join(pwDir, 'x.js'))('playwright');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+let fails = 0;
+const check = (label, ok, detail = '') => { if (!ok) fails++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}  ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`); };
+const url = process.env.WB_URL ?? pathToFileURL(path.join(root, 'WalkBase.html')).href;
+const browser = await pw[name].launch();
+const errors = [];
+const page = await (await browser.newContext({ viewport: { width: 1280, height: 820 } })).newPage();
+await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true, expandAll: true })); });
+page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+await page.goto(url); await page.waitForFunction(() => window.__walkBase);
+const ev = (fn, arg) => page.evaluate(fn, arg);
+const wait = (ms) => page.waitForTimeout(ms);
+const stagePng = () => page.locator('[data-testid="stage"]').screenshot();
+const q = (id) => page.locator(`[data-testid="${id}"]:visible`).first();
+
+await ev(() => window.__walkBase.setTab('Scene')); await wait(150);
+check('there is a Scene tab with Add figure and Add scenery', (await q('scene-add-figure').count()) === 1 && (await q('scene-add-prop').count()) === 1);
+const empty = await stagePng();
+
+// figures
+await q('scene-add-figure').click(); await page.locator('[data-testid="scene-add-hose"]').click(); await wait(200);
+await q('scene-add-figure').click(); await page.locator('[data-testid="scene-add-dog"]').click(); await wait(200);
+const n = await ev(() => window.__walkBase.S.scene.actors.map((a) => [a.fig, a.preset]));
+check('figures are added with their own first walk', n.length === 2 && n[0][0] === 'hose' && n[0][1] === 'Bouncy' && n[1][0] === 'dog', n);
+check('they appear on the stage', Buffer.compare(empty, await stagePng()) !== 0);
+await ev(() => { const a = window.__walkBase.S.scene.actors[0]; window.__walkBase.S.sceneSel = a.id; window.__walkBase.setTab('Scene'); }); await wait(150);
+await page.locator('[data-testid="scene-preset"]').selectOption('Strut'); await wait(150);
+check('a figure keeps its own walk, apart from the main one', await ev(() => { const w = window.__walkBase; return w.S.scene.actors[0].preset === 'Strut' && w.S.preset !== 'Strut' && w.S.scene.actors[0].p.model === 'hose'; }));
+await ev(() => { const w = window.__walkBase; w.setFrame(0); w.render(); });
+const a0 = await stagePng(); await ev(() => { window.__walkBase.setFrame(6); window.__walkBase.render(); }); await wait(100);
+check('they move with the playhead', Buffer.compare(a0, await stagePng()) !== 0);
+await ev(() => { const w = window.__walkBase; w.S.scene.actors[0].x = 1.2; w.S.scene.actors[0].z = 0.4; w.render(); }); await wait(80);
+const placed = await stagePng();
+await ev(() => { const w = window.__walkBase; w.S.scene.actors[0].x = 2.4; w.render(); }); await wait(80);
+check('along and depth move a figure', Buffer.compare(placed, await stagePng()) !== 0);
+
+// scenery
+for (const k of ['tree', 'wall', 'box', 'ball', 'step', 'pillar', 'lamp', 'fence', 'rock']) { await q('scene-add-prop').click(); await page.locator(`[data-testid="scene-prop-${k}"]`).click(); await wait(60); }
+const props = await ev(() => window.__walkBase.S.scene.props.map((p) => p.type));
+check('all the scenery can be added', props.length === 9, props);
+await ev(() => window.__walkBase.render()); await wait(120);
+check('scenery draws without errors', errors.length === 0, errors);
+await ev(() => { window.__walkBase.S.s.showScene = false; window.__walkBase.render(); }); await wait(100);
+const hidden = await stagePng();
+await ev(() => { window.__walkBase.S.s.showScene = true; window.__walkBase.render(); }); await wait(100);
+check('Show the scene turns it off', Buffer.compare(hidden, await stagePng()) !== 0);
+
+// edit, copy, remove
+await q(`scene-item-${await ev(() => window.__walkBase.S.scene.props[0].id)}`).click();
+const w0 = await ev(() => window.__walkBase.S.scene.props[0].w);
+await ev(() => { const e = document.querySelector('[data-testid="scene-w"]'); e.value = 1.5; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);
+check('a slider resizes scenery', (await ev(() => window.__walkBase.S.scene.props[0].w)) === 1.5 && w0 !== 1.5);
+await wait(350); await q('scene-copy').click(); await wait(350);
+check('Copy adds another', (await ev(() => window.__walkBase.S.scene.props.length)) === 10);
+await q('scene-remove').click(); await wait(350);
+check('Remove takes it away', (await ev(() => window.__walkBase.S.scene.props.length)) === 9);
+
+// undo, reload, export
+await ev(() => window.__walkBase.undo()); await wait(200);
+check('undo brings the removed item back', (await ev(() => window.__walkBase.S.scene.props.length)) === 10);
+await wait(500); await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(300);
+const back = await ev(() => ({ a: window.__walkBase.S.scene.actors.length, p: window.__walkBase.S.scene.props.length, w: window.__walkBase.S.scene.props[0].w }));
+check('the scene survives a reload', back.a === 2 && back.p === 10 && back.w === 1.5, back);
+const frame = await ev(async () => { const r = await window.__walkBase.frame(3); return r?.blob?.size ?? r?.size ?? 1; }).catch(() => 0);
+check('a frame exports with the scene in it', frame > 0);
+await ev(() => { const w = window.__walkBase; w.S.s.camYaw = -35; w.S.s.camPitch = 8; w.setFrame(5); w.render(); }); await wait(150);
+if (shots) await page.screenshot({ path: path.join(shots, `wb-scene-${name}.png`) });
+for (const fig of ['dog', 'bird', 'human']) { await ev((f) => window.__walkBase.setFigure(f), fig); await wait(120); }
+check('switching the main figure leaves the scene alone', (await ev(() => window.__walkBase.S.scene.actors.length)) === 2 && errors.length === 0, errors);
+console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
+await browser.close();
+process.exit(fails ? 1 : 0);

@@ -364,3 +364,17 @@ Nine new proportions for the human and the hose figure: waist length, chest leng
 Also: the mouth tongue is now drawn for TH (the tip pokes out over the lower lip), L and R; Play with voice keeps the mouth in step with the device's voice (the voice sets the pace, the mouth starts with it and jumps to each word as the voice reaches it); two Stomp presets no longer lose a foot.
 
 Not done: arms and legs that stretch in length (only their width squashes); follow-through (overlap) on the hands and feet; a tail; a hose version of the animals.
+
+## Phase: scene, terrain, pictures and editing (done, 2026-11-10)
+
+Asked for: terrain, a human run, more movements, heading and path, left and right gait for the animals, a tidier top bar, pictures that bend and sit in the right layers, a scene with more figures and scenery, and Blender-style proportional editing.
+
+Done:
+- **Top bar.** The caption of each pop-up now sits beside its value instead of on top of it (it was overlapping and clipping the text). On a narrow screen the caption is dropped so the four pop-ups stay on one row.
+- **Pictures.** Four layers (Back, Behind, In front, Top) instead of two, so a picture can be set behind the other leg or arm, or behind or in front of the whole figure. The mannequin no longer shows under a picture: Look > Body under pictures hides the parts a picture sits on (the default), the whole model, or nothing. A picture on the upper leg or upper arm can Bend over the knee or elbow: it is cut into thin slices that follow a smooth curve through the joint, so it bends with the limb instead of staying straight.
+- **Proportional editing** (curve editor, automation lanes and the dots on a motion arc). Moving one point also moves the points near it by less the further they are, with a Reach and a falloff (Smooth, Sphere, Root, Linear, Sharp, Constant). The shaded band shows how far it reaches. The setting is remembered. Only values move, so the points keep their order.
+- **Scene tab.** Add other figures (any of the seven) each with its own walk, place, depth, facing, size, start point round the cycle and fill colour, and scenery (box, step, wall, fence, pillar, lamp post, ball, tree, rock) with size, turn and colour. Figures follow the playhead, so they work in a cycle, in a performance and in every export. Items are sorted by depth with the main figure. Saved, undoable, in Save settings.
+- **Terrain** (human and rubber hose). Ground: flat, slope or steps. Each planted foot stands on the ground where it lands, the swinging foot lifts to clear the next step, the foot tilts to the slope, and the hips ride near the lower foot (the higher leg bends). On uneven ground a plain cycle becomes four cycles so there is room to climb. Presets: Uphill, Downhill, Up the steps, Down the steps. The ground is drawn as a solid profile.
+- **Left and right gait for the dog and the animals**: left paws land late, stay down for a different time, lift differently; a Limp preset for the dog; the gait chart and footprints follow each paw.
+
+Not done (still open): a real human run with a flight phase (the walk rig keeps one foot down, min time on ground 0.52); more movements (run, jog, sit, jump); heading and path (turning a corner, walking a curve); rubber hose stretchy limbs and follow-through; terrain for the dog and animals; scenery that the figure can touch (props to reach for, a hand on a rail); dragging figures and scenery on the stage (sliders only today); a picture bending over joints other than the knee and elbow.

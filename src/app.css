@@ -380,3 +380,9 @@ body.stage-only .splitter, body.cutting .splitter { display: none; }
 .prop-reach .rng { flex: 1; min-width: 60px; }
 .prop-row .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 @media (max-width: 900px) { .pillfield { padding-left: 0; } .pillfield small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .pillfield .select { padding-left: 12px; } }
+
+/* the scene tab */
+.scene-list { display: flex; flex-direction: column; gap: 4px; }
+.scene-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: var(--h); padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--ctl); color: var(--ink); text-align: left; cursor: pointer; }
+.scene-row small { color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; font-size: 10px; }
+.scene-row[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); }

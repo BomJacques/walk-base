@@ -26,11 +26,18 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Far foot lands late | human | cycle | -0.12 to 0.12 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
 | Far foot time on ground | human |  | -0.15 to 0.15 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
 | Far foot lift | human |  | -0.8 to 0.8 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
+| Ground | human |  | flat, slope, steps | flat | What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step. |
+| Slope | human | ° | -30 to 30 | 8 | How steeply the ground rises along the slope (negative goes downhill). |
+| Step height | human | legs | -0.3 to 0.3 | 0.14 | Height of each step, in leg lengths (negative goes down). |
+| Step length | human | legs | 0.3 to 2.5 | 1 | Length of the flat top of each step. |
 | Far arm swing | human |  | -0.8 to 0.8 | 0 | The far arm swings more or less than the near one. |
 | Gait | dog |  | walk, trot, pace, gallop, run, hop | walk | Which paws move together. Walk is four beats, trot pairs diagonal paws, pace pairs the paws on one side. Gallop lands the hind paws, then the front paws, with the body in the air and the legs tucked under it in between. |
 | Stride | dog | heights | 0.1 to 5 | 0.95 | Ground covered in one cycle, in shoulder heights. Longer strides at the same timing run faster. |
 | Time on the ground | dog |  | 0.15 to 0.85 | 0.68 | Fraction of the cycle each paw is down. |
 | Paw lift | dog | heights | 0 to 0.5 | 0.13 | How high the swinging paw clears the ground. |
+| Left paws land late | dog | cycle | -0.12 to 0.12 | 0 | Moves the left paws off their place in the beat, so the steps on the two sides are unequal. |
+| Left paws time on ground | dog |  | -0.15 to 0.15 | 0 | Added to the left paws only. Less is a leg that is hurried off the ground, as when it hurts. |
+| Left paws lift | dog |  | -0.8 to 0.8 | 0 | The left paws lift more (positive) or less (negative) than the right. |
 | Paws width | dog | heights | 0 to 0.3 | 0.11 | Distance of each paw from the centre line. |
 | Elbows and knees out | dog | ° | -15 to 30 | 3 | Direction the elbows and knees point away from straight ahead. |
 
@@ -127,6 +134,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Limb thickness | both | × | 0.5 to 2 | 1 | How thick the tube arms and legs are. |
 | Limb curve | both |  | 0 to 1 | 1 | 1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint. |
 | Squash and stretch | both |  | 0 to 1.5 | 0.6 | The body swells when it is lowest in the step and thins as it rises. |
+| Body under pictures | both |  | hide covered parts, hide the model, show the model | hide covered parts | What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin. |
 | Ears | both |  | none, round | none | Round ears on top of the head. Off by default. |
 | Eyes | both |  | pie, round, dots | pie | Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots. |
 | Body colour | both |  | color | #2d2a2e | The head, body, arms and legs. |
@@ -150,6 +158,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 |---|---|---|---|---|---|
 | Ground line and ticks | both |  | bool | true | Ticks stay on the ground, so a sliding foot shows. |
 | Footprints | both |  | bool | true | Where each foot plants. |
+| Show the scene | both |  | bool | true | The other figures and the scenery. Off draws the main figure alone. |
 | Foot labels | both |  | bool | false | Names the ankle, heel, ball and toe on the near foot. |
 | Motion arcs | both |  | bool | false | Paths of the points you tick below through the cycle. Drag a dot to reshape the movement. |
 | Frame dots | both |  | bool | true | One dot on the path for every frame, so the spacing shows speed and ease. Drag a dot to bend the path there. |

@@ -22,6 +22,7 @@ import { findKeyFrames, laneTable, tableCsv } from './keyposes.js';
 import { VISEMES, VISEME_BY_ID, buildSpeech, cleanSpeech, keyOn } from './lipsync.js';
 import { paintMouth } from './mouth.js';
 import { icon } from './icons.js';
+import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner } from './menu.js';
@@ -40,6 +41,8 @@ const S = {
   fixMode: false, fixSpread: 10, lanes: {}, perfLen: 0, bank: { human: null, dog: null }, perfs: { human: {}, dog: {} }, perfName: '', attach: { human: [], dog: [] }, attachSel: null, ver: 0, recMode: 'touch', armed: false, recording: false, laneEdit: null, clip: 'stop', clipStart: 0, clipLen: null, clipK: 1,
   // Speech: the text becomes key mouth shapes on the timeline. speechDraft is what is typed but not built yet.
   speech: null, speechDraft: null, speechStart: 0, speechSpeed: 1, mouthPreview: null,
+  // The scene: other figures with walks of their own, and scenery. sceneSel is the one being edited.
+  scene: { actors: [], props: [] }, sceneSel: null,
 };
 const rec = new Recorder();
 // A picture to compare against, shown under the figure. It is a view aid, so it is kept out of undo and the settings file.
@@ -51,7 +54,8 @@ let perfCache = null;
 /** The performance the figure follows: phase and position at every frame. Null when there is no automation and one cycle is all there is. */
 function perfData() {
   const n = Math.max(2, Math.round(S.p.cycleFrames));
-  const T = S.perfLen > 0 ? Math.round(S.perfLen) : n;
+  // On uneven ground the figure has to keep going to climb, so a plain cycle becomes four cycles long.
+  const T = S.perfLen > 0 ? Math.round(S.perfLen) : S.p.rig !== 'dog' && S.p.terrain && S.p.terrain !== 'flat' ? n * 4 : n;
   if (!hasLanes(S.lanes) && T === n) return null;
   const key = `${S.ver}|${T}|${JSON.stringify(S.p)}`;
   if (perfCache?.key !== key) { const dog = S.p.rig === 'dog';
@@ -61,7 +65,7 @@ function perfData() {
   return { ...perfCache, lanes: S.lanes, live: Object.keys(live).length ? live : null };
 }
 /** The parameters every drawing and export reads: gait, proportions and the motion you have changed. */
-const P = () => ({ ...S.p, proportions: S.r, motion: S.motion, attach: S.source === 'sampled' ? [] : (S.attach[figKey()] || []), speech: S.source === 'sampled' ? null : S.speech, perf: S.source === 'sampled' ? null : perfData(), sampled: S.source === 'sampled' ? sampledSummary() : null });
+const P = () => ({ ...S.p, proportions: S.r, motion: S.motion, attach: S.source === 'sampled' ? [] : (S.attach[figKey()] || []), speech: S.source === 'sampled' ? null : S.speech, scene: S.source === 'sampled' ? null : S.scene, perf: S.source === 'sampled' ? null : perfData(), sampled: S.source === 'sampled' ? sampledSummary() : null });
 
 // ---------- small DOM helper ----------
 function h(tag, attrs = {}, ...kids) {
@@ -84,7 +88,7 @@ const hist = new History({ gap: 250 });
 let restoring = false;
 const snapState = () => JSON.stringify({
   p: S.p, s: Object.fromEntries(Object.entries(S.s).filter(([k]) => !/^cam|^autoOrbit/.test(k))), x: S.x, r: S.r, motion: S.motion, lanes: S.lanes,
-  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech,
+  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene,
 });
 function refreshHistory() {
   for (const [id, ok] of [['undo', hist.canUndo], ['redo', hist.canRedo]]) { const b = document.querySelector(`[data-testid="${id}"]`); if (b) b.disabled = !ok; }
@@ -121,7 +125,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -168,6 +172,7 @@ function adopt(raw) {
   if (raw.attach && typeof raw.attach === 'object') S.attach = cleanAttach(raw.attach);
   if (raw.perfs && typeof raw.perfs === 'object') for (const r of FIGS) { const o = {}; for (const [name, v] of Object.entries(raw.perfs[r] || {})) { const nm = String(name).slice(0, 40); if (nm && v) o[nm] = { lanes: cleanLanes(v.lanes), perfLen: Math.max(0, Math.round(finite(v.perfLen))) }; } S.perfs[r] = o; }
   S.motion = cleanMotion(raw.motion);
+  S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(2400, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
   adoptSampler(raw.sampler);
@@ -577,6 +582,61 @@ async function pickRef(file) {
     const i2 = new Image(); await new Promise((res) => { i2.onload = res; i2.src = REF.data; }); REF.img = i2;
     REF.on = true; refSave(); renderPanel(); render(); setMessage('Picture added under the figure. Set where its ground line is, then match its size.');
   } catch (e) { setMessage(e.message); } finally { URL.revokeObjectURL(url); }
+}
+// ---------- the scene: other figures and scenery ----------
+/** The whole parameter set of a walk for a figure, from its preset: the same keys the main figure uses. */
+function actorParams(fig, name) {
+  const rig = rigOfFig(fig); const preset = presetsForFigure(fig)[name] || presetsForFigure(fig)[Object.keys(presetsForFigure(fig))[0]] || {};
+  const { camYaw, ...pp } = preset; void camYaw;
+  const p = { ...DEFAULTS, ...pp, rig, model: fig === 'hose' ? 'hose' : 'mannequin' };
+  if (rig === 'dog') p.dogSpecies = fig;
+  p.fps = S.p.fps; p.cycleFrames = S.p.cycleFrames; p.travel = S.p.travel; p.exposure = pp.exposure ?? 1;
+  return p;
+}
+const sceneItem = () => S.scene.actors.find((a) => a.id === S.sceneSel) || S.scene.props.find((q) => q.id === S.sceneSel) || null;
+function sceneChanged(panel = false) { S.ver++; if (panel) renderPanel(); render(); save(); }
+function addActor(fig) {
+  const name = Object.keys(presetsForFigure(fig))[0]; const n = S.scene.actors.length;
+  const a = newActor(fig, FIG_LABELS[fig], actorParams(fig, name), fig === 'hose' ? { ...HOSE_PROPORTIONS } : {}, { preset: name, x: 1.3 + n * 0.9, z: n % 2 ? 0.55 : -0.55, phase: (0.25 + 0.2 * n) % 1 });
+  S.scene.actors.push(a); S.sceneSel = a.id; sceneChanged(true); setMessage(`${FIG_LABELS[fig]} added behind and beside the main figure. Pick its walk and place it below.`);
+}
+function addProp(type) { const q = newProp(type, { x: 0.9 + S.scene.props.length * 0.7, z: -0.9 }); S.scene.props.push(q); S.sceneSel = q.id; sceneChanged(true); }
+function removeSceneItem(id) { S.scene.actors = S.scene.actors.filter((a) => a.id !== id); S.scene.props = S.scene.props.filter((q) => q.id !== id); if (S.sceneSel === id) S.sceneSel = null; sceneChanged(true); }
+function sceneSection() {
+  const host = h('div', { testid: 'scene-section' });
+  const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIGS.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) })) });
+  const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => addProp(k.id) })) });
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Scene'),
+    h('p', { class: 'hint' }, 'Put more figures on the stage, each with its own walk, size and place, and stand them among simple scenery. They keep step with the playhead, so they work in a cycle, in a performance and in every export. The main figure is the one you edit in the other tabs.'),
+    h('div', { class: 'btnrow' }, addFig, addPr)));
+  const rows = [...S.scene.actors.map((a) => ({ id: a.id, label: `${a.name} (${a.preset || 'walk'})`, kind: 'figure' })), ...S.scene.props.map((q) => ({ id: q.id, label: q.name, kind: 'scenery' }))];
+  host.append(h('section', { class: 'group' }, h('h3', null, `In the scene (${rows.length})`),
+    rows.length ? h('div', { class: 'scene-list', role: 'listbox', 'aria-label': 'Scene items' }, rows.map((r) => h('button', { type: 'button', class: 'scene-row', role: 'option', 'aria-selected': String(r.id === S.sceneSel), testid: `scene-item-${r.id}`, onClick: () => { S.sceneSel = r.id; renderPanel(); } }, h('span', null, r.label), h('small', null, r.kind)))) : h('p', { class: 'hint' }, 'Nothing added yet.')));
+  const it = sceneItem(); if (!it) return host;
+  const actor = S.scene.actors.includes(it);
+  const set = (patch, panel = false) => { Object.assign(it, patch); sceneChanged(panel); };
+  const row = (label, key, min, max, step, tid) => h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, label),
+    h('input', { type: 'range', class: 'rng', min, max, step, value: it[key], testid: tid, 'aria-label': label, onInput: (e) => { set({ [key]: Number(e.target.value) }); const n = e.target.parentElement.querySelector('.num'); if (n) n.value = e.target.value; } }),
+    h('input', { type: 'number', class: 'num', min, max, step, value: it[key], 'aria-label': `${label} value`, onChange: (e) => { set({ [key]: Math.min(max, Math.max(min, Number(e.target.value))) }, true); } }));
+  const colour = (label, key, tid) => h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, label)), h('input', { type: 'color', class: 'color', value: it[key] || '#d9d4c7', 'aria-label': label, testid: tid, onInput: (e) => set({ [key]: e.target.value }) }));
+  const body = [h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Name'), h('input', { type: 'text', class: 'txt', value: it.name, maxlength: 40, 'aria-label': 'Name', testid: 'scene-name', onChange: (e) => { it.name = e.target.value.slice(0, 40) || it.name; sceneChanged(true); } }))];
+  if (actor) {
+    const presets = Object.keys(presetsForFigure(it.fig));
+    body.push(h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Walk'), h('select', { class: 'select', 'aria-label': 'Walk', testid: 'scene-preset', onChange: (e) => { it.preset = e.target.value; it.p = actorParams(it.fig, it.preset); sceneChanged(true); } }, presets.map((n) => h('option', { value: n, selected: n === it.preset }, n)))),
+      row('Along', 'x', -6, 6, 0.05, 'scene-x'), row('Depth', 'z', -4, 4, 0.05, 'scene-z'), row('Facing', 'yaw', -180, 180, 1, 'scene-yaw'), row('Size', 'scale', 0.3, 2.5, 0.01, 'scene-scale'), row('Starts at', 'phase', 0, 1, 0.01, 'scene-phase'),
+      colour('Fill colour', 'fill', 'scene-fill'),
+      h('p', { class: 'hint' }, 'Depth: negative is further back, positive is nearer to you in the side view. Facing 180 walks the other way. Starts at moves the figure round its own cycle, so two figures are not in step.'));
+  } else {
+    body.push(row('Along', 'x', -8, 8, 0.05, 'scene-x'), row('Depth', 'z', -5, 5, 0.05, 'scene-z'), row('Turn', 'rot', -180, 180, 1, 'scene-rot'),
+      row(it.kind === 'ball' || it.kind === 'cylinder' || it.kind === 'lamp' || it.kind === 'tree' ? 'Width' : 'Length', 'w', 0.05, 6, 0.01, 'scene-w'),
+      it.kind === 'box' ? row('Depth of it', 'd', 0.05, 4, 0.01, 'scene-d') : null, row('Height', 'h', 0.05, 5, 0.01, 'scene-h'), colour('Colour', 'color', 'scene-color'));
+  }
+  body.push(h('div', { class: 'btnrow' },
+    h('button', { type: 'button', class: 'btn', testid: 'scene-hide', onClick: () => set({ visible: !it.visible }, true) }, it.visible ? 'Hide' : 'Show'),
+    h('button', { type: 'button', class: 'btn', testid: 'scene-copy', onClick: () => { const c = JSON.parse(JSON.stringify(it)); c.id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`; c.name = `${it.name} copy`; c.x += 0.8; (actor ? S.scene.actors : S.scene.props).push(c); S.sceneSel = c.id; sceneChanged(true); } }, 'Copy'),
+    h('button', { type: 'button', class: 'btn', testid: 'scene-remove', onClick: () => removeSceneItem(it.id) }, 'Remove')));
+  host.append(h('section', { class: 'group' }, h('h3', null, actor ? 'This figure' : 'This scenery'), body));
+  return host;
 }
 function refSection() {
   const set = (k, v) => { REF[k] = v; refSave(); render(); };
@@ -1291,6 +1351,7 @@ function renderPanel() {
   if (S.tab === 'Auto') host.append(autoSection());
   else if (S.tab === 'Parts') host.append(partsSection());
   else if (S.tab === 'Attach') host.append(attachSection());
+  else if (S.tab === 'Scene') host.append(sceneSection());
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
     if (S.tab === 'Speech') host.append(speechSection());
@@ -1547,7 +1608,7 @@ async function runSheet() {
   try { const r = await contactSheet(P(), S.s); await deliver(r.blob, r.name); setMessage('Saved the contact sheet.'); } catch (e) { setMessage(`Contact sheet failed: ${e.message}`); }
 }
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, images: usedImages() }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, images: usedImages() }, null, 1)], { type: 'application/json' });
   deliver(blob, 'walk-settings.json').then(() => setMessage('Saved walk-settings.json.'));
 }
 async function loadSettings(e) {
@@ -1571,7 +1632,7 @@ function refreshViewbar() {
 }
 function resetAll() {
   if (!confirm('Reset every setting to its default?')) return;
-  closeEditor(true); S.p = clone(DEFAULTS); S.s = clone(STYLE_DEFAULTS); S.x = clone(EXPORT_DEFAULTS); S.r = {}; S.motion = {}; S.lanes = {}; S.perfLen = 0; S.bank = { human: null, dog: null }; S.speech = null; S.speechDraft = null; S.mouthPreview = null;
+  closeEditor(true); S.p = clone(DEFAULTS); S.s = clone(STYLE_DEFAULTS); S.x = clone(EXPORT_DEFAULTS); S.r = {}; S.motion = {}; S.lanes = {}; S.perfLen = 0; S.bank = { human: null, dog: null }; S.scene = EMPTY_SCENE(); S.sceneSel = null; S.speech = null; S.speechDraft = null; S.mouthPreview = null;
   S.ver++; pause(); setArmed(false); S.sel = null; S.preset = 'Normal'; S.zoom = 1; S.panX = S.panY = 0; S.frame = 0; build(); render(); save();
 }
 const goTab = (t) => { S.tab = t; renderPanel(); };
