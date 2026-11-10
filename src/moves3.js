@@ -95,4 +95,47 @@ HUMAN_MOVES.push(
     })),
   },
 );
+// ---- Wobbly movements, for the rubber hose figures. Each ramps a few settings up and back, so it sits on top of whatever walk is playing.
+const there = (b, D, o, f0 = 0.25, f1 = 0.72) => Object.fromEntries(Object.entries(o).map(([n, v]) => [P(n), at(D, [[0, b[n]], [f0, typeof v === 'function' ? v(b[n]) : v], [f1, typeof v === 'function' ? v(b[n]) : v], [1, b[n]]])]));
+const stays = (b, D, o) => Object.fromEntries(Object.entries(o).map(([n, v]) => [P(n), at(D, [[0, b[n]], [0.8, v]])]));
+HUMAN_MOVES.push(
+  { id: 'gowobbly', hose: true, label: 'Go wobbly', frames: 30, ends: 'stays wobbly',
+    help: 'The limbs turn to jelly and stay that way: a wave runs along every arm and leg. Firm up undoes it.',
+    build: (b, D) => stays(b, D, { hoseWobble: 1.1, hoseFollow: 1.3 }) },
+  { id: 'firmup', hose: true, label: 'Firm up', frames: 30, ends: 'limbs steady',
+    help: 'The wobble dies away and the limbs are steady again.',
+    build: (b, D) => stays(b, D, { hoseWobble: 0, hoseFollow: 0.6 }) },
+  { id: 'wobble', hose: true, label: 'Wobble like jelly', frames: 48, ends: 'settles',
+    help: 'The whole figure wobbles: the limbs ripple, the body sways from side to side, and then it settles.',
+    build: (b, D) => there(b, D, { hoseWobble: 1.4, torsoSway: (v) => v + 7, sway: (v) => v + 0.06, pelvisRoll: (v) => v + 6, headNod: (v) => v + 5 }) },
+  { id: 'noodle', hose: true, label: 'Noodle arms', frames: 48, ends: 'arms settle',
+    help: 'The arms go loose and fling about like cooked noodles, trailing far behind the shoulders, then settle.',
+    build: (b, D) => there(b, D, { hoseWobble: 1.1, armSwing: (v) => Math.max(v + 30, 76), elbowSwing: (v) => v + 30, armOut: (v) => v + 10, hoseFollow: 1.5, hoseStretch: 1.3 }) },
+  { id: 'jellylegs', hose: true, label: 'Jelly legs', frames: 56, ends: 'legs firm again',
+    help: 'The knees give and bow out, the hips roll and the body sinks and bounces as if the legs were made of jelly, then they firm up.',
+    build: (b, D) => there(b, D, { hoseWobble: 1.3, legExtend: (v) => Math.min(v, 0.86), kneeOut: (v) => v + 14, pelvisRoll: (v) => v + 8, sway: (v) => v + 0.07, bob: (v) => v * 1.5, stepLength: (v) => v * 0.75 }) },
+  { id: 'shimmy', hose: true, label: 'Shimmy', frames: 40, ends: 'steadies',
+    help: 'The hips and shoulders twist hard against each other and the body shakes from side to side.',
+    build: (b, D) => there(b, D, { pelvisYaw: (v) => v + 18, shoulderCounter: (v) => v + 22, torsoSway: (v) => v + 8, hoseWobble: (v) => Math.max(v, 0.6) }, 0.2, 0.75) },
+  { id: 'boing', hose: true, label: 'Boing', frames: 36, ends: 'bounce settles',
+    help: 'The figure squashes down, springs up tall with the limbs stretching, and bounces back to its walk.',
+    build: (b, D) => ({ [P('bob')]: at(D, [[0, b.bob], [0.2, b.bob * 0.4], [0.45, b.bob * 2.6], [0.7, b.bob * 0.8], [0.85, b.bob * 1.3], [1, b.bob]]), [P('hoseStretch')]: at(D, [[0, b.hoseStretch], [0.45, 1.5], [1, b.hoseStretch]]), [P('footLift')]: at(D, [[0, b.footLift], [0.45, b.footLift * 1.8], [1, b.footLift]]), [P('hoseWobble')]: at(D, [[0, b.hoseWobble], [0.55, Math.max(b.hoseWobble, 0.8)], [1, b.hoseWobble]]) }) },
+);
+DOG_MOVES.push(
+  { id: 'gowobbly', hose: true, label: 'Go wobbly', frames: 30, ends: 'stays wobbly',
+    help: 'The legs, neck and tail turn to jelly and stay that way. Firm up undoes it.',
+    build: (b, D) => stays(b, D, { hoseWobble: 1.1, dogWag: b.dogWag + 12 }) },
+  { id: 'firmup', hose: true, label: 'Firm up', frames: 30, ends: 'limbs steady',
+    help: 'The wobble dies away.',
+    build: (b, D) => stays(b, D, { hoseWobble: 0, dogWag: Math.max(0, b.dogWag - 12) }) },
+  { id: 'wobble', hose: true, label: 'Wobble like jelly', frames: 48, ends: 'settles',
+    help: 'The whole animal wobbles: the legs ripple, the back snakes from side to side, the tail whips, and then it settles.',
+    build: (b, D) => there(b, D, { hoseWobble: 1.4, dogFlex: (v) => v + 9, dogTwist: (v) => v + 7, dogWag: (v) => v + 20, dogHeadNod: (v) => v + 6 }) },
+  { id: 'jellylegs', hose: true, label: 'Jelly legs', frames: 56, ends: 'legs firm again',
+    help: 'The legs splay and bow, the body sinks and bounces, then the legs firm up.',
+    build: (b, D) => there(b, D, { hoseWobble: 1.5, dogElbowOut: (v) => v + 14, dogBob: (v) => v * 1.8 + 0.02, dogStride: (v) => v * 0.75, dogFlex: (v) => v + 6 }) },
+  { id: 'boing', hose: true, label: 'Boing', frames: 36, ends: 'bounce settles',
+    help: 'The animal squashes down, springs up, and bounces back to its gait.',
+    build: (b, D) => ({ [P('dogBob')]: at(D, [[0, b.dogBob], [0.2, b.dogBob * 0.4], [0.45, b.dogBob * 2.6 + 0.04], [0.7, b.dogBob * 0.8], [0.85, b.dogBob * 1.3], [1, b.dogBob]]), [P('dogLift')]: at(D, [[0, b.dogLift], [0.45, b.dogLift * 1.7], [1, b.dogLift]]), [P('hoseWobble')]: at(D, [[0, b.hoseWobble], [0.55, Math.max(b.hoseWobble, 0.8)], [1, b.hoseWobble]]) }) },
+);
 export { C };

@@ -32,6 +32,8 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Noise seed | human |  | 1 to 999 | 7 | Which wobble you get. The same seed always gives the same take; change it to try another. |
 | Keep the wobble looping | human |  | bool | true | On: the wobble repeats every cycle, so the loop stays seamless. Off: it carries on changing from cycle to cycle over a longer performance (the Loop button turns it back on). |
 | Follow-through | human |  | 0 to 1.5 | 0.6 | Hands and swinging feet trail behind the arm or leg they are on and catch up after, so a limb flows instead of moving all at once. 0 is stiff. |
+| Wobble | both |  | 0 to 1.5 | 0 | A wave runs along every arm, leg and tail and bends it like jelly. The hands and feet stay where they are; the limb between wobbles. 0 is off. |
+| Wobbles per cycle | both |  | 1 to 4 | 2 | How many times each limb wobbles in one cycle. Whole numbers, so the cycle still loops. |
 | Stretchy limbs | human |  | 0 to 1.5 | 0.5 | An arm that reaches, or a leg that swings out, stretches longer, up to half again at 1. 0 keeps every limb the same length. |
 | Heading | both | ° | -180 to 180 | 0 | Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends. |
 | Ground | both |  | flat, slope, steps | flat | What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step. |
@@ -139,6 +141,9 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Limb curve | both |  | 0 to 1 | 1 | 1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint. |
 | Squash and stretch | both |  | 0 to 2 | 1 | At the bottom of the bounce the body squashes down and swells; at the top it stretches up and thins, legs and arms with it. 1 is clear, 2 is cartoon. |
 | Body under pictures | both |  | hide covered parts, hide the model, show the model | hide covered parts | What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin. |
+| Limb taper | both |  | -1 to 1 | 0 | Positive makes each limb thicker where it joins the body and thinner at the hand or foot. Negative is the other way: thin at the body, thick at the end. |
+| Belly | both | × | 0.6 to 1.8 | 1 | How round the middle of the body is. |
+| Tail | both |  | 0 to 1.5 | 0 | A thin tail that swings and wobbles behind the figure. 0 is none. |
 | Ears | both |  | none, round | none | Round ears on top of the head. Off by default. |
 | Eyes | both |  | pie, round, dots | pie | Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots. |
 | Light direction | both | ° | -180 to 180 | -135 | Where the light comes from, as an angle on the screen. -135 is the top left; the hatching goes on the other side of each form. |

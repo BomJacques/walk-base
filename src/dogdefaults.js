@@ -58,7 +58,7 @@ export const DOG_GAITS = Object.freeze({
  * `legs` is how many limbs carry the body; `lean` is how far the hock and the wrist lean (a column leg is nearly straight);
  * `look` scales the thickness of each part when drawn; `view` frames the figure.
  */
-export const SPECIES = Object.freeze({
+const SPECIES_BASE = Object.freeze({
   dog: { label: 'Dog', legs: 4, front: 'leg', bones: {}, lean: { hock: 0.35, pastern: 0.12 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 1.45, y: 0.55 } },
   sauropod: {
     label: 'Sauropod', legs: 4, front: 'leg',
@@ -75,10 +75,20 @@ export const SPECIES = Object.freeze({
     bones: { spine: [0.36, 0.36, 0.36], neck: 0.55, skull: 0.5, snout: 0.34, jaw: 0.52, upper: 0.14, fore: 0.12, pastern: 0.06, thigh: 0.64, shin: 0.62, meta: 0.44, paw: 0.06, pawLen: 0.24, shoulderDrop: 0.1, scapula: 0.14, tail: [0.8, 0.7, 0.6], ear: 0.02, hipWidth: 0.1, shoulderWidth: 0.08, scapulaWidth: 0.07 },
     lean: { hock: 0.3, pastern: 0.1 }, look: { body: 1.7, leg: 1.5, neck: 1.5, tail: 1.8, wing: 1 }, view: { zoom: 0.8, y: 0.95 },
   },
+  horse: {
+    label: 'Horse', legs: 4, front: 'leg',
+    bones: { spine: [0.33, 0.33, 0.33], neck: 0.56, skull: 0.26, snout: 0.3, jaw: 0.34, upper: 0.27, fore: 0.34, pastern: 0.25, thigh: 0.34, shin: 0.35, meta: 0.27, paw: 0.05, pawLen: 0.09, tail: [0.24, 0.24, 0.22], ear: 0.1, hipWidth: 0.085, shoulderWidth: 0.09 },
+    lean: { hock: 0.26, pastern: 0.07 }, look: { body: 1.3, leg: 0.85, neck: 1.3, tail: 1.5, wing: 1 }, view: { zoom: 1.15, y: 0.65 },
+  },
   bird: {
     label: 'Bird', legs: 2, front: 'wing', armRest: [-0.2, -0.04, 0],
     bones: { spine: [0.15, 0.15, 0.15], neck: 0.5, skull: 0.13, snout: 0.15, jaw: 0.13, upper: 0.34, fore: 0.34, pastern: 0.22, thigh: 0.3, shin: 0.38, meta: 0.34, paw: 0.03, pawLen: 0.14, shoulderDrop: 0.06, shoulderBack: 0.02, scapula: 0.1, tail: [0.12, 0.12, 0.1], ear: 0.02, hipWidth: 0.06, shoulderWidth: 0.07, scapulaWidth: 0.05 },
     lean: { hock: 0.55, pastern: 0.1 }, look: { body: 1.5, leg: 0.4, neck: 0.8, tail: 1.2, wing: 1.8 }, view: { zoom: 1.25, y: 0.6 },
   },
 });
+// The rubber hose animals: the same bones and gaits as the figure they are `like`, drawn as tubes with no knees or elbows.
+const ALL_SPECIES = { ...SPECIES_BASE, hosehorse: { ...SPECIES_BASE.horse, label: 'Rubber hose horse', word: 'Horse', hose: true, like: 'horse' }, hosebird: { ...SPECIES_BASE.bird, label: 'Rubber hose bird', word: 'Bird', hose: true, like: 'bird' } };
+export const SPECIES = Object.freeze(ALL_SPECIES);
+/** The figure whose bones, words and movements this one uses: 'bird' for the rubber hose bird. */
+export const kindOf = (name) => SPECIES[name]?.like || name;
 export const speciesOf = (p) => SPECIES[p?.dogSpecies] || SPECIES.dog;

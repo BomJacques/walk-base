@@ -32,8 +32,8 @@ import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
 const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The figures. The human has its own rig; the others are species of the dog's legged rig, each with its own attachments, saved performances and presets. */
-const FIGS = ['human', 'hose', 'dog', 'theropod', 'bird', 'sauropod', 'ceratopsian'];
-const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian' };
+const FIGS = ['human', 'hose', 'dog', 'horse', 'theropod', 'bird', 'sauropod', 'ceratopsian', 'hosehorse', 'hosebird'];
+const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
@@ -877,7 +877,7 @@ const DOG_KEYS = Object.keys(DEFAULTS).filter((k) => k.startsWith('dog'));
 const SHARED_KEYS = ['rig', 'fps', 'cycleFrames', 'exposure', 'travel'];
 function applyPreset(name) {
   const rig = S.p.rig; const fig = figKey();
-  const mine = rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'weight', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
+  const mine = rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'weight', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop', 'hoseWobble', 'hoseWobbleRate'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
   const reset = Object.fromEntries(mine.map((k) => [k, DEFAULTS[k]]));
   const { camYaw, ...presetP } = presetsForFigure(fig)[name] || {}; // a preset may also turn the camera, to show its movement best
   S.p = { ...S.p, ...reset, ...presetP, rig, model: S.p.model };
@@ -1293,6 +1293,17 @@ function perfNamesSection() {
   return sec;
 }
 
+/** How long the playback is: more cycles of the same walk, or a time. The walk keeps its speed (that is Cycle frames, in the Body tab); only the length changes. */
+function lengthItems() {
+  const n = Math.max(2, Math.round(S.p.cycleFrames));
+  return [
+  ...[2, 4, 6, 8, 16, 32, 64].map((k) => ({ label: `${k} cycles`, testid: `perf-x${k}`, onClick: () => { S.perfLen = Math.min(MAX_FRAMES, n * k); S.ver++; buildStrip(); renderPanel(); render(); save(); } })),
+  { separator: true },
+  ...[[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes']].map(([sec, label]) => ({ label, testid: `perf-s${sec}`, onClick: () => { S.perfLen = Math.min(MAX_FRAMES, Math.max(n, Math.round((S.p.fps * sec) / n) * n)); S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage(`The performance is ${S.perfLen} frames, ${(S.perfLen / S.p.fps).toFixed(1)} seconds, a whole number of cycles.`); } })),
+  { separator: true },
+  { label: 'One cycle', testid: 'perf-one', onClick: () => { S.perfLen = 0; S.frame = Math.min(S.frame, n - 1); S.ver++; buildStrip(); renderPanel(); render(); save(); } },
+  ];
+}
 function autoSection() {
   const host = h('div', { class: 'auto' });
   const n = Math.max(2, Math.round(S.p.cycleFrames));
@@ -1305,13 +1316,7 @@ function autoSection() {
     h('p', { class: 'hint' }, `The performance is ${T} frames (${(T / S.p.fps).toFixed(1)} s). One walk cycle is ${n} frames. Make it longer to give movements room.`),
     h('div', { class: 'btnrow' },
       numField('Frames', S.perfLen > 0 ? S.perfLen : n, n, MAX_FRAMES, (v) => { S.perfLen = Math.min(MAX_FRAMES, Math.max(n, Math.round(v) || n)); if (S.perfLen === n && !hasLanes(S.lanes)) S.perfLen = 0; S.ver++; buildStrip(); renderPanel(); render(); save(); }, 'perf-len'),
-      menuButton({ label: 'Set length', testid: 'perf-menu', items: () => [
-        ...[2, 4, 6, 8, 16, 32, 64].map((k) => ({ label: `${k} cycles`, testid: `perf-x${k}`, onClick: () => { S.perfLen = Math.min(MAX_FRAMES, n * k); S.ver++; buildStrip(); renderPanel(); render(); save(); } })),
-        { separator: true },
-        ...[[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes']].map(([sec, label]) => ({ label, testid: `perf-s${sec}`, onClick: () => { S.perfLen = Math.min(MAX_FRAMES, Math.max(n, Math.round((S.p.fps * sec) / n) * n)); S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage(`The performance is ${S.perfLen} frames, ${(S.perfLen / S.p.fps).toFixed(1)} seconds, a whole number of cycles.`); } })),
-        { separator: true },
-        { label: 'One cycle', testid: 'perf-one', onClick: () => { S.perfLen = 0; S.frame = Math.min(S.frame, n - 1); S.ver++; buildStrip(); renderPanel(); render(); save(); } },
-      ] }))));
+      menuButton({ label: 'Set length', testid: 'perf-menu', items: lengthItems }))));
 
   host.append(h('section', { class: 'group' }, h('h3', null, 'Record by hand'),
     h('p', { class: 'hint' }, 'Press Rec, then Play, and move any gait slider or a part\'s Amount or Offset while it plays. Your moves are written as automation, like recording a synth knob. Touch: it records while you hold and glides back when you let go. Latch: it records from your first touch and holds the last value until you stop.'),
@@ -2009,6 +2014,7 @@ function build() {
       h('button', { type: 'button', class: 'btn ghost rec icon', id: 'rec', testid: 'rec', 'aria-pressed': 'false', 'aria-label': 'Record', title: 'Arm recording: moves you make while playing become automation', onClick: () => setArmed(!S.armed) }, icon('rec'), h('span', { class: 'sr' }, 'Rec')),
       h('label', { class: 'field' }, h('span', null, 'Frame'), h('input', { id: 'frameNum', type: 'number', class: 'num', inputmode: 'numeric', min: 1, value: 1, testid: 'frame-input', onChange: (e) => { pause(); setFrame(Number(e.target.value) - 1); } })),
       h('button', { type: 'button', class: 'btn ghost', testid: 'make-loop', title: 'Make a seamless loop: adjust the frames so the last frame leads straight back into the first', onClick: makeLoop }, icon('loop'), h('span', { class: 'lbl' }, 'Loop')),
+      menuButton({ label: 'Length', testid: 'length-menu', title: 'How long the playback runs: more cycles or a time. The walk keeps its speed', items: lengthItems }),
       h('span', { class: 'tc', id: 'tc', 'aria-hidden': 'true' })),
     h('div', { id: 'strip', class: 'strip', role: 'group', 'aria-label': 'Frames in the cycle' }));
   const splitter = h('div', { class: 'splitter', role: 'separator', tabindex: '0', 'aria-label': 'Resize the animation window. Drag, or use the arrow keys.', testid: 'splitter' }, h('span', { class: 'grip' }));

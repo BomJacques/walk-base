@@ -16,6 +16,7 @@ import { speechAt, VISEME_BY_ID } from './lipsync.js';
 import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
 import { propParts, faceLight } from './scene.js';
+import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
 
 export const STYLE_DEFAULTS = Object.freeze({
@@ -67,6 +68,9 @@ export const STYLE_DEFAULTS = Object.freeze({
   handStyle: 'default',      // default (each figure's own) | mitten | fist | fingers | pointing
   footStyle: 'default',      // default (each figure's own) | boot | bare | round
   hoseLimb: 1, hoseBend: 1, hoseSquash: 1, hoseEars: 'none', hoseEyes: 'pie',
+  hoseTaper: 0,              // rubber hose limbs: positive is thicker at the body, negative thicker at the hand or foot
+  hoseBelly: 1,              // how round the middle of the rubber hose body is
+  hoseTail: 0,               // the rubber hose person's tail: 0 none, 1 a long one
   hoseBody: '#2d2a2e', hoseFace: '#fff8e8', hoseGlove: '#ffffff', hoseShoe: '#ffffff', hoseShorts: '#2d2a2e',
 });
 
@@ -203,25 +207,6 @@ export function handPolys(H, W, r, style) {
   }
 }
 const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-/** A limb as one curve through three joints. bend 1 is a single smooth curve that passes through the middle joint; 0 is the joint's sharp corner. */
-function hoseCurve(a, m, b, bend, n = 14) {
-  const c = [2 * m[0] - (a[0] + b[0]) / 2, 2 * m[1] - (a[1] + b[1]) / 2, 2 * m[2] - (a[2] + b[2]) / 2];
-  return Array.from({ length: n }, (_, i) => {
-    const t = i / (n - 1);
-    const smooth = [0, 1, 2].map((k) => (1 - t) ** 2 * a[k] + 2 * (1 - t) * t * c[k] + t * t * b[k]);
-    const joint = t < 0.5 ? lerp3(a, m, t * 2) : lerp3(m, b, t * 2 - 1);
-    return lerp3(joint, smooth, bend);
-  });
-}
-/** The outline of a tube (a thick line with round ends and a radius that can change along it) from screen points and radii. */
-function tubePoly(pts, radii) {
-  const n = pts.length; const L = []; const R = [];
-  const nrm = (i) => { const a = pts[Math.max(0, i - 1)]; const b = pts[Math.min(n - 1, i + 1)]; let tx = b.x - a.x; let ty = b.y - a.y; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l; return [-ty, tx]; };
-  for (let i = 0; i < n; i++) { const [nx, ny] = nrm(i); L.push([pts[i].x + nx * radii[i], pts[i].y + ny * radii[i]]); R.push([pts[i].x - nx * radii[i], pts[i].y - ny * radii[i]]); }
-  const cap = (c, r, a0, a1, steps = 9) => Array.from({ length: steps - 1 }, (_, k) => { const a = a0 + (a1 - a0) * ((k + 1) / steps); return [c.x + r * Math.cos(a), c.y + r * Math.sin(a)]; });
-  const e = nrm(n - 1); const a1 = Math.atan2(e[1], e[0]); const s0 = nrm(0); const a0 = Math.atan2(s0[1], s0[0]);
-  return [...L, ...cap(pts[n - 1], radii[n - 1], a1, a1 - Math.PI), ...R.reverse(), ...cap(pts[0], radii[0], a0 + Math.PI, a0)];
-}
 /** Where a point of the face [z, y] (in head radii from the head's centre) lands on the front of the head. */
 function headMap(pz, cam) {
   const hr = pz.headR; const W = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
@@ -240,8 +225,11 @@ function buildHoseShapes(pz, cam, st) {
   const bend = Math.max(0, Math.min(1, st.hoseBend ?? 1));
   const col = (c, role) => (role === 'far' ? mixHex(c, st.farTint, 0.3) : c);
   const add1 = (pts, depth, part, side, role, color, lw = 1.6) => shapes.push({ pts, depth, part, side, role, fill: col(color, role), lw });
-  const tubeOf = (pts3, radii, part, side, role, color, bias = 0) => {
-    const P = pts3.map(S); const poly = tubePoly(P, radii.map((r) => r * sc));
+  // the wobble: a wave along each limb, a whole number of times a cycle so the cycle still loops. `wob` is where in its wave this limb starts (each one differs), or { k, free, plus } for a tail.
+  const wobA = Math.max(0, pz.params?.hoseWobble || 0) * 0.03 * sc; const wobR = Math.max(1, Math.round(pz.params?.hoseWobbleRate || 2)); const taper = st.hoseTaper ?? 0;
+  const tubeOf = (pts3, radii, part, side, role, color, bias = 0, wob = null) => {
+    let P = pts3.map(S); if (wob != null) { const o = typeof wob === 'number' ? { k: wob } : wob; P = wobble(P, wobA + (o.plus || 0), (pz.u || 0) * wobR + o.k, o.free); }
+    const poly = tubePoly(P, radii.map((r) => r * sc));
     add1(poly, P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
   };
   const blob = (center, R, rad, n = 10, m = 24) => { // an ellipsoid's outline
@@ -252,7 +240,13 @@ function buildHoseShapes(pz, cam, st) {
 
   // body: a pear of overlapping round sections from the hips to the shoulders, then shorts over the hips and a short neck
   const T = [pz.pelvis, pz.base0, pz.j1, pz.j2, pz.j3];
-  tubeOf(T, [0.125, 0.13, 0.14, 0.13, 0.105].map((r) => r * bodyK * wMul), 'spine.mid', null, 'body', st.hoseBody);
+  const belly = st.hoseBelly ?? 1;
+  tubeOf(T, [0.125, 0.13 * belly, 0.14 * belly, 0.13 * belly, 0.105].map((r) => r * bodyK * wMul), 'spine.mid', null, 'body', st.hoseBody);
+  if ((st.hoseTail ?? 0) > 0) { // a thin tail from the seat, curling up, swinging with the walk and wobbling along its length
+    const L = 0.55 * st.hoseTail; const sw = Math.sin(2 * Math.PI * (pz.u || 0));
+    const tail = Array.from({ length: 10 }, (_, i) => { const t = i / 9; return add(pz.pelvis, apply(pz.Rp, [-0.08 - L * 0.8 * t, -0.04 + L * 0.55 * t * t, 0.22 * L * t * sw])); });
+    tubeOf(tail, taperRadii(10, 0.016 * limbK, 0.6), 'pelvis', null, 'body', st.hoseBody, -0.0006, { k: 0.4, free: true, plus: 0.012 * sc * st.hoseTail });
+  }
   tubeOf([add(pz.pelvis, apply(pz.Rp, [0, -0.06, 0])), pz.pelvis, pz.base0].map((p) => p), [0.12, 0.125, 0.13].map((r) => r * bodyK * wMul * 1.04), 'pelvis', null, 'body', st.hoseShorts, 0.0004);
   tubeOf([pz.neckBase, pz.neckTop], [0.05 * bodyK, 0.045 * bodyK], 'neck', null, 'body', st.hoseBody);
 
@@ -269,8 +263,8 @@ function buildHoseShapes(pz, cam, st) {
   for (const side of ['R', 'L']) {
     const sd = hoseLimbs(pz.sides[side], pz.params); const role = side === 'R' ? 'near' : 'far';
     // legs and arms are single tubes with no knee or elbow: one curve through the three joints
-    tubeOf(hoseCurve(sd.hip, sd.knee, sd.ankle, bend), Array(14).fill(0.052 * limbK * wMul), 'leg', side, role, st.hoseBody);
-    tubeOf(hoseCurve(sd.shoulder, sd.elbow, sd.wrist, bend), Array(14).fill(0.04 * limbK * wMul), 'arm', side, role, st.hoseBody);
+    tubeOf(hoseCurve(sd.hip, sd.knee, sd.ankle, bend), taperRadii(14, 0.052 * limbK * wMul, taper), 'leg', side, role, st.hoseBody, 0, side === 'R' ? 0 : 0.5);
+    tubeOf(hoseCurve(sd.shoulder, sd.elbow, sd.wrist, bend), taperRadii(14, 0.04 * limbK * wMul, taper), 'arm', side, role, st.hoseBody, 0, side === 'R' ? 0.25 : 0.75);
     // the foot: a short, round tube along the sole, the same colour as the leg so the two read as one hose
     const k = pr.footSize ?? 1; const f = sd.foot; const r = 0.055 * k; const cy = -0.075 + r; // its underside rests on the ground
     const along = (x) => add(sd.ankle, add(mul(f.fx, x * k), mul(f.fy, cy)));
@@ -593,7 +587,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     return { shapes: [], placed: placedLines };
   }
   const hose = !pz.legs && pz.params?.model === 'hose';
-  const built = pz.legs ? buildDogShapes(pz, cam) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam, st);
+  const built = pz.legs ? buildDogShapes(pz, cam, st) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam, st);
   const { face } = built; let shapes = built.shapes;
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];

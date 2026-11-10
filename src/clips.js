@@ -4,6 +4,7 @@
 import { laneValue, replaceSpan, targetOfParam, targetOfChannel, CADENCE } from './automation.js';
 import { HUMAN_MOVES, DOG_MOVES } from './moves.js';
 import './moves3.js'; // adds the jog, sprint, duck, punch, clap and salute movements
+import { kindOf, SPECIES } from './dogdefaults.js';
 import { SPECIES_MOVES, speciesSharedIds } from './moves2.js'; // also adds the kneel, limp, scratch and roll over movements to the two lists above
 
 const P = targetOfParam;
@@ -162,16 +163,19 @@ export const CLIP_GROUPS = [
   ['Pace', ['turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'begin', 'stop', 'jog', 'run', 'sprint', 'slow', 'speedup', 'slowdown', 'limp', 'nolimp', 'takeoff', 'land', 'trip']],
   ['Posture', ['sit', 'down', 'beg', 'kneel', 'crouch', 'standup', 'bow', 'stretch', 'playbow', 'headdown', 'rollover']],
   ['Action', ['stumble', 'slip', 'stagger', 'duck', 'punch', 'jump', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff', 'peck', 'roar', 'lunge', 'rearup', 'toss']],
+  ['Wobbly', ['gowobbly', 'firmup', 'wobble', 'noodle', 'jellylegs', 'shimmy', 'boing']],
   ['Gesture', ['clap', 'salute', 'wave', 'cheer', 'shrug', 'nod', 'look', 'lookaround', 'wag', 'scratch', 'neckswing']],
 ];
 export const groupOfClip = (id) => CLIP_GROUPS.find(([, ids]) => ids.includes(id))?.[0] || 'Other';
 export const clipsFor = (rig) => CLIPS[rig] || [];
 /** The movements for one figure: the human's, the dog's, or (for the other animals) the dog's that suit them and their own. */
-export function clipsForFigure(fig) {
-  if (fig === 'human' || fig === 'hose') return CLIPS.human;
-  if (fig === 'dog' || !SPECIES_MOVES[fig]) return CLIPS.dog;
+export function clipsForFigure(fig0) {
+  const fig = kindOf(fig0); const hose = fig0 === 'hose' || Boolean(SPECIES[fig0]?.hose); const mine = (c) => hose || !c.hose; // the wobbly movements are for the rubber hose figures
+  if (fig === 'human' || fig === 'hose') return CLIPS.human.filter(mine);
+  const wob = CLIPS.dog.filter((c) => c.hose && hose);
+  if (fig === 'dog' || !SPECIES_MOVES[fig]) return CLIPS.dog.filter(mine);
   const keep = speciesSharedIds(fig) || [];
-  return [...CLIPS.dog.filter((c) => keep.includes(c.id)), ...SPECIES_MOVES[fig]];
+  return [...CLIPS.dog.filter((c) => keep.includes(c.id)), ...SPECIES_MOVES[fig], ...wob];
 }
 const neutral = (target) => (target.endsWith(':amount') ? 1 : target === CADENCE ? 1 : 0);
 

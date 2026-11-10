@@ -40,6 +40,8 @@ export const DEFAULTS = Object.freeze({
   asymLift: 0,          // far foot lift, as a fraction more or less
   asymArm: 0,           // far arm swing, as a fraction more or less
   hoseFollow: 0.6,      // rubber hose figure: how far the hands and feet trail behind the limb they are on (follow-through)
+  hoseWobble: 0,        // rubber hose figures: how far a wave running along each limb bends it, like jelly
+  hoseWobbleRate: 2,    // rubber hose figures: wobbles in each cycle (a whole number, so a cycle still loops)
   hoseStretch: 0.5,     // rubber hose figure: how far an arm or a swinging leg stretches when it reaches
   weight: 0,            // how heavy the figure feels: positive is heavy (slower, flatter feet, a deeper drop), negative is light (springy, higher feet)
   noiseAmount: 0,       // variety: how much small random wobble is added to the walk (0 is none)

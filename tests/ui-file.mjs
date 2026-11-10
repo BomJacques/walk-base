@@ -219,6 +219,47 @@ await ev(() => { const w = window.__walkBase; for (const st of ['outline', 'stic
 check('they draw on the rubber hose figure and in every style without an error', errors.length === 0, errors);
 await ev(() => { window.__walkBase.S.s.handStyle = 'default'; window.__walkBase.S.s.footStyle = 'default'; });
 await ev(() => { const w = window.__walkBase; w.S.s.camYaw = 0; w.setTab('Gait'); });
+// ---- rubber hose: more controls, the horse and the bird, wobbly walks and movements
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.setTab('Gait'); }); await wait(150);
+check('the wobble controls are not shown for the mannequin', (await q('rng-hoseWobble').count()) === 0);
+await ev(() => { const w = window.__walkBase; w.setFigure('hose'); w.applyPreset('Bouncy'); w.S.s.camYaw = -20; w.setFrame(3); w.render(); }); await wait(200);
+check('the rubber hose figure has Wobble and Wobbles per cycle', (await q('rng-hoseWobble').count()) === 1 && (await q('rng-hoseWobbleRate').count()) === 1);
+const hoseLooks = new Set([await stageShot()]);
+await ev(() => { const e = document.querySelector('[data-testid="rng-hoseWobble"]'); e.value = 1.2; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(150); hoseLooks.add(await stageShot());
+for (const [k, v] of [['hoseTaper', 0.8], ['hoseBelly', 1.6], ['hoseTail', 1]]) { await ev(([k, v]) => { const w = window.__walkBase; w.S.s[k] = v; w.render(); }, [k, v]); await wait(100); hoseLooks.add(await stageShot()); }
+check('wobble, limb taper, belly and tail each change the drawing', hoseLooks.size === 5, hoseLooks.size);
+await ev(() => window.__walkBase.setTab('View')); await wait(150);
+check('taper, belly and tail are in the View tab', (await q('rng-hoseTaper').count()) === 1 && (await q('rng-hoseBelly').count()) === 1 && (await q('rng-hoseTail').count()) === 1);
+const presetNames = await ev(() => [...document.querySelectorAll('select')].flatMap((s) => [...s.options].map((o) => o.textContent)));
+check('the wobbly walks are in the presets', ['Wobbly', 'Jelly legs', 'Noodle arms', 'Drunk', 'Boing'].every((n) => presetNames.includes(n)), presetNames.length);
+await ev(() => { const w = window.__walkBase; w.applyPreset('Wobbly'); w.setTab('Auto'); }); await wait(200);
+check('the rubber hose figure has a Wobbly group of movements', (await q('clip-group-Wobbly').count()) === 1 || (await page.locator('text=Wobble like jelly').count()) > 0);
+await ev(() => { const w = window.__walkBase; w.S.s.hoseTaper = 0; w.S.s.hoseBelly = 1; w.S.s.hoseTail = 0; });
+const figNames = await ev(() => [...document.querySelectorAll('select option')].map((o) => o.value));
+check('Horse, Rubber hose horse and Rubber hose bird are figures', ['horse', 'hosehorse', 'hosebird'].every((f) => figNames.includes(f)));
+const animalLooks = new Set();
+for (const fig of ['horse', 'hosehorse', 'hosebird']) {
+  await ev((f) => { const w = window.__walkBase; w.setFigure(f); w.S.s.camYaw = 0; w.setTab('Gait'); w.setFrame(3); w.render(); }, fig); await wait(250); animalLooks.add(await stageShot());
+  const n = await q('rng-hoseWobble').count();
+  check(`${fig}: ${fig === 'horse' ? 'no wobble control' : 'has the wobble control'}`, n === (fig === 'horse' ? 0 : 1), n);
+  for (const st of ['outline', 'stick', 'silhouette', 'moebius', 'mannequin']) await ev((s) => { const w = window.__walkBase; w.S.s.style = s; w.render(); }, st);
+  for (let f = 0; f < 12; f++) await ev((f) => window.__walkBase.setFrame(f), f);
+}
+check('each of the three draws differently, in every style, with no errors', animalLooks.size === 3 && errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.setFigure('hosehorse'); w.applyPreset('Wobbly'); w.setTab('Auto'); }); await wait(200);
+check('the rubber hose horse has wobbly movements too', (await page.locator('text=Wobble like jelly').count()) > 0);
+await ev(() => { const w = window.__walkBase; w.setFigure('hosehorse'); w.applyPreset('Walk'); w.S.s.showOnion = false; w.setFrame(0); w.render(); }); await wait(150);
+check('a wobbling rubber hose horse still loops seamlessly', (await wrapRatio()) <= 1.2, await wrapRatio());
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.setTab('Gait'); });
+// ---- a longer playback at the same speed, from the transport bar
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.setFrame(0); w.render(); }); await wait(150);
+const cyc0 = await ev(() => window.__walkBase.S.p.cycleFrames);
+check('there is a Length button beside Loop', (await q('length-menu').count()) === 1);
+await q('length-menu').click(); await page.locator('[data-testid="perf-x8"]:visible').first().click(); await wait(200);
+check('8 cycles makes the playback eight times as long and leaves the speed of the walk alone', (await ev(() => window.__walkBase.S.perfLen)) === 8 * cyc0 && (await ev(() => window.__walkBase.S.p.cycleFrames)) === cyc0);
+await q('length-menu').click(); await page.locator('[data-testid="perf-one"]:visible').first().click(); await wait(200);
+check('One cycle puts it back', (await ev(() => window.__walkBase.S.perfLen)) === 0);
+check('the rubber hose figure starts at an easy pace', (await ev(() => { const w = window.__walkBase; w.setFigure('hose'); const c = w.S.p.cycleFrames; w.setFigure('human'); return c; })) >= 20);
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

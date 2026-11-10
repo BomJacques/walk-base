@@ -43,7 +43,7 @@ test('arm segments are scaled one at a time', () => {
 });
 
 test('the rubber hose figure has its own presets, proportions and word list', () => {
-  assert.deepEqual(Object.keys(PRESETS_HOSE).sort(), ['Bouncy', 'Run', 'Skip', 'Sneak', 'Stomp', 'Strut', 'Tired']);
+  assert.deepEqual(Object.keys(PRESETS_HOSE).sort(), ['Boing', 'Bouncy', 'Drunk', 'Jelly legs', 'Noodle arms', 'Run', 'Skip', 'Sneak', 'Stomp', 'Strut', 'Tired', 'Wobbly']);
   assert.equal(presetsForFigure('hose'), PRESETS_HOSE);
   assert.ok(HOSE_PROPORTIONS.head > 1.2 && HOSE_PROPORTIONS.neck < 0.6);
   for (const [name, pr] of Object.entries(PRESETS_HOSE)) {
@@ -52,7 +52,9 @@ test('the rubber hose figure has its own presets, proportions and word list', ()
     const z = pose3({ ...DEFAULTS, ...pr, model: 'hose', proportions: HOSE_PROPORTIONS, motion: {} }, {}, 0.3);
     assert.ok(z.sides.R.reached && z.sides.L.reached, `${name} keeps its feet on the ground`);
   }
-  assert.equal(clipsForFigure('hose').length, clipsForFigure('human').length);
+  assert.equal(clipsForFigure('hose').length, clipsForFigure('human').length + 7, 'the human movements and seven wobbly ones of its own');
+  assert.ok(clipsForFigure('human').every((c) => !c.hose) && clipsForFigure('dog').every((c) => !c.hose) && clipsForFigure('bird').every((c) => !c.hose), 'the wobbly movements are only for rubber hose figures');
+  assert.ok(clipsForFigure('hosehorse').some((c) => c.id === 'wobble') && clipsForFigure('hosebird').some((c) => c.id === 'takeoff') && clipsForFigure('hosebird').some((c) => c.id === 'boing'));
 });
 
 test('the rubber hose controls belong to that figure only', () => {

@@ -2,14 +2,70 @@
 import { add, sub, mul, norm, apply } from './rig3.js';
 import { hull, circlePts, TAU } from './geom.js';
 import { pawGait, poseDog, legsOf, bonesOf, DOGB } from './dog3.js';
-import { speciesOf } from './dogdefaults.js';
+import { speciesOf, kindOf } from './dogdefaults.js';
+import { hosePath, tubePoly, wobble, taperRadii } from './hoseshape.js';
 
-export function buildDogShapes(pz, cam) {
+const mixHex = (a, b, t) => { const pa = parseInt(a.slice(1), 16); const pb = parseInt(b.slice(1), 16); const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t); return '#' + [16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join(''); };
+/**
+ * A rubber hose animal: the same bones as the figure it is like, drawn the rubber hose way. Every leg is one tube with no knee or hock, the neck and tail are tubes,
+ * the body is a sausage, the head a ball with a pale muzzle (or a beak) and a round eye. The colours are the rubber hose ones in the View tab.
+ */
+function buildHoseAnimal(pz, cam, st) {
+  const shapes = []; const p = pz.params; const sp = speciesOf(p); const K = sp.look; const bird = kindOf(p.dogSpecies) === 'bird';
+  const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]); const sc = cam.scale;
+  const hs = (p.proportions?.dHead ?? 1) * (bonesOf(p).skull / DOGB.skull);
+  const limbK = st.hoseLimb ?? 1; const bend = Math.max(0, Math.min(1, st.hoseBend ?? 1)); const taper = st.hoseTaper ?? 0; const belly = st.hoseBelly ?? 1;
+  const body = st.hoseBody ?? '#2d2a2e'; const pale = st.hoseFace ?? '#fff8e8'; const shoe = st.hoseShoe ?? '#ffffff'; const tint = st.farTint ?? '#9db4d0';
+  const col = (c, role) => (role === 'far' ? mixHex(c, tint, 0.3) : c);
+  const add1 = (pts, depth, part, side, role, color) => shapes.push({ pts, depth, part, side, role, fill: col(color, role), lw: 1.6 });
+  const wobA = Math.max(0, p.hoseWobble || 0) * 0.03 * sc; const wobR = Math.max(1, Math.round(p.hoseWobbleRate || 2));
+  const tube = (pts3, radii, part, side, role, color, bias = 0, wob = null) => {
+    let P = pts3.map(S); if (wob) P = wobble(P, wobA * (wob.gain ?? 1), (pz.u || 0) * wobR + wob.k, wob.free);
+    add1(tubePoly(P, radii.map((r) => r * sc)), P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
+  };
+  const BO = K.body;
+  tube(hosePath([pz.pelvis, pz.j1, pz.j2, pz.j3], 1, 10), Array.from({ length: 10 }, (_, i) => BO * (0.14 + 0.055 * belly * Math.sin(Math.PI * (0.12 + 0.76 * (i / 9))))), 'dog.spine2', null, 'body', body);
+  const nk = pz.neck || [pz.neckBase, pz.neckTop];
+  tube(hosePath(nk, 1, 8), taperRadii(8, 0.058 * K.neck * limbK, 0.3), 'dog.neck', null, 'body', body, -0.0002, { k: 0.4, gain: 0.4 });
+  // the head: a ball, a pale muzzle or a beak, the jaw, an eye on each side
+  const HC = S(pz.headC); add1(circlePts(HC, 0.135 * hs * sc, 24), HC.d, 'dog.head', null, 'body', body);
+  if (bird) tube([add(pz.neckTop, apply(pz.Rh, [0.2 * hs, 0, 0])), pz.noseTip], [0.055 * hs, 0.012 * hs], 'dog.head', null, 'body', '#f0b030', 0.0003);
+  else tube([add(pz.neckTop, apply(pz.Rh, [0.2 * hs, -0.01 * hs, 0])), pz.noseTip], [0.09 * hs, 0.062 * hs], 'dog.head', null, 'body', pale, 0.0003);
+  tube([pz.hinge, pz.jawEnd], [0.035 * hs, 0.02 * hs], 'dog.jaw', null, 'body', bird ? '#f0b030' : pale, -0.0003);
+  const NT = S(pz.noseTip); let fx = NT.x - HC.x; let fy = NT.y - HC.y; const fl = Math.hypot(fx, fy) || 1; fx /= fl; fy /= fl;
+  for (const s of [1, -1]) {
+    const E = S(add(pz.neckTop, apply(pz.Rh, [0.17 * hs, 0.07 * hs, s * 0.08 * hs]))); if (E.d <= HC.d - 0.0001) continue;
+    shapes.push({ pts: circlePts(E, 0.05 * hs * sc, 16), depth: HC.d + 0.0006, part: 'dog.head', side: null, role: 'body', fill: '#ffffff', lw: 1.2 });
+    shapes.push({ pts: circlePts({ x: E.x + fx * 0.015 * hs * sc, y: E.y + fy * 0.015 * hs * sc }, 0.027 * hs * sc, 12), depth: HC.d + 0.0007, part: 'dog.head', side: null, role: 'body', fill: '#111111', lw: 0 });
+  }
+  if (!bird) for (const side of ['R', 'L']) tube([pz.ears[side].root, pz.ears[side].tip], [0.045, 0.02], 'dog.ear', side, side === 'R' ? 'near' : 'far', body, 0.0005, { k: side === 'R' ? 0.1 : 0.6, free: true, gain: 0.5 });
+  tube(hosePath(pz.tail, 1, 12), bird ? Array.from({ length: 12 }, (_, i) => K.tail * (0.03 + 0.045 * (i / 11))) : taperRadii(12, 0.034 * K.tail, 0.9), 'dog.tail2', null, 'body', body, -0.0003, { k: 0.3, free: true });
+  let n = 0;
+  for (const leg4 of ['HR', 'HL', 'FR', 'FL']) {
+    const l = pz.legs[leg4]; const role = l.side === 'R' ? 'near' : 'far'; const pre = l.front ? 'dog.f' : 'dog.h'; const k = (n++) * 0.25;
+    const path = hosePath([l.root, l.mid, l.wrist, l.paw], bend, 16);
+    if (bird && l.front && l.free) { // a floppy wing: one broad tube and a few fat feathers trailing from it
+      const open = Math.min(1, p.dogWingOpen || 0); const back = apply(pz.R3, [-1, 0, 0]); const W = K.wing * (0.03 + 0.028 * open);
+      tube(path, Array.from({ length: 16 }, (_, i) => W * (0.55 + 0.9 * Math.sin(Math.PI * Math.min(1, 0.1 + (i / 15) * 0.95)))), 'dog.fleg', l.side, role, body, 0, { k, gain: 0.6 });
+      const hand = norm(sub(l.paw, l.wrist));
+      for (let i = 0; i < 4; i++) { const t = 0.3 + 0.2 * i; const base = path[Math.round(t * 15)]; const mix = norm([hand[0] + (back[0] - hand[0]) * (0.8 - 0.35 * open), hand[1] + (back[1] - hand[1]) * (0.8 - 0.35 * open) - 0.15, hand[2] + (back[2] - hand[2]) * (0.8 - 0.35 * open)]); tube([base, add(base, mul(mix, (0.1 + 0.12 * open) * K.wing))], [W * 0.9, W * 0.45], 'dog.fleg', l.side, role, body, -0.0002 - i * 0.00002); }
+      continue;
+    }
+    const r = (l.free ? 0.022 : 0.05) * Math.max(0.45, K.leg) * limbK;
+    tube(path, taperRadii(16, r, taper + 0.25), `${pre}leg`, l.side, role, body, 0, { k });
+    tube([l.paw, l.toe], [r * 1.45, r * 1.3], `${pre}paw`, l.side, role, bird ? '#f0b030' : shoe, 0.0003);
+  }
+  shapes.sort((a, b) => a.depth - b.depth);
+  return { shapes, face: { eyes: [], nose: null, noseBase: null, c: HC } };
+}
+
+export function buildDogShapes(pz, cam, st = {}) {
+  if (speciesOf(pz.params).hose) return buildHoseAnimal(pz, cam, st);
   const shapes = [];
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
   const sc = cam.scale;
   const hs = (pz.params.proportions?.dHead ?? 1) * (bonesOf(pz.params).skull / DOGB.skull); // head drawn in proportion to this species' skull
-  const sp = speciesOf(pz.params); const K = sp.look; const bird = pz.params.dogSpecies === 'bird'; const cera = pz.params.dogSpecies === 'ceratopsian';
+  const sp = speciesOf(pz.params); const K = sp.look; const bird = kindOf(pz.params.dogSpecies) === 'bird'; const cera = pz.params.dogSpecies === 'ceratopsian';
   const capsule = (a, b, ra, rb, part, side, role) => {
     const A = S(a); const B = S(b);
     shapes.push({ pts: hull([...circlePts(A, ra * sc), ...circlePts(B, rb * sc)]), depth: (A.d + B.d) / 2, part, side, role });

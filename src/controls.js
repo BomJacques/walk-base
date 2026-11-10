@@ -40,6 +40,8 @@ const RAW_CONTROLS = [
   n('p', 'noiseSeed', 'Gait', 'Variety', 'Noise seed', '', 1, 999, 1, 'Which wobble you get. The same seed always gives the same take; change it to try another.'),
   b('p', 'noiseLoop', 'Gait', 'Variety', 'Keep the wobble looping', 'On: the wobble repeats every cycle, so the loop stays seamless. Off: it carries on changing from cycle to cycle over a longer performance (the Loop button turns it back on).'),
   n('p', 'hoseFollow', 'Gait', 'Rubber hose', 'Follow-through', '', 0, 1.5, 0.05, 'Hands and swinging feet trail behind the arm or leg they are on and catch up after, so a limb flows instead of moving all at once. 0 is stiff.'),
+  n('p', 'hoseWobble', 'Gait', 'Rubber hose', 'Wobble', '', 0, 1.5, 0.05, 'A wave runs along every arm, leg and tail and bends it like jelly. The hands and feet stay where they are; the limb between wobbles. 0 is off.'),
+  n('p', 'hoseWobbleRate', 'Gait', 'Rubber hose', 'Wobbles per cycle', '', 1, 4, 1, 'How many times each limb wobbles in one cycle. Whole numbers, so the cycle still loops.'),
   n('p', 'hoseStretch', 'Gait', 'Rubber hose', 'Stretchy limbs', '', 0, 1.5, 0.05, 'An arm that reaches, or a leg that swings out, stretches longer, up to half again at 1. 0 keeps every limb the same length.'),
   n('p', 'heading', 'Gait', 'Direction', 'Heading', '°', -180, 180, 1, 'Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends.'),
   e('p', 'terrain', 'Gait', 'Ground', 'Ground', ['flat', 'slope', 'steps'], 'What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step.'),
@@ -140,6 +142,9 @@ const RAW_CONTROLS = [
   n('s', 'hoseBend', 'Look', 'Rubber hose', 'Limb curve', '', 0, 1, 0.01, '1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint.'),
   n('s', 'hoseSquash', 'Look', 'Rubber hose', 'Squash and stretch', '', 0, 2, 0.05, 'At the bottom of the bounce the body squashes down and swells; at the top it stretches up and thins, legs and arms with it. 1 is clear, 2 is cartoon.'),
   e('s', 'pictureModel', 'Look', 'Pictures', 'Body under pictures', ['hide covered parts', 'hide the model', 'show the model'], 'What the body does once a picture is attached. Parts a picture sits on are left out by default, so the picture is not drawn over the mannequin.'),
+  n('s', 'hoseTaper', 'Look', 'Rubber hose', 'Limb taper', '', -1, 1, 0.05, 'Positive makes each limb thicker where it joins the body and thinner at the hand or foot. Negative is the other way: thin at the body, thick at the end.'),
+  n('s', 'hoseBelly', 'Look', 'Rubber hose', 'Belly', '×', 0.6, 1.8, 0.01, 'How round the middle of the body is.'),
+  n('s', 'hoseTail', 'Look', 'Rubber hose', 'Tail', '', 0, 1.5, 0.05, 'A thin tail that swings and wobbles behind the figure. 0 is none.'),
   e('s', 'hoseEars', 'Look', 'Rubber hose', 'Ears', ['none', 'round'], 'Round ears on top of the head. Off by default.'),
   e('s', 'hoseEyes', 'Look', 'Rubber hose', 'Eyes', ['pie', 'round', 'dots'], 'Pie eyes have a wedge cut out of the pupil. Round eyes are plain pupils. Dots are black dots.'),
   n('s', 'moebiusLight', 'Look', 'Moebius style', 'Light direction', '°', -180, 180, 1, 'Where the light comes from, as an angle on the screen. -135 is the top left; the hatching goes on the other side of each form.'),
@@ -198,7 +203,7 @@ const RAW_CONTROLS = [
  * a proportion goes from a little over half its smallest to nearly twice its largest. Fractions with a natural limit (time on the ground, heel timing and the like), counts, the weight, the
  * heading and the terrain are left as they are, and the code that uses each value clamps it where the figure would break.
  */
-const KEEP_RANGE = new Set(['cycleFrames', 'fps', 'exposure', 'weight', 'heading', 'terrainGrade', 'terrainRun', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'dogNeckSegs', 'duty', 'dogDuty', 'headBob', 'legExtend', 'heelDown', 'heelUp', 'liftPeak', 'swingReach', 'downPhase', 'hoseFollow', 'hoseStretch']);
+const KEEP_RANGE = new Set(['cycleFrames', 'fps', 'exposure', 'weight', 'heading', 'terrainGrade', 'terrainRun', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'dogNeckSegs', 'duty', 'dogDuty', 'headBob', 'legExtend', 'heelDown', 'heelUp', 'liftPeak', 'swingReach', 'downPhase', 'hoseFollow', 'hoseStretch', 'hoseWobble', 'hoseWobbleRate']);
 const widen = (c) => {
   if (c.type !== 'number' || (c.scope !== 'p' && c.scope !== 'r') || KEEP_RANGE.has(c.id)) return c;
   const r = (v) => +v.toFixed(4);
@@ -210,7 +215,7 @@ const widen = (c) => {
 export const CONTROLS = RAW_CONTROLS.map((c) => widen(c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : c.tab === 'Look' || c.tab === 'Guides' ? { ...c, tab: 'View', area: c.tab } : { ...c, area: c.tab }));
 
 /** Which figure a control belongs to: 'both', 'human' or 'dog'. Timing, camera, look, guides and export are shared. */
-const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel', 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading']);
+const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel', 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'hoseWobble', 'hoseWobbleRate']); // the wobble is for every rubber hose figure, on two legs or four
 export const rigOf = (c) => (c.scope === 'p' || c.scope === 'r' ? (SHARED_P.has(c.id) ? 'both' : c.id.startsWith('dog') || (c.scope === 'r' && c.id.length > 1 && c.id[0] === 'd' && c.id[1] === c.id[1].toUpperCase()) ? 'dog' : 'human') : 'both');
 export const shownFor = (c, rig) => rigOf(c) === 'both' || rigOf(c) === rig;
 
@@ -292,6 +297,30 @@ export const PRESETS_SPECIES = {
     Walk: sp('sauropod', { dogNeckSegs: 7, dogNeckCurve: 25, dogNeckWave: 2.5, dogNeckSway: 4, dogGait: 'walk', dogStride: 1.3, dogDuty: 0.74, dogLift: 0.07, dogBob: 0.008, dogFlex: 1.5, dogArch: 0.5, dogTwist: 2, dogShoulder: 0.03, dogWidth: 0.16, dogElbowOut: 1, dogNeckAngle: 48, dogHeadAngle: 36, dogHeadNod: 1.5, dogTailAngle: -2, dogWag: 6, cycleFrames: 44 }),
     'Neck up': sp('sauropod', { dogNeckSegs: 7, dogNeckCurve: -10, dogNeckWave: 2, dogNeckSway: 3, dogGait: 'walk', dogStride: 0.9, dogDuty: 0.78, dogLift: 0.05, dogBob: 0.006, dogTwist: 1.5, dogShoulder: 0.025, dogWidth: 0.16, dogNeckAngle: 74, dogHeadAngle: 52, dogTailAngle: 4, dogWag: 4, cycleFrames: 52 }),
   },
+  horse: {
+    Walk: sp('horse', { dogGait: 'walk', dogStride: 1.15, dogDuty: 0.64, dogLift: 0.16, dogBob: 0.02, dogFlex: 2, dogArch: 1, dogTwist: 3, dogShoulder: 0.03, dogWidth: 0.09, dogNeckAngle: 46, dogHeadAngle: 86, dogHeadNod: 6, dogTailAngle: -38, dogWag: 6, dogEar: 4, cycleFrames: 28 }),
+    Trot: sp('horse', { dogGait: 'trot', dogStride: 1.7, dogDuty: 0.46, dogLift: 0.26, dogBob: 0.05, dogFlex: 1, dogArch: 2, dogTwist: 2, dogShoulder: 0.03, dogWidth: 0.08, dogNeckAngle: 54, dogHeadAngle: 94, dogHeadNod: 2, dogTailAngle: -24, dogWag: 5, dogEar: 6, cycleFrames: 16 }),
+    Canter: sp('horse', { dogGait: 'gallop', dogStride: 1.8, dogDuty: 0.34, dogLift: 0.3, dogBob: 0.1, dogFlex: 1, dogArch: 0, dogCurl: 8, dogTwist: 2, dogShoulder: 0.05, dogWidth: 0.07, dogNeckAngle: 44, dogHeadAngle: 84, dogHeadNod: 7, dogTailAngle: -10, dogWag: 4, dogEar: 8, cycleFrames: 16 }),
+    Gallop: sp('horse', { dogGait: 'gallop', dogStride: 2.5, dogDuty: 0.24, dogLift: 0.36, dogBob: 0.12, dogFlex: 1, dogArch: 0, dogCurl: 12, dogTwist: 2, dogShoulder: 0.06, dogWidth: 0.06, dogNeckAngle: 30, dogHeadAngle: 70, dogHeadNod: 8, dogTailAngle: 2, dogWag: 3, dogEar: 10, cycleFrames: 11 }),
+    Grazing: sp('horse', { dogGait: 'walk', dogStride: 0.45, dogDuty: 0.76, dogLift: 0.08, dogBob: 0.008, dogTwist: 2, dogWidth: 0.09, dogNeckAngle: 2, dogHeadAngle: 52, dogHeadNod: 2, dogTailAngle: -40, dogWag: 14, dogEar: 6, cycleFrames: 48 }),
+    Prance: sp('horse', { dogGait: 'trot', dogStride: 1.0, dogDuty: 0.5, dogLift: 0.42, dogBob: 0.07, dogArch: 3, dogTwist: 2, dogWidth: 0.08, dogNeckAngle: 66, dogHeadAngle: 106, dogHeadNod: 3, dogTailAngle: 6, dogWag: 8, dogEar: 6, cycleFrames: 20 }),
+  },
+  hosehorse: {
+    Bouncy: sp('hosehorse', { dogGait: 'trot', dogStride: 1.3, dogDuty: 0.5, dogLift: 0.34, dogBob: 0.12, dogFlex: 4, dogArch: 5, dogTwist: 5, dogWidth: 0.09, dogNeckAngle: 56, dogHeadAngle: 96, dogHeadNod: 9, dogTailAngle: 4, dogWag: 26, dogEar: 16, hoseWobble: 0.5, hoseWobbleRate: 2, cycleFrames: 16, exposure: 2 }),
+    Walk: sp('hosehorse', { dogGait: 'walk', dogStride: 1.1, dogDuty: 0.62, dogLift: 0.22, dogBob: 0.05, dogFlex: 5, dogArch: 3, dogTwist: 5, dogWidth: 0.09, dogNeckAngle: 48, dogHeadAngle: 88, dogHeadNod: 9, dogTailAngle: -24, dogWag: 18, dogEar: 10, hoseWobble: 0.3, hoseWobbleRate: 2, cycleFrames: 24, exposure: 2 }),
+    Wobbly: sp('hosehorse', { dogGait: 'walk', dogStride: 0.9, dogDuty: 0.64, dogLift: 0.2, dogBob: 0.07, dogFlex: 11, dogArch: 6, dogTwist: 9, dogWidth: 0.11, dogElbowOut: 10, dogNeckAngle: 50, dogHeadAngle: 90, dogHeadNod: 12, dogTailAngle: -10, dogWag: 34, dogEar: 20, hoseWobble: 1.2, hoseWobbleRate: 2, cycleFrames: 20, exposure: 2 }),
+    'Jelly legs': sp('hosehorse', { dogGait: 'pace', dogStride: 0.8, dogDuty: 0.6, dogLift: 0.16, dogBob: 0.09, dogFlex: 14, dogArch: 4, dogTwist: 12, dogWidth: 0.12, dogElbowOut: 16, dogNeckAngle: 44, dogHeadAngle: 84, dogHeadNod: 14, dogTailAngle: -18, dogWag: 30, dogEar: 22, hoseWobble: 1.5, hoseWobbleRate: 3, cycleFrames: 22, exposure: 2 }),
+    Gallop: sp('hosehorse', { dogGait: 'gallop', dogStride: 2.5, dogDuty: 0.26, dogLift: 0.42, dogBob: 0.18, dogFlex: 2, dogArch: 0, dogCurl: 22, dogTwist: 3, dogShoulder: 0.07, dogWidth: 0.07, dogNeckAngle: 32, dogHeadAngle: 72, dogHeadNod: 10, dogTailAngle: 8, dogWag: 8, dogEar: 20, hoseWobble: 0.4, hoseWobbleRate: 1, cycleFrames: 10, exposure: 2 }),
+    Prance: sp('hosehorse', { dogGait: 'trot', dogStride: 0.9, dogDuty: 0.48, dogLift: 0.5, dogBob: 0.14, dogArch: 6, dogTwist: 4, dogWidth: 0.08, dogNeckAngle: 68, dogHeadAngle: 108, dogHeadNod: 6, dogTailAngle: 14, dogWag: 22, dogEar: 12, hoseWobble: 0.4, hoseWobbleRate: 2, cycleFrames: 16, exposure: 2 }),
+  },
+  hosebird: {
+    Strut: sp('hosebird', { dogGait: 'walk', dogStride: 0.8, dogDuty: 0.6, dogLift: 0.3, dogBob: 0.06, dogFlex: 5, dogArch: 0, dogTwist: 7, dogWidth: 0.06, dogTilt: 40, dogNeckAngle: 42, dogHeadAngle: 76, dogTailAngle: 26, dogWag: 14, dogHeadNod: 0, dogHeadHold: 1, dogWingOpen: 0, hoseWobble: 0.4, hoseWobbleRate: 2, cycleFrames: 16, exposure: 2 }),
+    Hop: sp('hosebird', { dogGait: 'hop', dogStride: 0.6, dogDuty: 0.3, dogLift: 0.36, dogBob: 0.16, dogFlex: 0, dogTwist: 0, dogWidth: 0.05, dogTilt: 42, dogNeckAngle: 40, dogHeadAngle: 72, dogTailAngle: 28, dogWag: 6, dogHeadHold: 0.3, dogWingOpen: 0.2, dogFlap: 14, dogFlapRate: 1, hoseWobble: 0.5, hoseWobbleRate: 1, cycleFrames: 12, exposure: 2 }),
+    Wobbly: sp('hosebird', { dogGait: 'walk', dogStride: 0.6, dogDuty: 0.64, dogLift: 0.24, dogBob: 0.05, dogFlex: 10, dogTwist: 12, dogWidth: 0.08, dogTilt: 34, dogNeckAngle: 44, dogHeadAngle: 70, dogTailAngle: 20, dogWag: 26, dogHeadNod: 8, dogHeadHold: 0, dogWingOpen: 0.15, dogFlap: 8, dogFlapRate: 2, hoseWobble: 1.3, hoseWobbleRate: 2, cycleFrames: 20, exposure: 2 }),
+    Run: sp('hosebird', { dogGait: 'run', dogStride: 1.9, dogDuty: 0.4, dogLift: 0.4, dogBob: 0.1, dogCurl: 14, dogTwist: 4, dogWidth: 0.05, dogTilt: 20, dogNeckAngle: 46, dogHeadAngle: 56, dogTailAngle: 14, dogWag: 6, dogHeadHold: 0.2, dogWingOpen: 0.3, dogFlap: 16, dogFlapRate: 2, hoseWobble: 0.5, hoseWobbleRate: 2, cycleFrames: 10, exposure: 2 }),
+    Flying: sp('hosebird', { dogGait: 'walk', dogStride: 3.2, dogDuty: 0.5, dogLift: 0.05, dogBob: 0, dogFlex: 0, dogTwist: 0, dogWidth: 0.05, dogTilt: 8, dogNeckAngle: 16, dogHeadAngle: 22, dogTailAngle: 8, dogWag: 0, dogHeadHold: 0, dogWingOpen: 1, dogFlap: 60, dogFlapRate: 1, dogFlapFrames: 8, dogFlight: 1, dogFlightHeight: 1.1, hoseWobble: 0.6, hoseWobbleRate: 2, cycleFrames: 16, exposure: 2, camYaw: 35 }),
+    Flapping: sp('hosebird', { dogGait: 'walk', dogStride: 0.2, dogDuty: 0.8, dogLift: 0.05, dogBob: 0.0, dogTilt: 28, dogNeckAngle: 44, dogHeadAngle: 60, dogTailAngle: 12, dogWag: 0, dogHeadHold: 0, dogWingOpen: 1, dogFlap: 52, dogFlapRate: 2, hoseWobble: 0.8, hoseWobbleRate: 2, cycleFrames: 24, exposure: 2 }),
+  },
   ceratopsian: {
     Walk: sp('ceratopsian', { dogGait: 'walk', dogStride: 1.1, dogDuty: 0.7, dogLift: 0.1, dogBob: 0.014, dogFlex: 2, dogArch: 1, dogTwist: 3, dogShoulder: 0.04, dogWidth: 0.13, dogElbowOut: 6, dogNeckAngle: 8, dogHeadAngle: 34, dogHeadNod: 3, dogTailAngle: -4, dogWag: 8, cycleFrames: 32 }),
     Charge: sp('ceratopsian', { dogGait: 'trot', dogStride: 2.0, dogDuty: 0.46, dogLift: 0.2, dogBob: 0.05, dogFlex: 1, dogArch: 2, dogTwist: 2, dogShoulder: 0.05, dogWidth: 0.12, dogElbowOut: 3, dogNeckAngle: 4, dogHeadAngle: 48, dogHeadNod: 3, dogTailAngle: -2, dogWag: 5, cycleFrames: 18 }),
@@ -300,13 +329,18 @@ export const PRESETS_SPECIES = {
 /** The presets for one figure: 'human', 'dog', or a species name. */
 /** The rubber hose figure: bouncy, on twos, with a lot of arm swing and bob. */
 export const PRESETS_HOSE = {
-  Bouncy: { stepLength: 0.72, bob: 0.16, duty: 0.56, armSwing: 46, elbowBase: 4, elbowSwing: 10, footLift: 0.26, cycleFrames: 12, exposure: 2, lean: 3, torsoSway: 4, headNod: 5, headBob: 0.1, pelvisRoll: 6, sway: 0.05, heelStrike: 8, toeOff: 40, toeOut: 14, liftPeak: 0.4, swingReach: 0.7 },
+  Bouncy: { stepLength: 0.72, bob: 0.16, duty: 0.56, armSwing: 46, elbowBase: 4, elbowSwing: 10, footLift: 0.26, cycleFrames: 20, exposure: 2, lean: 3, torsoSway: 4, headNod: 5, headBob: 0.1, pelvisRoll: 6, sway: 0.05, heelStrike: 8, toeOff: 40, toeOut: 14, liftPeak: 0.4, swingReach: 0.7 },
   Strut: { stepLength: 0.7, bob: 0.12, duty: 0.58, armSwing: 40, elbowBase: 6, elbowSwing: 12, footLift: 0.2, cycleFrames: 16, exposure: 2, lean: -3, torsoSway: 3, headNod: 4, headBob: 0.4, pelvisRoll: 9, pelvisYaw: 12, sway: 0.07, heelStrike: 12, toeOut: 16 },
   Sneak: { stepLength: 0.45, bob: 0.06, duty: 0.7, armSwing: 8, elbowBase: 30, elbowSwing: 10, footLift: 0.2, cycleFrames: 32, exposure: 2, lean: 14, torsoSway: 1, headNod: 3, headBob: 0.6, heelStrike: 0, toeOff: 45, legExtend: 0.9, heelDown: 0.1, heelUp: 0.35 },
   Skip: { stepLength: 0.85, bob: 0.2, duty: 0.52, armSwing: 55, elbowBase: 20, elbowSwing: 20, footLift: 0.36, cycleFrames: 14, exposure: 2, lean: 2, torsoSway: 5, headNod: 6, headBob: 0, pelvisRoll: 5, heelStrike: 6, toeOff: 45, liftPeak: 0.35, swingReach: 0.6 },
   Stomp: { stepLength: 0.66, bob: 0.11, duty: 0.6, armSwing: 28, elbowBase: 40, elbowSwing: 14, footLift: 0.24, cycleFrames: 18, exposure: 2, lean: 6, torsoSway: 3, headNod: 5, heelStrike: 28, heelDown: 0.07, liftPeak: 0.3, swingReach: 0.95, legExtend: 0.985, toeOut: 10 },
   Tired: { stepLength: 0.5, bob: 0.07, duty: 0.66, armSwing: 14, elbowBase: 8, elbowSwing: 6, footLift: 0.07, cycleFrames: 32, exposure: 2, lean: 14, torsoSway: 3, headNod: 6, headBob: 0, heelStrike: 4, toeOff: 18, legExtend: 0.94, toeOut: 20 },
   Run: { stepLength: 0.95, duty: 0.4, footLift: 0.3, bob: 0.14, downPhase: 0.17, lean: 8, legExtend: 0.93, cycleFrames: 12, exposure: 2, armSwing: 60, elbowBase: 20, elbowSwing: 10, torsoSway: 3 },
+  Wobbly: { stepLength: 0.64, bob: 0.08, legExtend: 0.94, duty: 0.58, armSwing: 40, elbowBase: 6, elbowSwing: 14, footLift: 0.22, cycleFrames: 16, exposure: 2, lean: 2, torsoSway: 7, headNod: 6, pelvisRoll: 6, sway: 0.05, toeOut: 14, hoseWobble: 1, hoseWobbleRate: 2, hoseFollow: 1.2, hoseStretch: 0.8 },
+  'Jelly legs': { stepLength: 0.55, bob: 0.2, duty: 0.62, armSwing: 26, elbowBase: 10, elbowSwing: 10, footLift: 0.16, cycleFrames: 20, exposure: 2, lean: 4, torsoSway: 5, headNod: 7, pelvisRoll: 13, sway: 0.1, kneeOut: 14, legExtend: 0.86, toeOut: 22, hoseWobble: 1.3, hoseWobbleRate: 3, hoseFollow: 1, hoseStretch: 1 },
+  'Noodle arms': { stepLength: 0.74, bob: 0.13, duty: 0.56, armSwing: 80, elbowBase: 0, elbowSwing: 44, armOut: 10, footLift: 0.24, cycleFrames: 14, exposure: 2, lean: 3, torsoSway: 5, shoulderCounter: 16, headNod: 4, hoseWobble: 0.9, hoseWobbleRate: 2, hoseFollow: 1.5, hoseStretch: 1.3 },
+  Drunk: { stepLength: 0.52, bob: 0.045, legExtend: 0.92, duty: 0.66, armSwing: 20, armOut: 12, elbowBase: 14, elbowSwing: 8, footLift: 0.12, cycleFrames: 30, exposure: 2, lean: 7, torsoSway: 10, headNod: 8, pelvisRoll: 5, sway: 0.07, stepWidth: 0.06, toeOut: 18, asymTiming: 0.06, asymLift: 0.4, noiseAmount: 0.4, noiseSpeed: 1, hoseWobble: 0.7, hoseWobbleRate: 1, hoseFollow: 1.4 },
+  Boing: { stepLength: 0.7, bob: 0.19, duty: 0.5, armSwing: 50, elbowBase: 10, elbowSwing: 16, footLift: 0.4, cycleFrames: 16, exposure: 2, lean: 1, torsoSway: 3, headNod: 8, liftPeak: 0.35, toeOff: 50, hoseWobble: 0.5, hoseWobbleRate: 2, hoseFollow: 1.1, hoseStretch: 1.5 },
 };
 /** The proportions the rubber hose figure starts with: a big head, a short body, long thin limbs. */
 export const HOSE_PROPORTIONS = Object.freeze({ head: 1.5, neck: 0.35, torso: 0.8, waist: 0.9, shoulderWidth: 0.8, arm: 1.15, handSize: 1.3, footSize: 1.35, limbGirth: 1 });

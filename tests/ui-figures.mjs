@@ -23,7 +23,7 @@ const pick = async (v) => { await page.locator('[data-testid="rig"]').selectOpti
 const presets = () => page.locator('#preset option').evaluateAll((os) => os.map((o) => o.textContent));
 
 const opts = await page.locator('[data-testid="rig"] option').evaluateAll((os) => os.map((o) => o.value));
-check('the Figure menu offers all seven figures', JSON.stringify(opts) === JSON.stringify(['human', 'hose', 'dog', 'theropod', 'bird', 'sauropod', 'ceratopsian']), opts);
+check('the Figure menu offers all ten figures', JSON.stringify(opts) === JSON.stringify(['human', 'hose', 'dog', 'horse', 'theropod', 'bird', 'sauropod', 'ceratopsian', 'hosehorse', 'hosebird']), opts);
 
 const expectPresets = { theropod: ['Walk', 'Stalk', 'Run'], bird: ['Walk', 'Hop', 'Flapping'], sauropod: ['Walk'], ceratopsian: ['Walk', 'Charge'] };
 for (const f of ['theropod', 'bird', 'sauropod', 'ceratopsian']) {
