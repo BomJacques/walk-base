@@ -464,3 +464,9 @@ select, select option, select optgroup { background-color: var(--panel-2); color
 .padgrid.clearing .padbtn:not(.empty) { --padarm: color-mix(in srgb, var(--danger) 22%, var(--ctl)); }
 @keyframes padarm { from { background: var(--ctl); } to { background: var(--padarm, var(--accent-soft)); } }
 @media (prefers-reduced-motion: reduce) { .padgrid.storing .padbtn, .padgrid.clearing .padbtn:not(.empty) { animation: none; background: var(--padarm, var(--accent-soft)); } }
+
+/* audit: a choice with many options is an even grid; the mood corners sit side by side where there is room */
+.seg.seg-grid { display: grid; width: 100%; }
+.seg.seg-3 { grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); } /* as many even columns as fit the names */
+.seg.seg-grid .segbtn { min-width: 0; padding-left: 4px; padding-right: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moodside { grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }

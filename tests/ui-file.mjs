@@ -259,7 +259,7 @@ await q('length-menu').click(); await page.locator('[data-testid="perf-x8"]:visi
 check('8 cycles makes the playback eight times as long and leaves the speed of the walk alone', (await ev(() => window.__walkBase.S.perfLen)) === 8 * cyc0 && (await ev(() => window.__walkBase.S.p.cycleFrames)) === cyc0);
 await q('length-menu').click(); await page.locator('[data-testid="perf-one"]:visible').first().click(); await wait(200);
 check('One cycle puts it back', (await ev(() => window.__walkBase.S.perfLen)) === 0);
-check('the rubber hose figure starts at an easy pace', (await ev(() => { const w = window.__walkBase; w.setFigure('hose'); const c = w.S.p.cycleFrames; w.setFigure('human'); return c; })) >= 20);
+check('the rubber hose figure starts at an easy pace', (await ev(() => { const w = window.__walkBase; w.setFigure('hose'); w.applyPreset('Bouncy'); const c = w.S.p.cycleFrames; w.setFigure('human'); return c; })) >= 20);
 // ---- the face: eye styles, blinks, eyebrows and mouth styles
 await page.mouse.move(4, 4); // off the panel, so no line of help is showing over the stage
 await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.s.style = 'mannequin'; w.S.s.focus = 'head'; w.S.s.camYaw = -65; w.S.s.camPitch = 0; w.S.ver++; w.setTab('Speech'); w.setFrame(2); w.render(); }); await wait(250);
@@ -409,6 +409,8 @@ await ev(() => window.__walkBase.pause()); await wait(300);
 const padTake = await ev(() => { const w = window.__walkBase; const l = w.S.lanes['p:lean']; return { has: Boolean(l), first: l?.pts?.[0]?.v, last: l?.pts?.[l.pts.length - 1]?.v, lean: w.S.p.lean, target: w.padBank().pads[1].values.lean, n: l?.pts?.length }; });
 check('a pad tapped in a take writes its blend as automation, from the walk that was playing to the pad', padTake.has && Math.abs(padTake.first - 4) < 1e-6 && Math.abs(padTake.last - padTake.target) < 1e-6 && padTake.n >= 3 && padTake.lean === 4, padTake);
 const padEnd = await ev(() => { const w = window.__walkBase; w.setFrame(w.S.perfLen - 1); return w.nowValues().p.lean; });
+const cadLane = await ev(() => { const w = window.__walkBase; const l = w.S.lanes.cadence; return { first: l?.pts?.[0]?.v, last: l?.pts?.[l.pts.length - 1]?.v, want: 24 / w.padBank().pads[1].values.cycleFrames, cyc: w.S.p.cycleFrames }; });
+check('the pad\u2019s pace is recorded too, as the speed lane: the sneak is slower, and the cycle length of the take is left alone', cadLane.first === 1 && Math.abs(cadLane.last - cadLane.want) < 1e-6 && cadLane.want < 0.9 && cadLane.cyc === 24, cadLane);
 check('and it holds: the performance is still the sneaking walk at its last frame, even recorded in Touch', Math.abs(padEnd - padTake.target) < 1e-6 && errors.length === 0, [padEnd, errors]);
 await ev(() => { const w = window.__walkBase; w.setArmed(false); w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.padBank().pads.fill(null); w.padBank().active = null; w.padBank().blend = 1; w.applyPreset('Normal'); w.setFrame(0); });
 // ---- leg length, for the human and the rubber hose figure
@@ -425,6 +427,25 @@ for (const fig of ['human', 'hose']) {
 await ev(() => { const w = window.__walkBase; w.setFigure('dog'); w.setTab('Gait'); }); await wait(200);
 check('the dog keeps its own Leg length', (await q('rng-leg').count()) === 0 && (await q('rng-dLeg').count()) === 1 && errors.length === 0, errors);
 await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.setTab('Gait'); });
+// ---- each figure keeps its own walk across a switch (found in the audit: a human reached by way of the dog had the rubber hose walk, named Normal)
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.applyPreset('March'); w.setParam('lean', 9); w.setFigure('hose'); w.applyPreset('Sneak'); w.setFigure('dog'); w.applyPreset('Trot'); w.setFigure('human'); }); await wait(250);
+const backHuman = await ev(() => ({ lean: window.__walkBase.S.p.lean, lift: window.__walkBase.S.p.footLift, ex: window.__walkBase.S.p.exposure, cyc: window.__walkBase.S.p.cycleFrames, preset: window.__walkBase.S.preset, model: window.__walkBase.S.p.model }));
+check('back on the human by way of the hose and the dog, it has its own march and its own lean, not the hose walk', backHuman.lean === 9 && backHuman.lift === 0.3 && backHuman.ex === 1 && backHuman.cyc === 20 && backHuman.model === 'mannequin' && backHuman.preset === 'Custom', backHuman);
+await ev(() => window.__walkBase.setFigure('hose')); await wait(200);
+const backHose = await ev(() => ({ step: window.__walkBase.S.p.stepLength, ex: window.__walkBase.S.p.exposure, preset: window.__walkBase.S.preset, sel: document.getElementById('preset')?.value }));
+check('and the rubber hose figure still has its sneak, with the menu saying so', backHose.step === 0.45 && backHose.ex === 2 && backHose.preset === 'Sneak' && backHose.sel === 'Sneak', backHose);
+await ev(() => window.__walkBase.setFigure('dog')); await wait(200);
+check('and the dog its trot', (await ev(() => window.__walkBase.S.p.dogGait)) === 'trot' && (await ev(() => window.__walkBase.S.preset)) === 'Trot');
+await ev(() => window.__walkBase.setFigure('horse')); await wait(200);
+check('a figure not seen before starts on its first walk', (await ev(() => window.__walkBase.S.preset)) === 'Walk' && (await ev(() => window.__walkBase.S.p.dogSpecies)) === 'horse' && errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.setTab('View'); }); await wait(200);
+const styleCols = await ev(() => { const b = [...document.querySelectorAll('[data-testid^="opt-style-"]')].map((e) => e.getBoundingClientRect()); const cut = [...document.querySelectorAll('[data-testid^="opt-style-"]')].filter((e) => e.scrollWidth > e.clientWidth + 2).map((e) => e.textContent); return { n: b.length, rows: new Set(b.map((r) => Math.round(r.top))).size, widths: new Set(b.map((r) => Math.round(r.width))).size, cut }; });
+check('the styles are an even grid with every name in full, not a ragged wrap', styleCols.n === 11 && styleCols.rows >= 3 && styleCols.widths <= 2 && styleCols.cut.length === 0, styleCols);
+const lookShots = new Set([await stageShot()]);
+for (const st of ['clay', 'lowpoly', 'blocks']) { await q(`opt-style-${st}`).click(); await wait(150); lookShots.add(await stageShot()); for (const fig of ['hose', 'hosehorse', 'dog', 'human']) await ev((f) => { const w = window.__walkBase; w.setFigure(f); for (let fr = 0; fr < 6; fr++) w.setFrame(fr); }, fig); await ev(() => { const w = window.__walkBase; w.S.s.camYaw = 0; w.setTab('View'); w.setFrame(0); w.render(); }); await wait(150); }
+check('Clay, Lowpoly and Blocks are looks of their own, on every kind of figure, with no errors', lookShots.size === 4 && errors.length === 0, [lookShots.size, errors]);
+await ev(() => { const w = window.__walkBase; w.S.s.style = 'mannequin'; w.render(); });
+await ev(() => window.__walkBase.setTab('Gait'));
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

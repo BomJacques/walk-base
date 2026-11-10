@@ -38,9 +38,11 @@ Both play on the same timeline and export the same way.
 - **View**: drag the stage to orbit, pinch to zoom. Presets for side, ¾, front, back and top, and a turntable.
 - Feet are planted by IK, so there is no sliding. Hip height and turn are the pelvis channels.
 
-## Two figures
+## Figures
 
-Pick **Figure** in the header: a human or a dog. Each has its own presets (the dog: Walk, Brisk walk, Trot, Pace, Gallop, Sniffing, Old dog), its own gait and body settings, its own Parts, and keeps its own edits and automation when you switch.
+Pick **Figure** in the header. They are in groups: People (Human, Rubber hose), Animals (Dog, Horse, Bird), Dinosaurs (Theropod, Sauropod, Ceratopsian) and Rubber hose animals (horse, bird). Switching away from a figure and back leaves it with the walk, proportions and performance it had.
+
+The first two were a human and a dog. Each has its own presets (the dog: Walk, Brisk walk, Trot, Pace, Gallop, Sniffing, Old dog), its own gait and body settings, its own Parts, and keeps its own edits and automation when you switch.
 
 The dog walks, trots, paces or gallops with the right paw order (the walk follows the dog walk chart in The Animator's Survival Kit: hips and chest bob in opposition, shoulder blades that slide and drop, a twisting torso; the gallop gathers the legs under the body, with a flight phase and a curling back), planted paws, a bending spine, a neck and head that can reach and tilt, a jaw, ears and a three-joint tail. Every part has the same channels as the human: scale, offset, repeat faster (a quicker wag), shift in time, or draw the curve by hand.
 
@@ -84,7 +86,7 @@ Each figure offers only the gaits it can do: the dog walk, trot, pace and gallop
 3. While it plays, drag the mood dot, tap pads, move sliders.
 4. **Pause** ends the take. What you did is now automation lanes on the timeline: it plays back the same every time, can be made a loop, and exports.
 
-The Auto tab lists the lanes of the take; open one to redraw it or remove it, and Ctrl+Z undoes the whole take. A pad's change of cycle length is not written into a take (speed in a take is the cadence lane), so for a recorded change of pace use the Speed up and Slow down movements.
+The Auto tab lists the lanes of the take; open one to redraw it or remove it, and Ctrl+Z undoes the whole take. A take keeps one cycle length, so a pad whose walk is quicker or slower is recorded as the speed lane: a pad with a 16 frame cycle, tapped over a 24 frame walk, is written as speed 1.5 and holds.
 
 **Help.** Rest the mouse on any slider or choice for a line about it; on a touch screen, tap its name. The **?** button in the top bar opens the guide to the screen, with these steps in it.
 

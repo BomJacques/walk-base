@@ -21,7 +21,7 @@ import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
 
 export const STYLE_DEFAULTS = Object.freeze({
-  style: 'mannequin',        // mannequin | outline | stick | silhouette | moebius | comic | ink | pencil
+  style: 'mannequin',        // mannequin | outline | stick | silhouette | moebius | comic | ink | pencil | clay | lowpoly | blocks
   moebiusLight: -135,        // the direction the light comes from, in degrees on the screen (-135 is the top left)
   moebiusAngle: 50,          // the angle of the hatching, in degrees
   moebiusDensity: 4.5,       // the gap between hatching lines, in pixels at the 1080 line frame
@@ -372,9 +372,59 @@ function hatchShape(ctx, pts, st, cam, key) {
   ctx.restore();
 }
 /** The drawing styles that show a face (eyes, a mouth) on the head. */
-const faceStyle = (st) => st.style === 'mannequin' || st.style === 'outline' || st.style === 'comic' || st.style === 'ink' || st.style === 'pencil';
+const faceStyle = (st) => st.style === 'mannequin' || st.style === 'outline' || st.style === 'comic' || st.style === 'ink' || st.style === 'pencil' || st.style === 'clay' || st.style === 'lowpoly';
 /** The styles drawn as one outline round the whole figure, and how thick that line is against the plain line width. */
-const OUTLINED = { outline: 2.2, moebius: 1.7, comic: 3.6, ink: 2.4 };
+const OUTLINED = { outline: 2.2, moebius: 1.7, comic: 3.6, ink: 2.4, clay: 1.5 };
+/** The colour a shape is filled with, as a plain hex, whatever the style does to it afterwards. */
+const baseHex = (sh, st) => (typeof sh.fill === 'string' && sh.fill[0] === '#' ? sh.fill.slice(0, 7) : sh.role === 'far' ? mixHex(st.fillColor, st.farTint, 0.4) : st.fillColor);
+const boundsOf = (pts) => { let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; let cx = 0; let cy = 0; for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; cx += x; cy += y; } return { x0, y0, x1, y1, cx: cx / pts.length, cy: cy / pts.length, R: Math.hypot(x1 - x0, y1 - y0) / 2 }; };
+const lightDir = (st) => { const a = ((st.moebiusLight ?? -135) * Math.PI) / 180; return [Math.cos(a), Math.sin(a)]; }; // toward the light, on the screen
+/**
+ * Clay: every form is rounded. It is lit from one side, falling smoothly into shade on the other, with a soft highlight, and thin contour lines follow the form inward
+ * like the lines of a map, so the roundness reads even in a still.
+ */
+function paintClay(ctx, sh, cam, st) {
+  const b = boundsOf(sh.pts); const [lx, ly] = lightDir(st); const base = baseHex(sh, st); const R = Math.max(2, b.R);
+  const g = ctx.createLinearGradient(b.cx + lx * R, b.cy + ly * R, b.cx - lx * R, b.cy - ly * R);
+  g.addColorStop(0, mixHex(base, '#ffffff', 0.5)); g.addColorStop(0.45, base); g.addColorStop(1, mixHex(base, st.lineColor, 0.5));
+  tracePts(ctx, sh.pts); ctx.fillStyle = g; ctx.fill();
+  if (R < 7 * cam.k) return;
+  ctx.save(); tracePts(ctx, sh.pts); ctx.clip();
+  const hl = ctx.createRadialGradient(b.cx + lx * R * 0.45, b.cy + ly * R * 0.45, 0, b.cx + lx * R * 0.45, b.cy + ly * R * 0.45, R * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.5)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl; ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+  ctx.strokeStyle = hexA(st.lineColor, 0.22); ctx.lineWidth = Math.max(0.6, cam.lw * 0.35); ctx.lineJoin = 'round';
+  for (const k of [0.74, 0.48]) { tracePts(ctx, sh.pts.map(([x, y]) => [b.cx - lx * R * 0.1 + (x - b.cx) * k, b.cy - ly * R * 0.1 + (y - b.cy) * k])); ctx.stroke(); } // contours, pulled a little toward the shaded side
+  ctx.restore();
+}
+/** Low-poly: the outline is cut down to a few straight edges and the form is built of flat facets fanned from its middle, each one lighter or darker as it faces the light. */
+function paintLowPoly(ctx, sh, cam, st) {
+  const b = boundsOf(sh.pts); const [lx, ly] = lightDir(st); const base = baseHex(sh, st); const n = sh.pts.length;
+  const want = Math.max(5, Math.min(9, Math.round(b.R / (9 * cam.k)) + 4)); const step = Math.max(1, n / want); const P = [];
+  for (let i = 0; i < n - 0.5; i += step) P.push(sh.pts[Math.floor(i)]);
+  ctx.save(); ctx.lineJoin = 'bevel'; ctx.lineWidth = Math.max(0.6, cam.lw * 0.45);
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i]; const c = P[(i + 1) % P.length]; const mx = (a[0] + c[0]) / 2 - b.cx; const my = (a[1] + c[1]) / 2 - b.cy; const ml = Math.hypot(mx, my) || 1;
+    const lit = (mx / ml) * lx + (my / ml) * ly; // 1 facing the light, -1 facing away
+    const col = lit >= 0 ? mixHex(base, '#ffffff', 0.42 * lit) : mixHex(base, st.lineColor, 0.42 * -lit);
+    ctx.beginPath(); ctx.moveTo(b.cx, b.cy); ctx.lineTo(a[0], a[1]); ctx.lineTo(c[0], c[1]); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = col; ctx.stroke(); // its own colour on the seams, so no hairline gaps
+  }
+  ctx.strokeStyle = sh.role === 'far' ? mixHex(st.lineColor, st.farTint, 0.55) : st.lineColor; ctx.lineWidth = Math.max(0.8, cam.lw * 0.7); tracePts(ctx, P); ctx.stroke();
+  ctx.restore();
+}
+/** Blocks: the form is built of square blocks on a grid fixed to the page, like voxels seen from the side or pixel art, with the blocks on the shaded edge darker and the lit edge lighter. */
+function paintBlocks(ctx, sh, cam, st) {
+  const b = boundsOf(sh.pts); const [lx, ly] = lightDir(st); const base = baseHex(sh, st); const s = Math.max(3, Math.round(7 * cam.k)); const pts = sh.pts; const n = pts.length;
+  const inside = (x, y) => { let c = false; for (let i = 0, j = n - 1; i < n; j = i++) { const [xi, yi] = pts[i]; const [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+  const gx0 = Math.floor(b.x0 / s) * s; const gy0 = Math.floor(b.y0 / s) * s; const lit = mixHex(base, '#ffffff', 0.38); const dark = mixHex(base, st.lineColor, 0.45); const edge = hexA(st.lineColor, 0.28);
+  let drew = false;
+  for (let y = gy0; y <= b.y1; y += s) for (let x = gx0; x <= b.x1; x += s) {
+    if (!inside(x + s / 2, y + s / 2)) continue; drew = true;
+    const toLight = inside(x + s / 2 + lx * s, y + s / 2 + ly * s); const toShade = inside(x + s / 2 - lx * s, y + s / 2 - ly * s);
+    ctx.fillStyle = !toLight ? lit : !toShade ? dark : base; ctx.fillRect(x, y, s, s);
+    ctx.strokeStyle = edge; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
+  }
+  if (!drew) { tracePts(ctx, pts); ctx.fillStyle = base; ctx.fill(); } // too small for one block: keep it there as a dab of its colour
+}
 /** A shape's outline with each point nudged a little, the same way every frame (seeded by the part), for a hand-drawn line. */
 function roughPts(pts, amp, key) { const r = rng(key); return pts.map(([x, y]) => [x + (r() - 0.5) * 2 * amp, y + (r() - 0.5) * 2 * amp]); }
 const tracePts = (ctx, pts) => { ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); };
@@ -406,6 +456,9 @@ function paintShape(ctx, sh, cam, st, ghost) {
     hatchShape(ctx, sh.pts, st, cam, `${sh.part}${sh.side}`); return;
   }
   if ((st.style === 'outline' || st.style === 'ink') && !ghost) { ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill(); return; }
+  if (st.style === 'clay' && !ghost) { paintClay(ctx, sh, cam, st); return; }
+  if (st.style === 'lowpoly' && !ghost) { paintLowPoly(ctx, sh, cam, st); return; }
+  if (st.style === 'blocks' && !ghost) { paintBlocks(ctx, sh, cam, st); return; }
   if (st.style === 'comic' && !ghost) { // flat colour inside a heavy line, with printed dots for the shadow
     const flat = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.45) : hexA(st.fillColor, 1)); ctx.fillStyle = flat; ctx.fill();
     dotShade(ctx, sh.pts, st, cam, mixHex(typeof flat === 'string' && flat[0] === '#' ? flat.slice(0, 7) : st.fillColor, st.lineColor, 0.42)); return;

@@ -716,7 +716,10 @@ function padBegin() {
   const r = PADRUN; if (!r || !r.waiting) return; r.waiting = false; r.done = 0;
   r.from = Object.fromEntries(Object.keys(r.pad.values).map((k) => [k, typeof S.p[k] === 'number' ? S.p[k] : r.pad.values[k]]));
   r.dur = blendFrames(padBank(), S.p.cycleFrames);
-  if (r.rec) { for (const k of Object.keys(r.pad.values)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs(r.from[k] - r.pad.values[k]) > 1e-9) rec.touch(targetOfParam(k), S.frame, r.from[k], { hold: true }); } // a pad is a change of walk: it holds to the end of the performance, in Touch and in Latch
+  if (r.rec) { for (const k of Object.keys(r.pad.values)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs(r.from[k] - r.pad.values[k]) > 1e-9) rec.touch(targetOfParam(k), S.frame, r.from[k], { hold: true }); // a pad is a change of walk: it holds to the end of the performance, in Touch and in Latch
+    // Its pace too: a take keeps one cycle length, so a quicker or slower walk is written as the speed lane. Speed 2 is a cycle in half the frames.
+    const n0 = Math.max(2, Math.round(S.p.cycleFrames)); const live = rec.liveValues()[CADENCE]; r.cadFrom = live ?? laneValue(S.lanes[CADENCE], S.frame, 1); r.cadTo = Math.min(4, Math.max(0.1, n0 / Math.max(2, r.pad.values.cycleFrames ?? n0)));
+    if (Math.abs(r.cadTo - r.cadFrom) > 1e-6) rec.touch(CADENCE, S.frame, r.cadFrom, { hold: true }); else r.cadTo = r.cadFrom; }
   else { for (const [k, v] of Object.entries(r.pad.flags || {})) if (k in S.p && typeof S.p[k] === typeof v) S.p[k] = v; MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null; markCustom(); }
   if (r.dur <= 0) padFinish();
 }
@@ -729,7 +732,9 @@ function padStep() {
   if (r.done >= r.dur) padFinish();
 }
 function padApply(vals, r = PADRUN) {
-  if (r?.rec) { for (const [k, v] of Object.entries(vals)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs((r.from[k] ?? v) - r.pad.values[k]) > 1e-9) rec.set(targetOfParam(k), S.frame, v); return; } // while recording, the blend is written into the take
+  if (r?.rec) { for (const [k, v] of Object.entries(vals)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs((r.from[k] ?? v) - r.pad.values[k]) > 1e-9) rec.set(targetOfParam(k), S.frame, v);
+    if (r.cadTo !== r.cadFrom) rec.set(CADENCE, S.frame, transitionValues({ c: r.cadFrom }, { c: r.cadTo }, r.dur > 0 ? Math.min(1, r.done / r.dur) : 1).c);
+    return; } // while recording, the blend is written into the take
   const before = Math.max(2, Math.round(S.p.cycleFrames));
   for (const [k, v] of Object.entries(vals)) if (typeof S.p[k] === 'number') S.p[k] = P_CONTROL[k]?.type === 'number' ? clampTo(P_CONTROL[k], v) : v;
   const now = Math.max(2, Math.round(S.p.cycleFrames)); S.ver++;
@@ -790,7 +795,7 @@ function padSection() {
   const act = b.active != null && b.pads[b.active] ? b.pads[b.active] : null;
   return h('section', { class: 'group', 'data-area': 'Gait', testid: 'pad-section' }, h('h3', null, filled ? `Pads (${filled})` : 'Pads'), fileIn,
     grid,
-    h('p', { class: 'hint', testid: 'pad-hint' }, PADMODE === 'store' ? 'Tap one of the flashing pads to keep the walk as it is now on it. Store again cancels.' : PADMODE === 'clear' ? 'Tap one of the flashing pads to empty it. Clear again cancels.' : filled ? 'Tap a pad to change to its walk. End of cycle waits for the first frame. With Rec on, the change is written into the take and holds to its end.' : 'Set up a walk (a preset, the sliders, the mood pad), then tap an empty pad to keep it there. Do the same for other walks, and tap between them while it plays.'),
+    h('p', { class: 'hint', testid: 'pad-hint' }, PADMODE === 'store' ? 'Tap one of the flashing pads to keep the walk as it is now on it. Store again cancels.' : PADMODE === 'clear' ? 'Tap one of the flashing pads to empty it. Clear again cancels.' : filled ? 'Tap a pad to change to its walk. End of cycle waits for the first frame. With Rec on, the change and its pace are written into the take and hold to its end.' : 'Set up a walk (a preset, the sliders, the mood pad), then tap an empty pad to keep it there. Do the same for other walks, and tap between them while it plays.'),
     h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Change')), seg([['now', 'Now'], ['cycle', 'End of cycle']], b.when, (v) => { b.when = v; save(); renderPanel(); }, 'pad-when')),
     h('div', { class: 'row noreset row-enum' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Blend over'), h('span', { class: 'unit' }, 'cycles')), seg(BLENDS, b.blend, (v) => { b.blend = v; save(); renderPanel(); }, 'pad-blend')),
     act ? h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, `Pad ${b.active + 1} name`), h('input', { type: 'text', class: 'txt', value: act.name, maxlength: 24, 'aria-label': 'Name of this pad', testid: 'pad-name', onChange: (e) => { act.name = e.target.value.slice(0, 24) || act.name; save(); renderPanel(); } })) : null,
@@ -1051,6 +1056,8 @@ function setParam(c, v) {
 /** Keys that belong to one figure, so choosing a preset for the dog leaves the human's settings alone. */
 const DOG_KEYS = Object.keys(DEFAULTS).filter((k) => k.startsWith('dog'));
 const SHARED_KEYS = ['rig', 'fps', 'cycleFrames', 'exposure', 'travel'];
+/** The settings that make up a figure's walk: the dog's own for the animals, everything else for the people, and the timing. */
+const walkKeys = (rig) => [...(rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'weight', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop', 'hoseWobble', 'hoseWobbleRate'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model')), ...SHARED_KEYS.filter((k) => k !== 'rig')];
 function applyPreset(name) {
   MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null; // a new walk starts in the middle of the mood pad
   const rig = S.p.rig; const fig = figKey();
@@ -1078,13 +1085,17 @@ function setFigure(fig) {
   S.lanes = b?.lanes ?? {}; S.perfLen = b?.perfLen ?? 0; S.ver++;
   const rig = rigOfFig(fig); const wasRig = S.p.rig; const wasSpecies = S.p.dogSpecies; const wasFig = figKey();
   (S.rBank ||= {})[wasFig] = S.r; // each figure keeps its own proportions
+  (S.pBank ||= {})[wasFig] = { p: Object.fromEntries([...new Set(walkKeys(wasRig))].map((k) => [k, S.p[k]])), preset: S.preset }; // and its own walk
   S.r = S.rBank[fig] ?? (fig === 'hose' ? { ...HOSE_PROPORTIONS } : {});
   if (rig === 'human') S.p.model = fig === 'hose' ? 'hose' : 'mannequin';
   S.p.rig = rig; S.sel = null; S.attachSel = null; S.frame = 0; S.clipLen = null; S.clipStart = 0;
   S.clip = clipsForFigure(fig)[0]?.id ?? '';
+  // Coming back to a figure, it has the walk it had when you left it (before this, a human reached by way of the dog was left with the rubber hose walk under the name Normal).
+  const kept = S.pBank[fig];
+  if (kept) { if (rig === 'dog') S.p.dogSpecies = fig; for (const [k, v] of Object.entries(kept.p)) if (k in DEFAULTS && typeof v === typeof DEFAULTS[k]) S.p[k] = v; S.preset = kept.preset in presetsForFigure(fig) || kept.preset === 'Custom' ? kept.preset : 'Custom'; build(); render(); save(); return; }
   if (rig === 'dog' && (wasRig === 'dog' || wasSpecies !== fig)) { S.p.dogSpecies = fig; applyPreset(Object.keys(presetsForFigure(fig))[0]); build(); render(); save(); return; }
   if (rig === 'dog') S.p.dogSpecies = fig;
-  if (rig === 'human' && (fig === 'hose' || wasFig === 'hose')) { applyPreset(Object.keys(presetsForFigure(fig))[0]); build(); render(); save(); return; } // a new walk for the new figure
+  if (rig === 'human') { applyPreset(Object.keys(presetsForFigure(fig))[0]); build(); render(); save(); return; } // a new walk for the new figure
   if (!(S.preset in presetsForFigure(fig))) S.preset = Object.keys(presetsForFigure(fig))[0];
   build(); render(); save();
 }
@@ -1327,7 +1338,7 @@ function row(c) {
     }
     control = h('div', { class: 'ctl' }, rng, num);
   } else if (c.type === 'enum') {
-    control = h('div', { class: 'seg', role: 'group', 'aria-label': c.label }, wordsFor(figKey()).options(c).map((o) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(String(o) === String(val)), testid: `opt-${c.id}-${o}`, onClick: () => { setParam(c, o); renderPanel(); } }, String(o))));
+    control = h('div', { class: `seg${wordsFor(figKey()).options(c).length >= 5 ? ` seg-grid seg-3` : ''}`, role: 'group', 'aria-label': c.label }, wordsFor(figKey()).options(c).map((o) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(String(o) === String(val)), testid: `opt-${c.id}-${o}`, onClick: () => { setParam(c, o); renderPanel(); } }, String(o))));
   } else if (c.type === 'bool') {
     control = h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: val, testid: `chk-${c.id}`, onChange: (e) => { setParam(c, e.target.checked); e.target.nextSibling.textContent = e.target.checked ? 'On' : 'Off'; } }), h('span', null, val ? 'On' : 'Off'));
   } else {
@@ -1650,7 +1661,7 @@ function collapsible(host) {
     else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and legs, left and right feet, onion skin, colours, names, target app); a choice you make is remembered.
-    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
+    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^eyebrows$|^mouth$|^moebius style$|^pictures$|^pivot around the figure$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
     const body = h('div', { class: 'group-body' });
     while (hd.nextSibling) body.append(hd.nextSibling);
     sec.append(body); body.hidden = folded;

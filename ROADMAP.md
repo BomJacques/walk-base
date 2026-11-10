@@ -582,3 +582,16 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 - **Store and Clear flash the pads** until one is chosen, so it is plain where the walk will go.
 - **Guide.** The ? guide points at the mood pad and the pads and has a How to list: recording the mood pad and the pads, making the playback longer, changing or undoing a take, and help for one control. The read-me has a section on moods, pads and recording them.
 - **Leg length** (Body tab > Proportions) for the human and the rubber hose figure: scales both legs. The steps stay the same length; the hips ride higher on longer legs with the knees keeping their bend, and lower on shorter ones. Not done: the stage does not re-frame, so very long legs can put the head off the top (lower Figure size in View, or zoom out); the dog has its own Leg length already.
+
+## Done (2026-11-12, night): audit, a pad's pace in a take, three more looks
+
+- **Audit of the screen and the program.** Every tab was opened for the human, the rubber hose figure and the dog at desktop, tablet and phone sizes, in light and dark, and checked by a script for sideways scrolling, controls sticking out of the panel, cut-off text, controls with no name, repeated ids, repeated group titles and console messages. All of those came back clean. What it did find, and what was done:
+  - **A bug:** a human reached by way of the dog was left with the rubber hose figure's walk (drawn on twos, a 20 frame cycle) under the name Normal. Every figure now keeps its own walk, its preset name, its proportions and its performance when you switch away and back; a figure not seen before starts on its first walk.
+  - The eight (now eleven) drawing styles wrapped raggedly over four rows. A choice with five or more options is now an even grid, with every name in full.
+  - The Speech and View tabs had grown long. Eyebrows, Mouth, Moebius style, Pictures and Pivot around the figure now start folded.
+  - On a wide panel (a tablet held upright) the four mood corners sit side by side instead of in one tall column.
+  - The read-me's figure section still said two figures.
+- **Left as found:** on a phone the stage tools take two rows over a small stage, the names in the top bar's menus are cut short (Huma, Norm), and the Body tab is about 17 screens long. The app is made for a tablet and a desktop; a phone layout is its own piece of work. The dog's groups have not been regrouped the way the people's were.
+- **A pad's pace is recorded.** A take keeps one cycle length, so a pad whose walk is quicker or slower is written as the speed lane (a 16 frame walk tapped over a 24 frame one is speed 1.5) and holds with the rest of the pad.
+- **Three more looks** (View > Figure > Style): **Clay** (rounded: lit from one side, falling smoothly into shade, with a highlight and thin contour lines that follow each form), **Lowpoly** (flat facets with straight edges) and **Blocks** (square blocks on a grid, like voxels or pixel art). They take the light direction from the Moebius style group and work on every figure.
+- Not done: true 3D voxels or a mesh (these are looks painted on the same flat shapes); contour lines that wrap round a limb's axis rather than its outline; a block size control.
