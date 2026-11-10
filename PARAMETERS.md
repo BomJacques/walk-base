@@ -121,6 +121,27 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 |---|---|---|---|---|---|
 | Look at | both |  | body, head | body | Body keeps the whole figure in view. Head fills the stage with the face. Drag to turn the head around, pinch or scroll to zoom in and out, two fingers to move it. |
 | Head size | both | × | 3 to 14 | 4.6 | How large the head is when the view is on the head. |
+| Eye style | both |  | default, dots, round, pie, almond, closed | default | Default is each figure's own eyes (the Eyes setting of the rubber hose figure, dots on the mannequin). Round is a white eye with a pupil, Pie has a wedge cut out of the pupil, Almond has pointed corners and a coloured iris, Closed is a happy curve. The other eye settings need a style other than Default. |
+| Eye size | both | × | 0.4 to 2.2 | 1 | How big the eyes are. |
+| Eye spacing | both | × | 0.4 to 1.8 | 1 | How far apart the eyes are. |
+| Eye height | both |  | -0.5 to 0.5 | 0 | Up or down on the head, in head radii. |
+| Look across | both |  | -1 to 1 | 0 | Where the pupils point, side to side. |
+| Look up or down | both |  | -1 to 1 | 0 | Where the pupils point, up (positive) or down. |
+| Eyelids | both |  | 0 to 1 | 0 | How far the lids are down: 0 wide open, 0.5 sleepy, 1 shut. |
+| Blinks per cycle | both |  | 0 to 4 | 0 | The eyes blink this many times in each cycle. Whole numbers, so the cycle still loops. 0 is no blinking. |
+| Eye colour | both |  | color | #111111 | The pupil, or the iris of an almond eye. |
+| Eyebrows | both |  | none, line, thick, arched | none | A line over each eye, in the line colour. |
+| Raise | both |  | -1 to 1 | 0 | Up for surprise, down toward the eyes for a scowl. |
+| Furrow | both |  | -1 to 1 | 0 | Positive pulls the inner ends down (angry). Negative lifts them (worried, sad). |
+| Show the mouth | both |  | when speaking, always | when speaking | The mannequin has a mouth only while it speaks, unless this is Always. The rubber hose figure always has one. |
+| Mouth style | both |  | full, line, curve, cartoon | full | Full has lips, teeth and a tongue. Line has no lips. Curve is a plain line that opens to a plain dark shape. Cartoon is a bold opening with a row of teeth and a tongue. |
+| Mouth width | both | × | 0.5 to 1.8 | 1 | How wide the mouth is. |
+| Lip thickness | both | × | 0 to 2.5 | 1 | How thick the lips are, in the Full style. 0 is none. |
+| Smile | both |  | -1 to 1 | 0 | Positive lifts the corners of the mouth into a smile; negative drops them into a frown. It carries through every mouth shape of the speech. |
+| Lip colour | both |  | color | #d98c8c | The lips, in the Full style. |
+| Teeth colour | both |  | color | #ffffff | The teeth. |
+| Tongue colour | both |  | color | #d9786f | The tongue. |
+| Inside colour | both |  | color | #5b2c2c | The dark of the open mouth. |
 | Mouth shape label | both |  | bool | true | Names the current mouth shape and the sounds it stands for, in the top corner. |
 
 ## View

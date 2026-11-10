@@ -10,10 +10,17 @@ export const MOUTH_COLORS = Object.freeze({ cavity: '#5b2c2c', teeth: '#ffffff',
 const ellipse = (cz, cy, rz, ry, n = 14) => Array.from({ length: n }, (_, i) => { const t = (i / n) * Math.PI * 2; return [cz + rz * Math.cos(t), cy + ry * Math.sin(t)]; });
 const TEETH_SPAN = 0.72; // the teeth cover the middle of the opening, a little under three quarters of its width
 
-/** id: a shape id. o: { line, lw, cavity, teeth, tongue, lip }. */
+/**
+ * id: a shape id. o: { line, lw, cavity, teeth, tongue, lip } and, for a mouth of another style, { style, width, lipK, smile }:
+ * style 'full' is lips, teeth and tongue; 'line' has no lips; 'curve' is a plain line and a plain dark opening; 'cartoon' is a bold opening with a row of teeth and a tongue.
+ * width stretches the mouth sideways, lipK is how thick the lips are (0 none), smile lifts (or, negative, drops) the corners.
+ */
 export function paintMouth(ctx, id, map, o) {
   const c = { ...MOUTH_COLORS, ...o };
-  const sh = mouthShape(id);
+  const sh0 = mouthShape(id); const style = c.style || 'full'; const wK = c.width ?? 1; const sm = c.smile ?? 0; const lipK = c.lipK ?? 1;
+  const bend = (p) => [p[0] * wK, p[1] + sm * 0.1 * (p[0] / sh0.W) ** 2 - sm * 0.03]; // a smile lifts the corners and drops the middle a little
+  const sh = { ...sh0, top: sh0.top.map(bend), bot: sh0.bot.map(bend), W: sh0.W * wK,
+    teeth: style === 'curve' ? 0 : style === 'cartoon' ? Math.max(1, sh0.teeth) : sh0.teeth, tongue: style === 'curve' ? 0 : style === 'cartoon' ? (sh0.tongue || 1) : sh0.tongue, tuck: lipK > 0 ? sh0.tuck : false };
   const poly = (pts) => { ctx.beginPath(); pts.map(map).forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); };
   const line = (pts, w) => { ctx.beginPath(); pts.map(map).forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.lineWidth = w; ctx.stroke(); };
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = c.line;
@@ -21,11 +28,11 @@ export function paintMouth(ctx, id, map, o) {
   const N = sh.top.length; const mid = N >> 1;
   const yTopC = sh.top[mid][1]; const yBotC = sh.bot[mid][1];
   // the lips: the opening grown outward, thickest in the middle and meeting at the corners
-  const tU = 0.04; const tL = 0.055;
+  const tU = 0.04 * lipK; const tL = 0.055 * lipK;
   const grow = (k, up) => sh.top.map((p, i) => { const f = Math.sqrt(Math.max(0, 1 - (p[0] / sh.W) ** 2)); return up ? [p[0], p[1] + tU * f * k] : [p[0], sh.bot[i][1] - tL * f * k]; });
   const outerTop = grow(1, true); const outerBot = grow(1, false);
   const lips = [...outerTop, ...[...outerBot].reverse()];
-  poly(lips); ctx.fillStyle = c.lip; ctx.fill();
+  if (lipK > 0) { poly(lips); ctx.fillStyle = c.lip; ctx.fill(); }
   if (open) {
     const gap = [...sh.top, ...[...sh.bot].reverse()];
     poly(gap); ctx.fillStyle = c.cavity; ctx.fill();
@@ -56,6 +63,6 @@ export function paintMouth(ctx, id, map, o) {
     if (sh.press) { const l = seam[0]; const r = seam[seam.length - 1]; line([[l[0] - 0.02, l[1] + 0.035], l], c.lw * 0.8); line([[r[0] + 0.02, r[1] + 0.035], r], c.lw * 0.8); }
   }
   // the outer edge of the lips
-  ctx.strokeStyle = c.line; poly(lips); ctx.lineWidth = c.lw; ctx.stroke();
+  if (lipK > 0) { ctx.strokeStyle = c.line; poly(lips); ctx.lineWidth = c.lw; ctx.stroke(); }
   ctx.restore();
 }

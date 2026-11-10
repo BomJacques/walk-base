@@ -16,6 +16,7 @@ import { speechAt, VISEME_BY_ID } from './lipsync.js';
 import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
 import { propParts, faceLight } from './scene.js';
+import { paintEyes, paintBrows, mouthOptions, EYE_BASE } from './face.js';
 import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
 
@@ -54,6 +55,10 @@ export const STYLE_DEFAULTS = Object.freeze({
   showFootLabels: false,
   showGizmo: true,
   showMouthLabel: true,
+  // the face: 'default' eyes are each figure's own; the rest are drawn on the front of the head
+  eyeStyle: 'default', eyeSize: 1, eyeSpacing: 1, eyeHeight: 0, eyeLookX: 0, eyeLookY: 0, eyeColor: '#111111', eyeLid: 0, blinkRate: 0,
+  browStyle: 'none', browRaise: 0, browFurrow: 0,
+  mouthShow: 'when speaking', mouthStyle: 'full', mouthWidth: 1, lipThickness: 1, mouthSmile: 0, lipColor: '#d98c8c', teethColor: '#ffffff', tongueColor: '#d9786f', cavityColor: '#5b2c2c',
   focus: 'body',             // body | head: the camera looks at the whole figure or at the face
   headZoom: 4.6,               // how large the head is in the head view
   showOnion: false,
@@ -298,8 +303,9 @@ function paintHoseFace(ctx, pz, cam, st, mouthId) {
   const lw = cam.lw * 1.2;
   ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   poly(ell(0, -0.1, 0.68, 0.8, 28)); ctx.fillStyle = st.hoseFace; ctx.fill(); // the face patch
-  const kind = st.hoseEyes || 'pie';
-  for (const sg of [1, -1]) {
+  const kind = st.hoseEyes || 'pie'; const faceO = { base: EYE_BASE.hose, lw, line: st.lineColor, skin: st.hoseFace, u: pz.u };
+  const own = !paintEyes(ctx, map, st, faceO); // a chosen eye style replaces the figure's own eyes
+  for (const sg of own ? [1, -1] : []) {
     const ez = sg * 0.3; const ey = 0.3;
     if (kind === 'dots') { poly(ell(ez, ey - 0.02, 0.07, 0.1)); ctx.fillStyle = '#111'; ctx.fill(); continue; }
     poly(ell(ez, ey, 0.21, 0.3)); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.strokeStyle = st.lineColor; ctx.lineWidth = lw; ctx.stroke();
@@ -312,7 +318,8 @@ function paintHoseFace(ctx, pz, cam, st, mouthId) {
   }
   poly(ell(0, -0.07, 0.13, 0.09)); ctx.fillStyle = '#111'; ctx.fill(); // the nose
   ctx.restore();
-  paintMouth(ctx, mouthId || 'rest', ([z, y]) => map([z, -0.42 + y * 0.9]), { line: st.lineColor, lw: cam.lw * 1.1 });
+  paintBrows(ctx, map, st, { ...faceO, browLine: st.hoseFace }); // above the face patch, on the dark of the head, so in the pale colour
+  paintMouth(ctx, mouthId || 'rest', ([z, y]) => map([z, -0.42 + y * 0.9]), mouthOptions(st, cam.lw * 1.1));
 }
 
 /** The pivot point (screen) of a part, for the selection marker. */
@@ -532,7 +539,7 @@ function paintHeadMouth(ctx, pz, cam, st, id) {
   const map = headMap(pz, cam);
   const surf = ([z, y]) => map([z, -0.45 + y]);
   if (surf([0, 0]).d <= cam.p([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]).d) return; // turned away from the camera
-  paintMouth(ctx, id, surf, { line: st.lineColor, lw: cam.lw * 0.85 });
+  paintMouth(ctx, id, surf, mouthOptions(st, cam.lw * 0.85));
 }
 
 /** For the rubber hose figure: the camera with the figure squashed toward its feet at the bottom of the bounce and stretched up at the top, about the ground it stands on. */
@@ -608,10 +615,17 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     if (!ghost && coveredByPicture(sh, st, opts.attach)) continue;
     paintShape(ctx, sh, cam, st, ghost);
     if (sh.face && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHoseFace(ctx, pz, cam, st, opts.mouth);
-    if (sh.part === 'head' && opts.mouth && !hose && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHeadMouth(ctx, pz, cam, st, opts.mouth);
+    const faceOn = sh.part === 'head' && !hose && !ghost && (st.style === 'mannequin' || st.style === 'outline');
+    if (faceOn && (opts.mouth || st.mouthShow === 'always')) paintHeadMouth(ctx, pz, cam, st, opts.mouth || 'rest');
+    let ownEyes = true;
+    if (faceOn && (st.eyeStyle !== 'default' || st.browStyle !== 'none')) { // eyes and eyebrows of a chosen style, on the front of the head
+      const map = headMap(pz, cam);
+      if (map([0, 0]).d > cam.p([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]).d) { const fo = { base: EYE_BASE.mannequin, lw: cam.lw * 0.9, line: st.lineColor, skin: st.fillColor, u: pz.u }; ownEyes = !paintEyes(ctx, map, st, fo); paintBrows(ctx, map, st, fo); }
+      else ownEyes = st.eyeStyle === 'default';
+    }
     if ((sh.part === 'head' || sh.part === 'dog.head') && !hose && (st.style === 'mannequin' || st.style === 'outline') && !ghost) {
       ctx.strokeStyle = st.lineColor; ctx.fillStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.9;
-      for (const e of face.eyes) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9, 0.05 * pz.headR * cam.scale), 0, TAU); ctx.fill(); }
+      for (const e of ownEyes ? face.eyes : []) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9, 0.05 * pz.headR * cam.scale), 0, TAU); ctx.fill(); }
       if (face.dot) { ctx.beginPath(); ctx.arc(face.dot.x, face.dot.y, Math.max(2, cam.lw * 1.4), 0, TAU); ctx.fill(); }
       if (face.nose) { ctx.beginPath(); ctx.moveTo(face.noseBase.x, face.noseBase.y); ctx.lineTo(face.nose.x, face.nose.y); ctx.stroke(); }
     }

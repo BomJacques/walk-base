@@ -38,7 +38,8 @@ export function wordsFor(fig) {
       return t.replace(/\bDog\b/g, name).replace(/\bdog\b/g, low).replace(/\bPaws\b/g, 'Feet').replace(/\bpaws\b/g, 'feet').replace(/\bPaw\b/g, 'Foot').replace(/\bpaw\b/g, 'foot');
     };
   }
-  f.hides = (c) => hide.has(c.id) || (/^hose/.test(c.id) && (sp?.hose ? HOSE_PERSON.has(c.id) : fig !== 'hose')); // the rubber hose controls belong to the rubber hose figures
+  const FACE = /^(eye|brow|blink|mouth(Show|Style|Width|Smile)|lip|teeth|tongue|cavity)/; // the face settings are for the two-legged figures' heads
+  f.hides = (c) => hide.has(c.id) || (Boolean(sp) && c.scope === 's' && FACE.test(c.id)) || (/^hose/.test(c.id) && (sp?.hose ? HOSE_PERSON.has(c.id) : fig !== 'hose')); // the rubber hose controls belong to the rubber hose figures
   /** The choices a control offers this figure (a theropod has no hop or gallop). */
   f.options = (c) => (c.id === 'dogGait' && GAITS[kind] ? c.options.filter((o) => GAITS[kind].includes(o)) : c.options);
   f.hidesPart = (id) => Boolean(sp && fig !== 'dog' && id === 'dog.ear');

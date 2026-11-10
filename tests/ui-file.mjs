@@ -260,6 +260,31 @@ check('8 cycles makes the playback eight times as long and leaves the speed of t
 await q('length-menu').click(); await page.locator('[data-testid="perf-one"]:visible').first().click(); await wait(200);
 check('One cycle puts it back', (await ev(() => window.__walkBase.S.perfLen)) === 0);
 check('the rubber hose figure starts at an easy pace', (await ev(() => { const w = window.__walkBase; w.setFigure('hose'); const c = w.S.p.cycleFrames; w.setFigure('human'); return c; })) >= 20);
+// ---- the face: eye styles, blinks, eyebrows and mouth styles
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.s.style = 'mannequin'; w.S.s.focus = 'head'; w.S.s.camYaw = -65; w.S.s.camPitch = 0; w.S.ver++; w.setTab('Speech'); w.setFrame(2); w.render(); }); await wait(250);
+const face0 = await stageShot(); const faces = new Set([face0]);
+check('the Speech tab has eye, eyebrow and mouth settings', (await q('opt-eyeStyle-almond').count()) === 1 && (await q('opt-browStyle-arched').count()) === 1 && (await q('opt-mouthStyle-cartoon').count()) === 1 && (await q('rng-mouthSmile').count()) === 1);
+for (const o of ['dots', 'round', 'pie', 'almond', 'closed']) { await q(`opt-eyeStyle-${o}`).click(); await wait(120); faces.add(await stageShot()); }
+await q('opt-eyeStyle-round').click(); await wait(100);
+for (const o of ['line', 'thick', 'arched']) { await q(`opt-browStyle-${o}`).click(); await wait(120); faces.add(await stageShot()); }
+await q('opt-mouthShow-always').click(); await wait(120); faces.add(await stageShot());
+for (const o of ['line', 'curve', 'cartoon']) { await q(`opt-mouthStyle-${o}`).click(); await wait(120); faces.add(await stageShot()); }
+for (const [k, v] of [['eyeLid', 0.5], ['eyeLookX', 0.9], ['browFurrow', 0.9], ['mouthSmile', 0.9], ['eyeSize', 1.6]]) { await ev(([k, v]) => { const e = document.querySelector(`[data-testid="rng-${k}"]`); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, [k, v]); await wait(120); faces.add(await stageShot()); }
+check('the eye, eyebrow and mouth choices change the face', faces.size >= 15, faces.size);
+await ev(() => { const e = document.querySelector('[data-testid="rng-eyeLid"]'); e.value = 0; e.dispatchEvent(new Event('input', { bubbles: true })); const b = document.querySelector('[data-testid="rng-blinkRate"]'); b.value = 2; b.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(120);
+const blinkFrames = new Set(); for (let f = 0; f < 24; f++) { await ev((f) => window.__walkBase.setFrame(f), f); blinkFrames.add(await stageShot()); }
+check('with two blinks a cycle the eyes are seen open, half shut and shut', blinkFrames.size >= 3, blinkFrames.size);
+await ev(() => { const w = window.__walkBase; for (const k of ['eyeStyle', 'eyeSize', 'eyeLookX', 'eyeLid', 'blinkRate', 'browStyle', 'browFurrow', 'mouthShow', 'mouthStyle', 'mouthSmile']) w.S.s[k] = ({ eyeStyle: 'default', eyeSize: 1, eyeLookX: 0, eyeLid: 0, blinkRate: 0, browStyle: 'none', browFurrow: 0, mouthShow: 'when speaking', mouthStyle: 'full', mouthSmile: 0 })[k]; w.S.s.focus = 'body'; w.S.s.camYaw = -65; w.setFrame(2); w.render(); }); await wait(200);
+await ev(() => { const w = window.__walkBase; w.S.s.focus = 'head'; w.render(); }); await wait(150);
+check('and the defaults give the plain face back', (await stageShot()) === face0);
+await ev(() => { const w = window.__walkBase; w.setFigure('hose'); w.S.s.focus = 'head'; w.S.s.eyeStyle = 'almond'; w.S.s.browStyle = 'thick'; w.S.s.mouthStyle = 'cartoon'; w.S.s.mouthSmile = 0.8; w.setFrame(2); w.render(); }); await wait(200);
+const hoseFace = await stageShot();
+await ev(() => { const w = window.__walkBase; w.S.s.eyeStyle = 'default'; w.S.s.browStyle = 'none'; w.S.s.mouthStyle = 'full'; w.S.s.mouthSmile = 0; w.S.s.blinkRate = 0; w.render(); }); await wait(150);
+check('the rubber hose figure takes the same face settings', (await stageShot()) !== hoseFace);
+await ev(() => { const w = window.__walkBase; w.setFigure('dog'); w.setTab('Speech'); }); await wait(150);
+check('the face settings are not offered for the animals', (await q('opt-eyeStyle-almond').count()) === 0);
+check('no errors from the face', errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.S.s.focus = 'body'; w.S.s.camYaw = 0; w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

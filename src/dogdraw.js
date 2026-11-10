@@ -19,9 +19,9 @@ function buildHoseAnimal(pz, cam, st) {
   const col = (c, role) => (role === 'far' ? mixHex(c, tint, 0.3) : c);
   const add1 = (pts, depth, part, side, role, color) => shapes.push({ pts, depth, part, side, role, fill: col(color, role), lw: 1.6 });
   const wobA = Math.max(0, p.hoseWobble || 0) * 0.03 * sc; const wobR = Math.max(1, Math.round(p.hoseWobbleRate || 2));
-  const tube = (pts3, radii, part, side, role, color, bias = 0, wob = null) => {
+  const tube = (pts3, radii, part, side, role, color, bias = 0, wob = null, depth = null) => {
     let P = pts3.map(S); if (wob) P = wobble(P, wobA * (wob.gain ?? 1), (pz.u || 0) * wobR + wob.k, wob.free);
-    add1(tubePoly(P, radii.map((r) => r * sc)), P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
+    add1(tubePoly(P, radii.map((r) => r * sc)), depth ?? P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
   };
   const BO = K.body;
   tube(hosePath([pz.pelvis, pz.j1, pz.j2, pz.j3], 1, 10), Array.from({ length: 10 }, (_, i) => BO * (0.14 + 0.055 * belly * Math.sin(Math.PI * (0.12 + 0.76 * (i / 9))))), 'dog.spine2', null, 'body', body);
@@ -29,16 +29,18 @@ function buildHoseAnimal(pz, cam, st) {
   tube(hosePath(nk, 1, 8), taperRadii(8, 0.058 * K.neck * limbK, 0.3), 'dog.neck', null, 'body', body, -0.0002, { k: 0.4, gain: 0.4 });
   // the head: a ball, a pale muzzle or a beak, the jaw, an eye on each side
   const HC = S(pz.headC); add1(circlePts(HC, 0.135 * hs * sc, 24), HC.d, 'dog.head', null, 'body', body);
-  if (bird) tube([add(pz.neckTop, apply(pz.Rh, [0.2 * hs, 0, 0])), pz.noseTip], [0.055 * hs, 0.012 * hs], 'dog.head', null, 'body', '#f0b030', 0.0003);
-  else tube([add(pz.neckTop, apply(pz.Rh, [0.2 * hs, -0.01 * hs, 0])), pz.noseTip], [0.09 * hs, 0.062 * hs], 'dog.head', null, 'body', pale, 0.0003);
-  tube([pz.hinge, pz.jawEnd], [0.035 * hs, 0.02 * hs], 'dog.jaw', null, 'body', bird ? '#f0b030' : pale, -0.0003);
+  // The head is layered from the ball outwards: ears and jaw behind it, the muzzle (or beak) growing out of it, the eyes on top. The jaw only shows when the mouth opens.
+  const NT0 = S(pz.noseTip); const toward = NT0.d >= HC.d; // is the nose nearer the camera than the head?
+  if (bird) tube([add(pz.neckTop, apply(pz.Rh, [0.2 * hs, 0, 0])), pz.noseTip], [0.055 * hs, 0.012 * hs], 'dog.head', null, 'body', '#f0b030', 0, null, HC.d + (toward ? 0.0003 : -0.0003));
+  else tube([add(pz.headC, mul(sub(pz.noseTip, pz.headC), 0.3)), add(pz.headC, mul(sub(pz.noseTip, pz.headC), 0.65)), pz.noseTip], [0.098 * hs, 0.085 * hs, 0.07 * hs], 'dog.head', null, 'body', pale, 0, null, HC.d + (toward ? 0.0003 : -0.0003));
+  tube([pz.hinge, pz.jawEnd], [0.04 * hs, 0.03 * hs], 'dog.jaw', null, 'body', bird ? '#f0b030' : pale, 0, null, HC.d - 0.0005);
   const NT = S(pz.noseTip); let fx = NT.x - HC.x; let fy = NT.y - HC.y; const fl = Math.hypot(fx, fy) || 1; fx /= fl; fy /= fl;
   for (const s of [1, -1]) {
-    const E = S(add(pz.neckTop, apply(pz.Rh, [0.17 * hs, 0.07 * hs, s * 0.08 * hs]))); if (E.d <= HC.d - 0.0001) continue;
+    const E = S(add(pz.headC, apply(pz.Rh, [0.035 * hs, 0.045 * hs, s * 0.115 * hs]))); if (E.d <= HC.d - 0.0001) continue; // on the side of the ball, clear of the muzzle
     shapes.push({ pts: circlePts(E, 0.05 * hs * sc, 16), depth: HC.d + 0.0006, part: 'dog.head', side: null, role: 'body', fill: '#ffffff', lw: 1.2 });
     shapes.push({ pts: circlePts({ x: E.x + fx * 0.015 * hs * sc, y: E.y + fy * 0.015 * hs * sc }, 0.027 * hs * sc, 12), depth: HC.d + 0.0007, part: 'dog.head', side: null, role: 'body', fill: '#111111', lw: 0 });
   }
-  if (!bird) for (const side of ['R', 'L']) tube([pz.ears[side].root, pz.ears[side].tip], [0.045, 0.02], 'dog.ear', side, side === 'R' ? 'near' : 'far', body, 0.0005, { k: side === 'R' ? 0.1 : 0.6, free: true, gain: 0.5 });
+  if (!bird) for (const side of ['R', 'L']) tube([pz.ears[side].root, add(pz.ears[side].root, mul(sub(pz.ears[side].tip, pz.ears[side].root), 1.7))], [0.04, 0.016], 'dog.ear', side, side === 'R' ? 'near' : 'far', body, 0,  { k: side === 'R' ? 0.1 : 0.6, free: true, gain: 0.5 }, HC.d - 0.0004);
   tube(hosePath(pz.tail, 1, 12), bird ? Array.from({ length: 12 }, (_, i) => K.tail * (0.03 + 0.045 * (i / 11))) : taperRadii(12, 0.034 * K.tail, 0.9), 'dog.tail2', null, 'body', body, -0.0003, { k: 0.3, free: true });
   let n = 0;
   for (const leg4 of ['HR', 'HL', 'FR', 'FL']) {
@@ -93,17 +95,18 @@ export function buildDogShapes(pz, cam, st = {}) {
       const P = S(add(skullC, apply(pz.Rh, q))); skull.push([P.x, P.y]);
     }
   }
-  const snoutStart = add(pz.neckTop, apply(pz.Rh, [0.22 * hs, 0, 0]));
+  const snoutStart = add(pz.neckTop, apply(pz.Rh, [0.22 * hs, 0, 0])); const SN = K.snout ?? 1; // a horse's muzzle is deep
   const A = S(snoutStart); const B = S(pz.noseTip);
-  shapes.push({ pts: hull([...skull, ...circlePts(A, 0.06 * hs * sc), ...circlePts(B, 0.035 * hs * sc)]), depth: S(skullC).d, part: 'dog.head', side: null, role: 'body' });
-  capsule(pz.hinge, pz.jawEnd, 0.04 * hs, 0.022 * hs, 'dog.jaw', null, 'body');
+  shapes.push({ pts: hull([...skull, ...circlePts(A, 0.06 * SN * hs * sc), ...circlePts(B, 0.035 * SN * hs * sc)]), depth: S(skullC).d, part: 'dog.head', side: null, role: 'body' });
+  if (SN > 1) { const J0 = S(pz.hinge); const J1 = S(pz.jawEnd); shapes.push({ pts: hull([...circlePts(J0, 0.05 * hs * sc), ...circlePts(J1, 0.032 * hs * sc)]), depth: S(skullC).d - 0.0005, part: 'dog.jaw', side: null, role: 'body' }); } // tucked behind the muzzle: it shows when the mouth opens
+  else capsule(pz.hinge, pz.jawEnd, 0.04 * hs, 0.022 * hs, 'dog.jaw', null, 'body');
   const hc = S(skullC);
   const eyes = [1, -1].map((s) => S(add(pz.neckTop, apply(pz.Rh, [0.17 * hs, 0.05 * hs, s * 0.07 * hs]))));
   const face = { eyes: eyes.filter((e) => e.d > hc.d - 0.0001), nose: null, noseBase: null, dot: B, c: hc };
 
   for (const side of ['R', 'L']) {
     const role = side === 'R' ? 'near' : 'far';
-    capsule(pz.ears[side].root, pz.ears[side].tip, 0.045, 0.03, 'dog.ear', side, role);
+    capsule(pz.ears[side].root, pz.ears[side].tip, 0.045 * (K.ear ?? 1), 0.03 * (K.ear ?? 1) * (K.ear ? 0.5 : 1), 'dog.ear', side, role);
   }
   for (let k = 0; k < 3; k++) capsule(pz.tail[k], pz.tail[k + 1], (0.035 - k * 0.008) * K.tail, (0.03 - k * 0.009) * K.tail, `dog.tail${k + 1}`, null, 'body');
   if (bird) { // a tail fan: a wedge of feathers spreading out from the last joint

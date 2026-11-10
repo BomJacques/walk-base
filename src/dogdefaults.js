@@ -78,7 +78,7 @@ const SPECIES_BASE = Object.freeze({
   horse: {
     label: 'Horse', legs: 4, front: 'leg',
     bones: { spine: [0.33, 0.33, 0.33], neck: 0.56, skull: 0.26, snout: 0.3, jaw: 0.34, upper: 0.27, fore: 0.34, pastern: 0.25, thigh: 0.34, shin: 0.35, meta: 0.27, paw: 0.05, pawLen: 0.09, tail: [0.24, 0.24, 0.22], ear: 0.1, hipWidth: 0.085, shoulderWidth: 0.09 },
-    lean: { hock: 0.26, pastern: 0.07 }, look: { body: 1.3, leg: 0.85, neck: 1.3, tail: 1.5, wing: 1 }, view: { zoom: 1.15, y: 0.65 },
+    lean: { hock: 0.26, pastern: 0.07 }, look: { body: 1.3, leg: 0.85, neck: 1.3, tail: 1.5, wing: 1, snout: 1.6, ear: 0.55 }, view: { zoom: 1.15, y: 0.65 }, // a deep muzzle that covers the jaw, and small pointed ears
   },
   bird: {
     label: 'Bird', legs: 2, front: 'wing', armRest: [-0.2, -0.04, 0],
