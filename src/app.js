@@ -40,6 +40,7 @@ const FIGS = FIG_GROUPS.flatMap(([, list]) => list);
 const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
 let BANKS = {}; // the pad bank of each figure: eight walks to switch between
 let PADRUN = null; // a blend to a pad that is waiting or under way
+const MOODREC = new Set(); // the settings the mood pad is writing in the take being recorded
 let PADMODE = 'play'; // what a tap on a pad does: play | store | clear
 let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
@@ -715,7 +716,7 @@ function padBegin() {
   const r = PADRUN; if (!r || !r.waiting) return; r.waiting = false; r.done = 0;
   r.from = Object.fromEntries(Object.keys(r.pad.values).map((k) => [k, typeof S.p[k] === 'number' ? S.p[k] : r.pad.values[k]]));
   r.dur = blendFrames(padBank(), S.p.cycleFrames);
-  if (r.rec) { for (const k of Object.keys(r.pad.values)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs(r.from[k] - r.pad.values[k]) > 1e-9) rec.touch(targetOfParam(k), S.frame, r.from[k]); }
+  if (r.rec) { for (const k of Object.keys(r.pad.values)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs(r.from[k] - r.pad.values[k]) > 1e-9) rec.touch(targetOfParam(k), S.frame, r.from[k], { hold: true }); } // a pad is a change of walk: it holds to the end of the performance, in Touch and in Latch
   else { for (const [k, v] of Object.entries(r.pad.flags || {})) if (k in S.p && typeof S.p[k] === typeof v) S.p[k] = v; MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null; markCustom(); }
   if (r.dur <= 0) padFinish();
 }
@@ -737,7 +738,7 @@ function padApply(vals, r = PADRUN) {
 function padFinish(quiet = false) {
   const r = PADRUN; if (!r) return; PADRUN = null; stopPadPump();
   if (r.waiting) { if (!quiet) renderPanel(); return; }
-  if (r.rec) { for (const k of Object.keys(r.pad.values)) if (k !== 'cycleFrames' && k in DEFAULTS) rec.release(targetOfParam(k), S.frame); }
+  if (r.rec) { padBank().active = r.idx; }
   else { padApply(transitionValues({}, r.pad.values, 1), r); if (r.pad.mood) MOOD = cleanMood(r.pad.mood); padBank().active = r.idx; refreshGaitLine(); }
   if (!quiet) { save(); renderPanel(); render(); }
 }
@@ -780,7 +781,7 @@ function padSection() {
   const b = padBank(); const filled = b.pads.filter(Boolean).length;
   const seg = (items, cur, on, tid) => h('div', { class: 'seg', role: 'group' }, items.map(([v, label]) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(cur === v), testid: `${tid}-${v}`, onClick: () => on(v) }, label)));
   const fileIn = h('input', { type: 'file', accept: '.json,application/json', class: 'sr', tabindex: '-1', 'aria-label': 'Load a pad bank', testid: 'pad-load-file', onChange: loadPadBank });
-  const grid = h('div', { class: 'padgrid', role: 'group', 'aria-label': 'Pads', testid: 'pad-grid' }, b.pads.map((p, i) => {
+  const grid = h('div', { class: `padgrid${PADMODE === 'store' ? ' storing' : PADMODE === 'clear' ? ' clearing' : ''}`, role: 'group', 'aria-label': 'Pads', testid: 'pad-grid' }, b.pads.map((p, i) => {
     const queued = PADRUN?.idx === i && PADRUN.waiting; const going = PADRUN?.idx === i && !PADRUN.waiting;
     return h('button', { type: 'button', class: `padbtn${p ? '' : ' empty'}${queued ? ' queued' : ''}${going ? ' going' : ''}`, 'aria-pressed': String(b.active === i && !PADRUN), testid: `pad-${i + 1}`,
       'aria-label': p ? `Pad ${i + 1}: ${p.name}${queued ? ', waiting for the end of the cycle' : ''}` : `Pad ${i + 1}, empty. Tap to keep this walk on it`, onClick: () => triggerPad(i) },
@@ -789,7 +790,7 @@ function padSection() {
   const act = b.active != null && b.pads[b.active] ? b.pads[b.active] : null;
   return h('section', { class: 'group', 'data-area': 'Gait', testid: 'pad-section' }, h('h3', null, filled ? `Pads (${filled})` : 'Pads'), fileIn,
     grid,
-    h('p', { class: 'hint', testid: 'pad-hint' }, PADMODE === 'store' ? 'Tap a pad to keep the walk as it is now on it.' : PADMODE === 'clear' ? 'Tap a pad to empty it.' : filled ? 'Tap a pad to change to its walk. End of cycle waits for the first frame; with Rec on (Latch) the blend is written into the take.' : 'Set up a walk (a preset, the sliders, the mood pad), then tap an empty pad to keep it there. Do the same for other walks, and tap between them while it plays.'),
+    h('p', { class: 'hint', testid: 'pad-hint' }, PADMODE === 'store' ? 'Tap one of the flashing pads to keep the walk as it is now on it. Store again cancels.' : PADMODE === 'clear' ? 'Tap one of the flashing pads to empty it. Clear again cancels.' : filled ? 'Tap a pad to change to its walk. End of cycle waits for the first frame. With Rec on, the change is written into the take and holds to its end.' : 'Set up a walk (a preset, the sliders, the mood pad), then tap an empty pad to keep it there. Do the same for other walks, and tap between them while it plays.'),
     h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Change')), seg([['now', 'Now'], ['cycle', 'End of cycle']], b.when, (v) => { b.when = v; save(); renderPanel(); }, 'pad-when')),
     h('div', { class: 'row noreset row-enum' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Blend over'), h('span', { class: 'unit' }, 'cycles')), seg(BLENDS, b.blend, (v) => { b.blend = v; save(); renderPanel(); }, 'pad-blend')),
     act ? h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, `Pad ${b.active + 1} name`), h('input', { type: 'text', class: 'txt', value: act.name, maxlength: 24, 'aria-label': 'Name of this pad', testid: 'pad-name', onChange: (e) => { act.name = e.target.value.slice(0, 24) || act.name; save(); renderPanel(); } })) : null,
@@ -806,6 +807,14 @@ const moodPresets = () => presetsForFigure(figKey());
 /** Puts the dot at x, y (0 to 1 each) and sets the walk to the mix there. The middle is the walk as it was before the pad was touched. */
 function setMoodPad(x, y, { commit = true } = {}) {
   const nx = Math.min(1, Math.max(0, x)); const ny = Math.min(1, Math.max(0, y));
+  if (recOn()) { // while recording, the dot's path is written into the take as automation; the walk underneath is left as it is
+    const base = Object.fromEntries(Object.entries(S.p).filter(([, v]) => typeof v === 'number'));
+    MOOD.x = nx; MOOD.y = ny;
+    const vals = blendMood(MOOD, base, DEFAULTS, S.p.rig, moodPresets(), moodLimit);
+    for (const [k, v] of Object.entries(vals)) { if (k === 'cycleFrames' || !(k in DEFAULTS)) continue; const t = targetOfParam(k); if (!MOODREC.has(k)) { if (Math.abs(v - base[k]) < 1e-9) continue; MOODREC.add(k); rec.touch(t, S.frame, base[k]); } rec.set(t, S.frame, v); }
+    if (commit) { for (const k of MOODREC) rec.release(targetOfParam(k), S.frame); MOODREC.clear(); if (S.recMode === 'touch') { MOOD.x = 0.5; MOOD.y = 0.5; } renderPanel(); }
+    render(); return;
+  }
   if (!MOOD.base) { if (Math.abs(nx - 0.5) < 1e-6 && Math.abs(ny - 0.5) < 1e-6) { MOOD.x = 0.5; MOOD.y = 0.5; return; } MOOD.base = Object.fromEntries(Object.entries(S.p).filter(([, v]) => typeof v === 'number')); }
   MOOD.x = nx; MOOD.y = ny;
   const before = S.p.cycleFrames;
@@ -2036,8 +2045,41 @@ const HELP_STOPS = [
   ['.viewbar', 'Stage tools', 'Select is for tapping and moving things. Orbit and Pan move the camera with one finger. View and the angle buttons jump to a view; the face button looks at the head.'],
   ['[data-testid="stage"]', 'The stage', 'Tap a part, a picture or a figure to select it. Press and hold (right-click on a mouse) for a menu for what is under your finger. Two fingers pan and zoom. Mouse: middle button pivots, Shift with it pans, the wheel zooms.'],
   ['.tabs', 'Tabs', 'Body: the scene, the walk, the body and the proportions. Parts: every joint and its curve. Attach: shapes and pictures. Auto: moves, recording and lanes. Speech, View, Sampler and Export.'],
-  ['.timeline', 'The timeline', 'Play, step and scrub the frames. Letters under a frame mark the key poses. Tap a frame to go there.'],
+  ['.timeline', 'The timeline', 'Play, step and scrub the frames. Letters under a frame mark the key poses. Tap a frame to go there. Loop makes the join seamless; Length makes the playback longer without changing the speed of the walk.'],
+  ['[data-testid="mood-pad"]', 'Mood pad', 'The middle is the walk as it is. Drag the dot toward a corner for that mood, or along an edge to mix two. Each corner can be a mood, one of the walks, or a walk you captured.'],
+  ['[data-testid="pad-grid"]', 'Pads', 'Eight walks to switch between. Tap an empty pad to keep the walk on it; tap a full one to change to it, at once or at the end of the cycle, blending over the cycles you choose.'],
 ];
+const HELP_HOW = [
+  ['Record the mood pad and the pads', 'Press the red Rec button by Play, then Play. Drag the mood dot, tap pads or move any slider while it plays; pause to end the take. What you did is now automation on the timeline: it plays back, loops and exports. A pad is a change of walk, so it holds to the end of the performance. The mood dot and the sliders follow the recording mode (Performance menu): Touch records while you hold and glides back when you let go; Latch holds the last value until you pause.'],
+  ['Make it longer', 'Length, beside Loop, sets how many cycles or seconds the playback runs. A take starts six cycles long if there is no performance yet.'],
+  ['Change or undo a take', 'The Auto tab lists every lane that was recorded: open one to redraw it, or remove it. Ctrl+Z undoes the whole take.'],
+  ['Help for one control', 'Rest the mouse on any slider or choice for a line about it. On a touch screen, tap its name.'],
+];
+// ---------- help on hover, with a mouse ----------
+// Every slider and choice has a line of help that opens when its name is tapped. With a mouse, resting the pointer on the row shows the same line beside it.
+let tipEl = null; let tipTimer = 0; let tipRow = null;
+function hideTip() { clearTimeout(tipTimer); tipTimer = 0; tipRow = null; if (tipEl) { tipEl.remove(); tipEl = null; } }
+function showTip(row) {
+  const text = row.querySelector(':scope > .help')?.textContent?.trim(); if (!text || row.classList.contains('open') || !row.isConnected) return;
+  hideTip(); tipRow = row;
+  tipEl = h('div', { class: 'hovertip', role: 'tooltip', testid: 'hover-help' }, text); document.body.append(tipEl);
+  const r = row.getBoundingClientRect(); const w = tipEl.offsetWidth; const hh = tipEl.offsetHeight; const vw = window.innerWidth; const vh = window.innerHeight;
+  let left = r.left - w - 10; let top = r.top; // beside the row, on the stage side, so it never covers the control it explains
+  if (left < 8) { left = Math.min(vw - w - 8, Math.max(8, r.left)); top = r.bottom + 6; if (top + hh > vh - 8) top = Math.max(8, r.top - hh - 6); }
+  tipEl.style.left = `${Math.round(left)}px`; tipEl.style.top = `${Math.round(Math.min(vh - hh - 8, Math.max(8, top)))}px`;
+}
+function initHoverHelp() {
+  document.addEventListener('pointermove', (e) => { // only a mouse that is moving: a panel that redraws under a still pointer shows nothing
+    if (e.pointerType !== 'mouse' || e.buttons) return;
+    const row = e.target.closest?.('.row'); if (row === tipRow) return;
+    hideTip(); if (!row || !row.querySelector(':scope > .help')) return;
+    tipRow = row; tipTimer = setTimeout(() => showTip(row), 450);
+  });
+  for (const ev of ['pointerdown', 'wheel', 'keydown']) document.addEventListener(ev, hideTip, { capture: true, passive: true });
+  document.addEventListener('scroll', hideTip, { capture: true, passive: true });
+  document.addEventListener('pointerleave', hideTip);
+}
+initHoverHelp();
 let helpEl = null;
 function closeHelp() { if (!helpEl) return; helpEl.remove(); helpEl = null; window.removeEventListener('resize', openHelpAgain); document.removeEventListener('keydown', helpKey, true); try { localStorage.setItem('walkbase.helpSeen', '1'); } catch { /* not kept */ } }
 const helpKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeHelp(); } };
@@ -2054,7 +2096,8 @@ function openHelp() {
   });
   const keys = [['Space', 'play or pause'], ['Left and right arrows', 'one frame'], ['Ctrl+Z, Shift+Ctrl+Z', 'undo, redo'], ['Ctrl+C, Ctrl+V, Ctrl+D', 'copy, paste, duplicate'], ['Delete', 'delete the selection'], ['Ctrl+S', 'save'], ['Esc', 'deselect, or close this'], ['F1 or ?', 'this guide']];
   root.append(h('div', { class: 'help-card', testid: 'help-card' }, h('h2', null, 'A quick guide'), h('ol', null, list),
-    h('div', { class: 'help-keys' }, h('h3', null, 'Keys'), h('dl', null, keys.flatMap(([k, d]) => [h('dt', null, k), h('dd', null, d)]))),
+    h('div', { class: 'help-keys' }, h('h3', null, 'Keys'), h('dl', null, keys.flatMap(([k, d]) => [h('dt', null, k), h('dd', null, d)])),
+      h('h3', null, 'How to'), h('div', { class: 'help-how', testid: 'help-how' }, HELP_HOW.map(([t, d]) => h('p', null, h('strong', null, `${t}. `), d)))),
     h('button', { type: 'button', class: 'btn primary', testid: 'help-close', onClick: closeHelp }, 'Got it')));
   root.addEventListener('pointerdown', (e) => { if (e.target === root) closeHelp(); });
   document.body.append(root); helpEl = root;

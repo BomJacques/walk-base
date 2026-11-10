@@ -261,6 +261,7 @@ await q('length-menu').click(); await page.locator('[data-testid="perf-one"]:vis
 check('One cycle puts it back', (await ev(() => window.__walkBase.S.perfLen)) === 0);
 check('the rubber hose figure starts at an easy pace', (await ev(() => { const w = window.__walkBase; w.setFigure('hose'); const c = w.S.p.cycleFrames; w.setFigure('human'); return c; })) >= 20);
 // ---- the face: eye styles, blinks, eyebrows and mouth styles
+await page.mouse.move(4, 4); // off the panel, so no line of help is showing over the stage
 await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.s.style = 'mannequin'; w.S.s.focus = 'head'; w.S.s.camYaw = -65; w.S.s.camPitch = 0; w.S.ver++; w.setTab('Speech'); w.setFrame(2); w.render(); }); await wait(250);
 const face0 = await stageShot(); const faces = new Set([face0]);
 check('the Speech tab has eye, eyebrow and mouth settings', (await q('opt-eyeStyle-almond').count()) === 1 && (await q('opt-browStyle-arched').count()) === 1 && (await q('opt-mouthStyle-cartoon').count()) === 1 && (await q('rng-mouthSmile').count()) === 1);
@@ -359,8 +360,10 @@ await page.waitForFunction(() => !window.__walkBase.padRun(), null, { timeout: 1
 check('and ends on the first pad\u2019s walk', (await ev(() => window.__walkBase.S.p.lean)) === 4 && (await ev(() => window.__walkBase.padBank().active)) === 0);
 await ev(() => { const e = document.querySelector('[data-testid="pad-name"]'); e.value = 'Plain'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(150);
 check('a pad can be named', (await q('pad-1').textContent()).includes('Plain'));
-await q('pad-store').click(); await ev(() => window.__walkBase.applyPreset('March')); await ev(() => window.__walkBase.padMode('store')); await q('pad-2').click(); await wait(200);
-check('Store then a pad puts the walk as it is now on a pad that was full', (await ev(() => window.__walkBase.padBank().pads[1].name)) === 'March');
+await q('pad-store').click(); await wait(150);
+check('with Store pressed the pads flash until one is chosen', (await page.locator('[data-testid="pad-grid"].storing').count()) === 1 && (await ev(() => getComputedStyle(document.querySelector('[data-testid="pad-3"]')).animationName)) === 'padarm');
+await ev(() => window.__walkBase.applyPreset('March')); await ev(() => window.__walkBase.padMode('store')); await q('pad-2').click(); await wait(200);
+check('Store then a pad puts the walk as it is now on a pad that was full, and the flashing stops', (await ev(() => window.__walkBase.padBank().pads[1].name)) === 'March' && (await page.locator('[data-testid="pad-grid"].storing').count()) === 0);
 await q('pad-clear').click(); await q('pad-2').click(); await wait(200);
 check('Clear then a pad empties it', (await ev(() => window.__walkBase.padBank().pads[1])) === null && (await page.locator('[data-testid="pad-grid"] .padbtn.empty').count()) === 7);
 await wait(400);
@@ -370,6 +373,44 @@ check('each figure has its own bank', (await page.locator('[data-testid="pad-gri
 await ev(() => window.__walkBase.setFigure('human')); await wait(200);
 check('and the first one is still there on the way back', (await q('pad-1').textContent()).includes('Plain') && errors.length === 0, errors);
 await ev(() => { const w = window.__walkBase; w.padBank().pads.fill(null); w.padBank().active = null; w.padBank().when = 'now'; w.applyPreset('Normal'); w.setFrame(0); });
+// ---- help on hover with a mouse, and recording the mood pad and the pads into a take
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.setTab('Gait'); w.setFrame(0); w.render(); }); await wait(250);
+await page.locator('.row:has([data-testid="rng-stepLength"])').first().scrollIntoViewIfNeeded(); await wait(150); await page.mouse.move(4, 4);
+const rowBox = await page.locator('.row:has([data-testid="rng-stepLength"])').first().boundingBox();
+await page.mouse.move(rowBox.x + 20, rowBox.y + rowBox.height / 2); await page.mouse.move(rowBox.x + 30, rowBox.y + rowBox.height / 2, { steps: 3 }); await wait(900);
+const tipText = await ev(() => document.querySelector('[data-testid="hover-help"]')?.textContent || '');
+check('resting the mouse on a slider shows its line of help', tipText.length > 10, tipText);
+const tipBox = await ev(() => { const e = document.querySelector('[data-testid="hover-help"]'); if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; });
+check('beside the row, not over it, and on the screen', tipBox && (tipBox.r <= rowBox.x + 1 || tipBox.t >= rowBox.y + rowBox.height - 1 || tipBox.b <= rowBox.y + 1) && tipBox.l >= 0 && tipBox.t >= 0, tipBox);
+await page.mouse.move(200, 300); await wait(250);
+check('and it goes when the mouse moves off', (await ev(() => document.querySelectorAll('[data-testid="hover-help"]').length)) === 0);
+await q('help').click(); await wait(300);
+const howText = await ev(() => document.querySelector('[data-testid="help-how"]')?.textContent || '');
+check('the guide says how to record the mood pad and the pads', /Rec/.test(howText) && /Latch/.test(howText) && /mood dot/.test(howText) && /holds to the end/.test(howText), howText.slice(0, 80));
+await ev(() => document.querySelector('[data-testid="help-close"]')?.click()); await wait(200);
+// the mood pad, recorded
+await ev(() => { const w = window.__walkBase; w.S.recMode = 'latch'; w.setArmed(true); w.setFrame(0); w.play(); }); await wait(250);
+for (const [x, y] of [[0.4, 0.4], [0.3, 0.3], [0.15, 0.15], [0, 0]]) { await ev(([x, y]) => window.__walkBase.setMoodPad(x, y, { commit: false }), [x, y]); await wait(120); }
+const during = await ev(() => ({ bob: window.__walkBase.S.p.bob, rec: window.__walkBase.S.recording }));
+await ev(() => window.__walkBase.setMoodPad(0, 0, { commit: true })); await wait(200);
+await ev(() => window.__walkBase.pause()); await wait(300);
+const takeEnd = await ev(() => window.__walkBase.S.frame);
+const take = await ev(() => { const w = window.__walkBase; const l = w.S.lanes['p:bob']; return { keys: Object.keys(w.S.lanes).filter((k) => k.startsWith('p:')).length, first: l?.pts?.[0]?.v, last: Math.max(...(l?.pts || []).map((q) => q.v)), n: l?.pts?.length, bob: w.S.p.bob, perf: w.S.perfLen, armed: w.S.armed }; });
+check('while recording, the walk underneath is left alone', during.rec === true && Math.abs(during.bob - 0.075) < 1e-9, during);
+check('dragging the mood dot in a take writes automation: the bounce rises from the plain walk to the happy one', take.keys >= 8 && Math.abs(take.first - 0.075) < 1e-6 && take.last > 0.11 && take.n >= 2 && take.perf > 24, take);
+const atEnd = await ev((f) => { const w = window.__walkBase; w.setFrame(Math.max(0, f - 1)); return w.nowValues().p.bob; }, takeEnd);
+check('and it plays back: at the end of the take the walk is happy', atEnd > 0.11, atEnd);
+// the pads, recorded
+await ev(() => { const w = window.__walkBase; w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.setArmed(false); w.applyPreset('Normal'); w.storePad(0); w.applyPreset('Sneak'); w.storePad(1); w.applyPreset('Normal'); w.padBank().when = 'now'; w.padBank().blend = 0.5; w.setFrame(0); }); await wait(200);
+await ev(() => { const w = window.__walkBase; w.S.recMode = 'touch'; w.setArmed(true); w.setFrame(0); w.play(); }); await wait(300);
+await ev(() => window.__walkBase.triggerPad(1));
+await page.waitForFunction(() => !window.__walkBase.padRun(), null, { timeout: 8000 }); await wait(200);
+await ev(() => window.__walkBase.pause()); await wait(300);
+const padTake = await ev(() => { const w = window.__walkBase; const l = w.S.lanes['p:lean']; return { has: Boolean(l), first: l?.pts?.[0]?.v, last: l?.pts?.[l.pts.length - 1]?.v, lean: w.S.p.lean, target: w.padBank().pads[1].values.lean, n: l?.pts?.length }; });
+check('a pad tapped in a take writes its blend as automation, from the walk that was playing to the pad', padTake.has && Math.abs(padTake.first - 4) < 1e-6 && Math.abs(padTake.last - padTake.target) < 1e-6 && padTake.n >= 3 && padTake.lean === 4, padTake);
+const padEnd = await ev(() => { const w = window.__walkBase; w.setFrame(w.S.perfLen - 1); return w.nowValues().p.lean; });
+check('and it holds: the performance is still the sneaking walk at its last frame, even recorded in Touch', Math.abs(padEnd - padTake.target) < 1e-6 && errors.length === 0, [padEnd, errors]);
+await ev(() => { const w = window.__walkBase; w.setArmed(false); w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.padBank().pads.fill(null); w.padBank().active = null; w.padBank().blend = 1; w.applyPreset('Normal'); w.setFrame(0); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

@@ -71,6 +71,23 @@ After a review of the interface on iPad and iPhone sizes: the rarely used groups
 
 Each figure offers only the gaits it can do: the dog walk, trot, pace and gallop; the theropod **walk and run**; the bird walk, run and hop; the sauropod walk; the ceratopsian walk and trot. The theropod and bird **run** is a two-legged run in the manner of a running chicken or a Deinonychus drawing: the feet alternate with a flight phase between steps, the swing foot tucks up high under the body, the back squashes (legs gathered, hips low, back arched) at mid-stance and stretches (legs reaching, hips high, back long) in flight once every step, the body leans forward with the neck in an S, and the tail is held out level and never drags. The Run preset is a twelve frame cycle; **Squash and stretch** on the Body tab sets how much.
 
+## Moods, pads and recording them
+
+**Mood pad** (Body tab > Mood). A square with a mood in each corner. The middle is the walk as it is; drag the dot toward a corner to turn the walk into that mood, or along an edge to mix the two moods on it. Each corner can be one of eight moods, one of the figure's own walks, or a walk you set up and captured with Use this walk as a corner. What the pad moves lists every setting the corners touch, with a tick to leave one out.
+
+**Pads** (Body tab > Pads). Eight pads for each figure, each holding a whole walk and where the mood pad was. Tap an empty pad to keep the walk on it; tap a full pad to change to its walk. Change is Now or End of cycle (the pad waits for the walk's first frame); Blend over is Cut, half a cycle, or 1, 2 or 4 cycles. Store then a pad overwrites it, Clear then a pad empties it; the pads flash until you have chosen one. Save bank and Load bank keep a bank as a file.
+
+**Recording them.** A performance is recorded the same way for the mood pad, the pads and every slider:
+
+1. Press the red **Rec** button beside Play. A pad is a change of walk, so it holds to the end of the performance whatever the mode. The mood dot and the sliders follow the recording mode in the Performance menu: **Touch** records only while you hold and glides back when you let go; **Latch** holds the last value until you pause.
+2. Press **Play**. If there is no performance yet, the take is made six cycles long; set another length first with **Length**, beside Loop.
+3. While it plays, drag the mood dot, tap pads, move sliders.
+4. **Pause** ends the take. What you did is now automation lanes on the timeline: it plays back the same every time, can be made a loop, and exports.
+
+The Auto tab lists the lanes of the take; open one to redraw it or remove it, and Ctrl+Z undoes the whole take. A pad's change of cycle length is not written into a take (speed in a take is the cadence lane), so for a recorded change of pace use the Speed up and Slow down movements.
+
+**Help.** Rest the mouse on any slider or choice for a line about it; on a touch screen, tap its name. The **?** button in the top bar opens the guide to the screen, with these steps in it.
+
 ## Corrections: fix a part without losing the animation
 
 On the **Parts** tab, pick a part (the neck, say), turn on **Show the fix handle on the stage**, go to the frame where it has drifted out of line, and drag the orange ring at the end of the part, or the square at its base, back where it belongs. The base moves the part before it, since that is where this one starts. The app finds the small change in that part's channels that puts the end where you dropped it, and adds it as a smooth **correction** on top of the animation, easing back out over **Spread** frames either side. The animation underneath is not changed: **Clear corrections** puts the part back exactly as it was, and Undo works. A part turns about its base, so its end can only go round an arc; drop it near the arc.

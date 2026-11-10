@@ -131,12 +131,13 @@ export class Recorder {
   /** The values being recorded right now, so the figure follows your hand. */
   liveValues() { return { ...this.live }; }
 
-  touch(target, t, value) {
+  /** opts.hold: the value stays after the take (a change of state, like a pad), instead of gliding back or letting go when the take stops. */
+  touch(target, t, value, opts = null) {
     if (!this.armed) return;
     let it = this.items.get(target);
     // `base` is the control's value before it was touched: what the frames before the take should keep.
     if (!it) { it = { target, t0: t, base: value, pts: [], held: false, writing: false, releasedAt: null, last: t - 1 }; this.items.set(target, it); }
-    it.held = true; it.writing = true; it.releasedAt = null;
+    it.held = true; it.writing = true; it.releasedAt = null; if (opts?.hold) it.hold = true;
     this.live[target] = value;
     this.push(it, t, value);
   }
@@ -151,7 +152,7 @@ export class Recorder {
 
   release(target, t) {
     const it = this.items.get(target);
-    if (!it || !it.held) return;
+    if (!it || !it.held || it.hold) return;
     it.held = false;
     if (this.mode === 'touch') { it.writing = false; it.releasedAt = t; delete this.live[target]; }
   }
@@ -182,6 +183,7 @@ export class Recorder {
       if (it.writing && pts[pts.length - 1].t < t) pts.push({ t, v: pts[pts.length - 1].v });
       // Latch holds until the take stops, then lets go on the next frame.
       if (it.writing) glideTo = { t: t + 1, v: back(t + 1) };
+      if (it.hold) glideTo = null; // it stays: nothing brings it back
       const fresh = thinPoints(pts, rangeOf(it.target) * 0.004);
       // Anchor the frame just before the take, so the earlier part of the lane does not ramp toward it.
       if (it.t0 > 0) fresh.unshift({ t: it.t0 - 1, v: old?.pts?.length ? laneValue(old, it.t0 - 1, it.base) : it.base });

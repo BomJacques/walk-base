@@ -573,3 +573,11 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 - **Banks.** The bank of each figure is kept with the settings and in the settings file. Save bank writes a `.padbank.json` file and Load bank reads one (for the same kind of figure).
 - **Feet.** The far foot against the near one (lands late, time on ground, lift) is in the Feet group with the rest; there is no separate left and right group.
 - Not done: more than eight pads or several banks side by side; number keys for the pads; a pad that plays a movement (a stumble, a jump) rather than holding a walk; recording a moving path of the mood dot onto a pad (a pad holds where the dot was, not a gesture); pads for figures in the scene.
+
+## Done (2026-11-12, later): hover help, recording the mood pad and pads, guide and read-me
+
+- **Help on hover.** With a mouse, resting the pointer on any slider or choice shows its line of help beside the row (on the stage side, so it never covers the control). It follows a moving mouse only, so a panel that redraws after a click shows nothing. Touch still opens the help by tapping the name.
+- **The mood pad records.** With Rec on, dragging the mood dot writes its path into the take as automation, like a slider, and leaves the walk underneath alone. It follows the recording mode: Touch glides back when you let go, Latch holds until you pause.
+- **Pads hold when recorded.** A pad tapped in a take writes its blend and then stays to the end of the performance, in Touch and in Latch (`Recorder.touch(..., { hold: true })`), since a pad is a change of walk and not a gesture.
+- **Store and Clear flash the pads** until one is chosen, so it is plain where the walk will go.
+- **Guide.** The ? guide points at the mood pad and the pads and has a How to list: recording the mood pad and the pads, making the playback longer, changing or undoing a take, and help for one control. The read-me has a section on moods, pads and recording them.
