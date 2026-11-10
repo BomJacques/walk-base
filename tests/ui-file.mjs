@@ -285,6 +285,48 @@ await ev(() => { const w = window.__walkBase; w.setFigure('dog'); w.setTab('Spee
 check('the face settings are not offered for the animals', (await q('opt-eyeStyle-almond').count()) === 0);
 check('no errors from the face', errors.length === 0, errors);
 await ev(() => { const w = window.__walkBase; w.S.s.focus = 'body'; w.S.s.camYaw = 0; w.setTab('Gait'); w.render(); });
+// ---- the mood pad, posture controls and the comic, ink and pencil styles
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.s.style = 'mannequin'; w.S.s.camYaw = 0; w.S.ver++; w.setTab('Gait'); w.setFrame(4); w.render(); }); await wait(250);
+check('the Body tab has a mood pad with Happy, Angry, Tired and Sneaky in its corners', (await q('mood-pad').count()) === 1 && (await ev(() => ['tl', 'tr', 'bl', 'br'].map((c) => document.querySelector(`[data-testid="mood-corner-${c}"]`).value).join())) === 'mood:Happy,mood:Angry,mood:Tired,mood:Sneaky');
+const walk0 = await ev(() => JSON.stringify(window.__walkBase.S.p)); const moodPlain = await stageShot();
+await q('mood-pad').scrollIntoViewIfNeeded(); const pb = await q('mood-pad').boundingBox();
+await page.mouse.move(pb.x + pb.width * 0.5, pb.y + pb.height * 0.5); await page.mouse.down(); await page.mouse.move(pb.x + pb.width * 0.3, pb.y + pb.height * 0.3, { steps: 4 }); await page.mouse.move(pb.x + 3, pb.y + 3, { steps: 4 }); await page.mouse.up(); await wait(250);
+const happyP = await ev(() => ({ ...window.__walkBase.S.p, mood: window.__walkBase.mood() }));
+check('dragging the dot to the top left makes the walk happy: more bounce, more arm swing, chest out', happyP.bob > 0.11 && happyP.armSwing > 38 && happyP.chestOut > 5 && happyP.mood.x < 0.05 && happyP.mood.y < 0.05, { bob: happyP.bob, arm: happyP.armSwing, x: happyP.mood.x });
+check('and the figure on the stage changes', (await stageShot()) !== moodPlain);
+check('the readout says what the mix is', /(100|9\d)% Happy/.test(await q('mood-readout').textContent()), await q('mood-readout').textContent());
+await ev(() => window.__walkBase.setMoodPad(0.5, 1)); await wait(150);
+const mixP = await ev(() => window.__walkBase.S.p);
+check('the bottom edge mixes Tired and Sneaky', /50% Tired, 50% Sneaky/.test(await q('mood-readout').textContent()) && mixP.lean > 9, await q('mood-readout').textContent());
+await ev(() => { const e = document.querySelector('[data-testid="rng-armSwing"]'); e.value = 50; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(120);
+await q('mood-centre').click(); await wait(200);
+const backP = await ev(() => window.__walkBase.S.p);
+check('Centre gives the walk back, keeping a slider moved meanwhile', Math.abs(backP.bob - JSON.parse(walk0).bob) < 1e-9 && Math.abs(backP.lean - JSON.parse(walk0).lean) < 1e-9 && backP.armSwing > JSON.parse(walk0).armSwing + 20, { bob: backP.bob, arm: backP.armSwing });
+await q('mood-corner-tl').selectOption('preset:March'); await wait(200);
+await ev(() => window.__walkBase.setMoodPad(0, 0)); await wait(150);
+check('a corner can be one of the walks of the figure', (await ev(() => window.__walkBase.S.p.footLift)) > 0.28 && /100% March/.test(await q('mood-readout').textContent()));
+await ev(() => { document.querySelector('[data-testid="mood-keys"]').open = true; const e = document.querySelector('[data-testid="mood-key-footLift"]'); e.checked = false; e.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
+check('a setting can be left out of what the pad moves', Math.abs((await ev(() => window.__walkBase.S.p.footLift)) - JSON.parse(walk0).footLift) < 1e-9 && (await ev(() => window.__walkBase.mood().skip.join())) === 'footLift');
+await q('mood-centre').click(); await wait(150);
+await ev(() => { const w = window.__walkBase; w.setParam('lean', 20); w.setParam('headTilt', 15); }); await wait(150);
+await q('mood-capture').click(); await page.locator('[data-testid="mood-capture-br"]:visible').first().click(); await wait(250);
+check('the walk as it is can be captured into a corner', (await ev(() => window.__walkBase.mood().corners.br.kind)) === 'custom' && (await ev(() => window.__walkBase.mood().corners.br.values.lean)) === 20);
+await ev(() => { const w = window.__walkBase; w.setParam('lean', 4); w.setParam('headTilt', 0); w.setMoodPad(1, 1); }); await wait(150);
+check('and moving to that corner brings it back', (await ev(() => window.__walkBase.S.p.lean)) === 20);
+await ev(() => window.__walkBase.applyPreset('Normal')); await wait(150);
+check('choosing a walk puts the dot back in the middle', (await ev(() => window.__walkBase.mood().x)) === 0.5 && (await ev(() => window.__walkBase.mood().base)) === null);
+check('the posture sliders are there', (await q('rng-sideLean').count()) === 1 && (await q('rng-chestOut').count()) === 1 && (await q('rng-carry').count()) === 1 && (await q('rng-headTilt').count()) === 1 && (await q('rng-headTurn').count()) === 1 && (await q('rng-armCarry').count()) === 1);
+const post = new Set([await stageShot()]);
+for (const [k, v] of [['sideLean', 14], ['chestOut', -20], ['carry', 1], ['headTilt', 25], ['armCarry', 40]]) { await ev(([k, v]) => window.__walkBase.setParam(k, v), [k, v]); await wait(120); post.add(await stageShot()); }
+check('each one changes the figure', post.size === 6, post.size);
+await ev(() => { const w = window.__walkBase; w.setFigure('dog'); w.setTab('Gait'); }); await wait(200);
+await ev(() => window.__walkBase.setMoodPad(0, 0)); await wait(150);
+check('the dog has the pad too, with its own moods', (await ev(() => window.__walkBase.S.p.dogWag)) > 40 && (await q('rng-chestOut').count()) === 0);
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.setTab('View'); w.S.s.camYaw = -25; w.setFrame(4); w.render(); }); await wait(200);
+const styleLooks = new Set([await stageShot()]);
+for (const st of ['comic', 'ink', 'pencil']) { await q(`opt-style-${st}`).click(); await wait(150); styleLooks.add(await stageShot()); for (const fig of ['hose', 'hosehorse', 'bird', 'human']) { await ev((f) => { window.__walkBase.setFigure(f); window.__walkBase.render(); }, fig); } await ev(() => { const w = window.__walkBase; w.S.s.camYaw = -25; w.setTab('View'); w.setFrame(4); w.render(); }); await wait(150); }
+check('Comic, Ink and Pencil are styles, each its own look, on every kind of figure', styleLooks.size === 4 && errors.length === 0, [styleLooks.size, errors]);
+await ev(() => { const w = window.__walkBase; w.S.s.style = 'mannequin'; w.S.s.camYaw = 0; w.applyPreset('Normal'); w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

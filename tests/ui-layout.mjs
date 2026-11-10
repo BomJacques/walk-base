@@ -36,7 +36,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
   // advanced groups start folded
   await tab('Body');
   const folded = await ev(() => [...document.querySelectorAll('#panel-body section.group')].map((s) => ({ t: s.querySelector('.sec-toggle')?.textContent.trim(), open: s.querySelector('.sec-toggle')?.getAttribute('aria-expanded') === 'true' })));
-  check(`${label}: Body starts with Proportions and Hips and shoulders folded`, folded.filter((x) => /proportions|hips and shoulders/i.test(x.t)).every((x) => !x.open) && folded.some((x) => x.open), folded);
+  check(`${label}: Body starts with Proportions and Hips and legs folded`, folded.filter((x) => /proportions|hips and legs/i.test(x.t)).every((x) => !x.open) && folded.some((x) => x.open), folded);
   const bodyScreens = await ev(() => document.getElementById('panel-body').scrollHeight / document.getElementById('panel-body').clientHeight);
   check(`${label}: the Body tab is now about ${bodyScreens.toFixed(1)} screens of scrolling (the walk, the body and the scene are one tab now; folded groups keep it manageable)`, bodyScreens < 6, bodyScreens.toFixed(2));
   await page.locator('#panel-body .sec-toggle', { hasText: /proportions/i }).first().click(); await page.waitForTimeout(150);
@@ -61,7 +61,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
   // movements: one group at a time
   await tab('Auto');
   const mv = await ev(() => { const rows = [...document.querySelectorAll('.cliprow')]; const vis = rows.filter((r) => !r.hidden && r.offsetParent); return { groups: [...document.querySelectorAll('[data-testid^="clip-group-"]')].map((b) => b.textContent), visibleChips: vis.reduce((n, r) => n + r.querySelectorAll('.pchip').length, 0), allChips: document.querySelectorAll('.pchip[data-testid^="clip-"]').length }; });
-  check(`${label}: movements show one kind at a time (${mv.visibleChips} of ${mv.allChips} chips)`, mv.groups.length === 4 && mv.visibleChips > 0 && mv.visibleChips < mv.allChips / 2, mv);
+  check(`${label}: movements show one kind at a time (${mv.visibleChips} of ${mv.allChips} chips)`, mv.groups.length >= 4 && mv.visibleChips > 0 && mv.visibleChips < mv.allChips / 2, mv);
   await page.locator('[data-testid="clip-group-Gesture"]').click(); await page.waitForTimeout(150);
   check('choosing Gesture shows the gestures and hides the others', await page.locator('.pchip[data-testid="clip-wave"]').isVisible() && !(await page.locator('.pchip[data-testid="clip-sit"]').isVisible()));
 

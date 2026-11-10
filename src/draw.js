@@ -21,7 +21,7 @@ import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
 
 export const STYLE_DEFAULTS = Object.freeze({
-  style: 'mannequin',        // mannequin | outline | stick | silhouette | moebius
+  style: 'mannequin',        // mannequin | outline | stick | silhouette | moebius | comic | ink | pencil
   moebiusLight: -135,        // the direction the light comes from, in degrees on the screen (-135 is the top left)
   moebiusAngle: 50,          // the angle of the hatching, in degrees
   moebiusDensity: 4.5,       // the gap between hatching lines, in pixels at the 1080 line frame
@@ -371,6 +371,28 @@ function hatchShape(ctx, pts, st, cam, key) {
   }
   ctx.restore();
 }
+/** The drawing styles that show a face (eyes, a mouth) on the head. */
+const faceStyle = (st) => st.style === 'mannequin' || st.style === 'outline' || st.style === 'comic' || st.style === 'ink' || st.style === 'pencil';
+/** The styles drawn as one outline round the whole figure, and how thick that line is against the plain line width. */
+const OUTLINED = { outline: 2.2, moebius: 1.7, comic: 3.6, ink: 2.4 };
+/** A shape's outline with each point nudged a little, the same way every frame (seeded by the part), for a hand-drawn line. */
+function roughPts(pts, amp, key) { const r = rng(key); return pts.map(([x, y]) => [x + (r() - 0.5) * 2 * amp, y + (r() - 0.5) * 2 * amp]); }
+const tracePts = (ctx, pts) => { ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); };
+/** Comic book shading: a field of dots on the side away from the light, bigger the deeper into the shadow, clipped to the shape. */
+function dotShade(ctx, pts, st, cam, color) {
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+  for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const cx = (x0 + x1) / 2; const cy = (y0 + y1) / 2; const R = Math.hypot(x1 - x0, y1 - y0) / 2; if (R < 6 * cam.k) return;
+  const la = ((st.moebiusLight ?? -135) * Math.PI) / 180; const sx = -Math.cos(la); const sy = -Math.sin(la);
+  const reach = Math.max(0, Math.min(1, st.moebiusShade ?? 0.5)); const thr = R * (0.6 - 1.1 * reach); const sp = Math.max(3, 5.5 * cam.k);
+  ctx.save(); tracePts(ctx, pts); ctx.clip(); ctx.fillStyle = color; ctx.beginPath();
+  const gx0 = Math.floor(x0 / sp) * sp; const gy0 = Math.floor(y0 / sp) * sp; // the dots sit on a grid fixed to the page, as printed dots do
+  for (let y = gy0, row = 0; y <= y1; y += sp * 0.866, row++) for (let x = gx0 + (row % 2 ? sp / 2 : 0); x <= x1; x += sp) {
+    const t = (x - cx) * sx + (y - cy) * sy - thr; if (t <= 0) continue;
+    const r = sp * 0.42 * Math.min(1, 0.35 + t / (R * 0.9)); ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2);
+  }
+  ctx.fill(); ctx.restore();
+}
 function paintShape(ctx, sh, cam, st, ghost) {
   if (sh.pts.length < 3) return;
   const far = sh.role === 'far';
@@ -383,7 +405,18 @@ function paintShape(ctx, sh, cam, st, ghost) {
     ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill();
     hatchShape(ctx, sh.pts, st, cam, `${sh.part}${sh.side}`); return;
   }
-  if (st.style === 'outline' && !ghost) { ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill(); return; }
+  if ((st.style === 'outline' || st.style === 'ink') && !ghost) { ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill(); return; }
+  if (st.style === 'comic' && !ghost) { // flat colour inside a heavy line, with printed dots for the shadow
+    const flat = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.45) : hexA(st.fillColor, 1)); ctx.fillStyle = flat; ctx.fill();
+    dotShade(ctx, sh.pts, st, cam, mixHex(typeof flat === 'string' && flat[0] === '#' ? flat.slice(0, 7) : st.fillColor, st.lineColor, 0.42)); return;
+  }
+  if (st.style === 'pencil' && !ghost) { // a pale wash, a little hatching, and the outline gone over three times, never quite in the same place
+    ctx.fillStyle = hexA(sh.fill && sh.fill[0] === '#' ? sh.fill.slice(0, 7) : far ? mixHex(st.fillColor, st.farTint, 0.4) : st.fillColor, 0.55); ctx.fill();
+    ctx.save(); ctx.globalAlpha = 0.45; hatchShape(ctx, sh.pts, { ...st, moebiusStipple: 0, moebiusDensity: (st.moebiusDensity ?? 4.5) * 1.3 }, cam, `${sh.part}${sh.side}`); ctx.restore();
+    ctx.save(); ctx.strokeStyle = hexA(st.lineColor, 0.5); ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(0.7, cam.lw * 0.5);
+    for (let i = 0; i < 3; i++) { tracePts(ctx, roughPts(sh.pts, cam.lw * 0.55, `${sh.part}${sh.side}${(sh.depth ?? 0).toFixed(5)}p${i}`)); ctx.stroke(); }
+    ctx.restore(); return;
+  }
   if (st.style === 'mannequin') {
     ctx.fillStyle = ghost ? hexA(ghost, 0.1) : sh.fill ?? (far ? hexA(st.farTint, st.farOpacity * 0.55) : hexA(st.fillColor, st.fillOpacity));
     ctx.fill();
@@ -599,12 +632,15 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
   if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (DEPTH_OFF[it.depth] ?? 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);
-  if ((st.style === 'outline' || st.style === 'moebius') && !ghost) {
+  if (OUTLINED[st.style] && !ghost) {
     // First pass: every limb and the body, stroked twice as thick. The fills that follow leave only the outer edge, so arms, legs and body read as one outline with no lines crossing inside.
-    ctx.save(); ctx.lineWidth = cam.lw * (st.style === 'moebius' ? 1.7 : 2.2); ctx.lineJoin = 'round';
+    ctx.save(); ctx.lineWidth = cam.lw * OUTLINED[st.style]; ctx.lineJoin = 'round'; const rough = st.style === 'ink';
     for (const sh of shapes) {
       ctx.strokeStyle = sh.role === 'far' && !sh.fill ? mixHex(st.lineColor, st.farTint, 0.55) : st.lineColor;
       if (sh.attach || sh.pts.length < 3 || (!ghost && coveredByPicture(sh, st, opts.attach)) || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
+      if (rough) { // a brush line: two passes that do not quite agree, so the line swells and thins along its length
+        const key = `${sh.part}${sh.side}`; ctx.lineWidth = cam.lw * 2.8; tracePts(ctx, roughPts(sh.pts, cam.lw * 0.5, `${key}a`)); ctx.stroke(); ctx.lineWidth = cam.lw * 1.5; tracePts(ctx, roughPts(sh.pts, cam.lw * 0.9, `${key}b`)); ctx.stroke(); continue;
+      }
       ctx.beginPath(); sh.pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); ctx.stroke();
     }
     ctx.restore();
@@ -614,8 +650,8 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam); continue; }
     if (!ghost && coveredByPicture(sh, st, opts.attach)) continue;
     paintShape(ctx, sh, cam, st, ghost);
-    if (sh.face && !ghost && (st.style === 'mannequin' || st.style === 'outline')) paintHoseFace(ctx, pz, cam, st, opts.mouth);
-    const faceOn = sh.part === 'head' && !hose && !ghost && (st.style === 'mannequin' || st.style === 'outline');
+    if (sh.face && !ghost && faceStyle(st)) paintHoseFace(ctx, pz, cam, st, opts.mouth);
+    const faceOn = sh.part === 'head' && !hose && !ghost && faceStyle(st);
     if (faceOn && (opts.mouth || st.mouthShow === 'always')) paintHeadMouth(ctx, pz, cam, st, opts.mouth || 'rest');
     let ownEyes = true;
     if (faceOn && (st.eyeStyle !== 'default' || st.browStyle !== 'none')) { // eyes and eyebrows of a chosen style, on the front of the head
@@ -623,7 +659,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
       if (map([0, 0]).d > cam.p([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]).d) { const fo = { base: EYE_BASE.mannequin, lw: cam.lw * 0.9, line: st.lineColor, skin: st.fillColor, u: pz.u }; ownEyes = !paintEyes(ctx, map, st, fo); paintBrows(ctx, map, st, fo); }
       else ownEyes = st.eyeStyle === 'default';
     }
-    if ((sh.part === 'head' || sh.part === 'dog.head') && !hose && (st.style === 'mannequin' || st.style === 'outline') && !ghost) {
+    if ((sh.part === 'head' || sh.part === 'dog.head') && !hose && faceStyle(st) && !ghost) {
       ctx.strokeStyle = st.lineColor; ctx.fillStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.9;
       for (const e of ownEyes ? face.eyes : []) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9, 0.05 * pz.headR * cam.scale), 0, TAU); ctx.fill(); }
       if (face.dot) { ctx.beginPath(); ctx.arc(face.dot.x, face.dot.y, Math.max(2, cam.lw * 1.4), 0, TAU); ctx.fill(); }

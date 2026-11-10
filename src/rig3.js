@@ -57,12 +57,13 @@ export function ik3(hip, ankle, l1, l2, pole) {
  * Full 3D pose at phase u. `motion` holds the channel edits.
  * Joints are relative to the figure's world position; add pelvisX for travel.
  */
+const LEAN_SIGN = 1; const TURN_SIGN = -1; // positive is toward the near side for both
 export function pose3(params, motion, u, extra = null) {
   const p = withWeight({ ...DEFAULTS, ...params });
   const ev = makeEvaluator(p, motion, extra?.freeU ?? null);
   const uw = wrap(u);
   const noiseT = extra?.freeU != null ? extra.freeU : uw; // over a performance the wobble runs on with the timeline
-  const c = (id) => ev.value(id, uw) + (p.noiseAmount > 0 ? noiseOf(p, id, noiseT) : 0);
+  let c = (id) => ev.value(id, uw) + (p.noiseAmount > 0 ? noiseOf(p, id, noiseT) : 0);
   const sc = (k) => (p.proportions || {})[k] ?? 1;
   // Follow-through (rubber hose): the pose a little earlier in the cycle, so a hand or a swinging foot can trail behind the limb it is on.
   const fol = p.model === 'hose' && !extra?.noLag ? Math.max(0, p.hoseFollow || 0) : 0;
@@ -84,6 +85,10 @@ export function pose3(params, motion, u, extra = null) {
     }
     const lo = Math.min(tf.R.g, tf.L.g); gY = lo + 0.12 * (Math.max(tf.R.g, tf.L.g) - lo); // the hips ride near the lower foot, so the higher leg bends and the lower one never overreaches
   }
+  // Posture, held on top of the walk: a lean to the side, the chest out or slouched, the head tilted or turned, and a load carried in one hand.
+  const RD = Math.PI / 180; const load = clamp(p.carry || 0, -1, 1); const side0 = (p.sideLean || 0) - 9 * load; const arch = p.chestOut || 0;
+  const POST = { 'spine1.roll': side0 * RD * LEAN_SIGN * 0.4, 'spine2.roll': side0 * RD * LEAN_SIGN * 0.6, 'spine2.pitch': -arch * RD * 0.5, 'spine3.pitch': -arch * RD * 0.5, 'neck.pitch': arch * RD * 0.45 + (p.headTilt || 0) * RD * 0.4, 'head.pitch': arch * RD * 0.25 + (p.headTilt || 0) * RD * 0.6, 'head.yaw': (p.headTurn || 0) * RD * TURN_SIGN * 0.7, 'neck.yaw': (p.headTurn || 0) * RD * TURN_SIGN * 0.3, 'neck.roll': -side0 * RD * LEAN_SIGN * 0.5 };
+  const c0 = c; c = (id) => c0(id) + (POST[id] || 0);
   const P = [c('pelvis.x'), hContact + gY + c('pelvis.y'), c('pelvis.z')];
   const Rp = seg(c('pelvis.yaw'), c('pelvis.pitch'), c('pelvis.roll'));
   const hw = BODY.hipWidth * sc('hipWidth');
@@ -111,12 +116,13 @@ export function pose3(params, motion, u, extra = null) {
     const s = side === 'R' ? 1 : -1;
     const k = (id) => c(`${id}.${side}`);
     const sw = BODY.shoulderWidth * sc('shoulderWidth');
-    const shoulder = add(j3, add(apply(R3, [k('girdle.x'), -BODY.shoulderDrop, s * sw]), [0, k('girdle.y'), 0]));
-    const armScale = side === 'L' ? Math.max(0, 1 + (p.asymArm || 0)) : 1; // the far arm can swing more or less
-    const Ru = mm(R3, mm(Rpitch(-k('arm.pitch') * armScale), Rroll(-s * k('arm.roll'))));
+    const held = Math.max(0, s * load); const other = Math.max(0, -s * load); // how much of the load is in this hand, and in the other one
+    const shoulder = add(j3, add(apply(R3, [k('girdle.x'), -BODY.shoulderDrop, s * sw]), [0, k('girdle.y') - 0.035 * held + 0.015 * other, 0]));
+    const armScale = (side === 'L' ? Math.max(0, 1 + (p.asymArm || 0)) : 1) * (1 - 0.9 * held); // the far arm can swing more or less; an arm with a load hardly swings
+    const Ru = mm(R3, mm(Rpitch(-(k('arm.pitch') * armScale + (p.armCarry || 0) * RD * (1 - held))), Rroll(-s * (k('arm.roll') + 12 * RD * other - 3 * RD * held))));
     const aL = sc('arm');
     const elbow = add(shoulder, apply(Ru, [0, -BODY.upperArm * aL * sc('upperArm'), 0]));
-    const Rf = mm(Ru, Rpitch(-k('elbow.flex')));
+    const Rf = mm(Ru, Rpitch(-k('elbow.flex') * (1 - 0.85 * held))); // the loaded arm hangs straight
     const wrist = add(elbow, apply(Rf, [0, -BODY.foreArm * aL * sc('foreArm'), 0]));
     const Rw = mm(Rf, Rpitch(-k('wrist.flex')));
     const hand = add(wrist, apply(Rw, [0, -BODY.hand * aL * sc('handSize'), 0]));

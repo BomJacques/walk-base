@@ -25,6 +25,7 @@ import { icon } from './icons.js';
 import { makeSeamless, loopGap } from './loop.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PHYS_MODES } from './propphys.js';
+import { newMood, cleanMood, blendMood, moodKeys, moodsFor, moodWeights, CORNERS, CORNER_LABELS } from './mood.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
@@ -32,8 +33,11 @@ import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
 const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The figures. The human has its own rig; the others are species of the dog's legged rig, each with its own attachments, saved performances and presets. */
-const FIGS = ['human', 'hose', 'dog', 'horse', 'theropod', 'bird', 'sauropod', 'ceratopsian', 'hosehorse', 'hosebird'];
+/** The figures, in the groups the menus show them in. */
+const FIG_GROUPS = [['People', ['human', 'hose']], ['Animals', ['dog', 'horse', 'bird']], ['Dinosaurs', ['theropod', 'sauropod', 'ceratopsian']], ['Rubber hose animals', ['hosehorse', 'hosebird']]];
+const FIGS = FIG_GROUPS.flatMap(([, list]) => list);
 const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
+let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
@@ -130,7 +134,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -177,6 +181,7 @@ function adopt(raw) {
   if (raw.attach && typeof raw.attach === 'object') S.attach = cleanAttach(raw.attach);
   if (raw.perfs && typeof raw.perfs === 'object') for (const r of FIGS) { const o = {}; for (const [name, v] of Object.entries(raw.perfs[r] || {})) { const nm = String(name).slice(0, 40); if (nm && v) o[nm] = { lanes: cleanLanes(v.lanes), perfLen: Math.max(0, Math.round(finite(v.perfLen))) }; } S.perfs[r] = o; }
   S.motion = cleanMotion(raw.motion);
+  MOOD = cleanMood(raw.mood);
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
@@ -693,9 +698,69 @@ const resetMenu = (target) => menuButton({ label: 'Reset', testid: 'fig-reset', 
   { label: 'Reset the body (proportions)', testid: 'reset-body', onClick: () => resetFigure(target, 'body') },
   { label: 'Reset the colours', testid: 'reset-colours', onClick: () => resetFigure(target, 'colours') },
   { separator: true }, { label: 'Reset everything about this figure…', testid: 'reset-fig-all', onClick: () => resetFigure(target, 'all') }] });
+// ---------- the mood pad ----------
+const P_CONTROL = Object.fromEntries(CONTROLS.filter((c) => c.scope === 'p').map((c) => [c.id, c]));
+const moodLimit = (k, v) => (P_CONTROL[k]?.type === 'number' ? clampTo(P_CONTROL[k], v) : v);
+const moodPresets = () => presetsForFigure(figKey());
+/** Puts the dot at x, y (0 to 1 each) and sets the walk to the mix there. The middle is the walk as it was before the pad was touched. */
+function setMoodPad(x, y, { commit = true } = {}) {
+  const nx = Math.min(1, Math.max(0, x)); const ny = Math.min(1, Math.max(0, y));
+  if (!MOOD.base) { if (Math.abs(nx - 0.5) < 1e-6 && Math.abs(ny - 0.5) < 1e-6) { MOOD.x = 0.5; MOOD.y = 0.5; return; } MOOD.base = Object.fromEntries(Object.entries(S.p).filter(([, v]) => typeof v === 'number')); }
+  MOOD.x = nx; MOOD.y = ny;
+  const before = S.p.cycleFrames;
+  Object.assign(S.p, blendMood(MOOD, MOOD.base, DEFAULTS, S.p.rig, moodPresets(), moodLimit));
+  if (moodWeights(nx, ny).strength <= 1e-9) MOOD.base = null; // back in the middle: the walk is its own again
+  markCustom(); S.ver++;
+  if (S.p.cycleFrames !== before) { if (S.perfLen <= 0) buildStrip(); if (S.frame >= cycleFrames(P()).frames.length) S.frame = 0; }
+  refreshGaitLine(); render(); if (commit) { save(); renderPanel(); }
+}
+function moodSection() {
+  const rig = S.p.rig; const moods = Object.keys(moodsFor(rig)); const presets = Object.keys(moodPresets());
+  const nameOf = (c) => (c.kind === 'custom' ? (c.name || 'Captured walk') : c.name);
+  const dot = h('span', { class: 'mdot', testid: 'mood-dot', style: `left:${MOOD.x * 100}%;top:${MOOD.y * 100}%` });
+  const place = (e, commit) => { const r = pad.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width; const y = (e.clientY - r.top) / r.height; setMoodPad(x, y, { commit }); dot.style.left = `${MOOD.x * 100}%`; dot.style.top = `${MOOD.y * 100}%`; };
+  let dragging = false;
+  const pad = h('div', { class: 'moodpad', testid: 'mood-pad', role: 'application', tabindex: '0', 'aria-label': `Mood pad. Top left ${nameOf(MOOD.corners.tl)}, top right ${nameOf(MOOD.corners.tr)}, bottom left ${nameOf(MOOD.corners.bl)}, bottom right ${nameOf(MOOD.corners.br)}. Arrow keys move the dot.`,
+    onPointerdown: (e) => { dragging = true; try { pad.setPointerCapture(e.pointerId); } catch { /* no capture */ } place(e, false); e.preventDefault(); },
+    onPointermove: (e) => { if (dragging) place(e, false); },
+    onPointerup: (e) => { if (!dragging) return; dragging = false; place(e, true); },
+    onPointercancel: () => { if (dragging) { dragging = false; save(); renderPanel(); } },
+    onKeydown: (e) => { const d = { ArrowLeft: [-0.05, 0], ArrowRight: [0.05, 0], ArrowUp: [0, -0.05], ArrowDown: [0, 0.05] }[e.key]; if (!d) return; e.preventDefault(); setMoodPad(MOOD.x + d[0], MOOD.y + d[1]); document.querySelector('[data-testid="mood-pad"]')?.focus(); } },
+    ...CORNERS.map((c) => h('span', { class: `mlab m-${c}` }, nameOf(MOOD.corners[c]))), h('span', { class: 'mcross' }), dot);
+  const setCorner = (c, value) => {
+    const [kind, ...rest] = value.split(':'); const name = rest.join(':');
+    if (kind === 'custom') return; MOOD.corners[c] = { kind, name };
+    if (MOOD.base) setMoodPad(MOOD.x, MOOD.y); else { save(); renderPanel(); }
+  };
+  const cornerSelect = (c) => { const cur = MOOD.corners[c]; const val = cur.kind === 'custom' ? 'custom' : `${cur.kind}:${cur.name}`;
+    return h('label', { class: 'mcorner' }, h('span', null, CORNER_LABELS[c]), h('select', { class: 'select', 'aria-label': `${CORNER_LABELS[c]} corner`, testid: `mood-corner-${c}`, onChange: (e) => setCorner(c, e.target.value) },
+      cur.kind === 'custom' ? h('option', { value: 'custom', selected: true }, nameOf(cur)) : null,
+      h('optgroup', { label: 'Moods' }, moods.map((m) => h('option', { value: `mood:${m}`, selected: val === `mood:${m}` }, m))),
+      h('optgroup', { label: 'This figure\'s walks' }, presets.map((m) => h('option', { value: `preset:${m}`, selected: val === `preset:${m}` }, m))))); };
+  const capture = (c) => { // the walk as it is now becomes a corner: every setting that differs from the walk in the middle (or from a plain walk, if the pad is in the middle)
+    const ref = MOOD.base || DEFAULTS; const values = {};
+    for (const [k, v] of Object.entries(S.p)) if (typeof v === 'number' && typeof ref[k] === 'number' && Math.abs(v - ref[k]) > 1e-9 && !['fps', 'exposure', 'noiseSeed'].includes(k)) values[k] = v;
+    if (!Object.keys(values).length) { setMessage('This walk is the same as the one in the middle of the pad, so there is nothing to put in a corner. Change some sliders first.'); return; }
+    MOOD.corners[c] = { kind: 'custom', name: S.preset && S.preset !== 'Custom' ? `${S.preset} (captured)` : 'Captured walk', values };
+    if (MOOD.base) setMoodPad(0.5, 0.5); else { save(); renderPanel(); }
+    setMessage(`The ${CORNER_LABELS[c].toLowerCase()} corner is now this walk (${Object.keys(values).length} settings). The pad is back in the middle.`);
+  };
+  const base = MOOD.base || Object.fromEntries(Object.entries(S.p).filter(([, v]) => typeof v === 'number'));
+  const keys = moodKeys(MOOD, base, DEFAULTS, rig, moodPresets());
+  const w = moodWeights(MOOD.x, MOOD.y); const parts = CORNERS.filter((c) => w[c] > 0.005).map((c) => `${Math.round(w[c] * 100)}% ${nameOf(MOOD.corners[c])}`);
+  return h('section', { class: 'group', 'data-area': 'Gait', testid: 'mood-section' }, h('h3', null, 'Mood'),
+    h('div', { class: 'moodrow' }, pad, h('div', { class: 'moodside' }, CORNERS.map(cornerSelect))),
+    h('p', { class: 'hint', testid: 'mood-readout' }, parts.length ? `Now: ${parts.join(', ')}.` : 'In the middle: the walk as it is. Drag the dot toward a corner for that mood, or along an edge to mix two.'),
+    h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn', testid: 'mood-centre', onClick: () => setMoodPad(0.5, 0.5) }, 'Centre'),
+      menuButton({ label: 'Use this walk as a corner', testid: 'mood-capture', title: 'Put the walk as it is now into a corner of the pad', items: () => CORNERS.map((c) => ({ label: CORNER_LABELS[c], testid: `mood-capture-${c}`, onClick: () => capture(c) })) })),
+    h('details', { class: 'moodkeys', testid: 'mood-keys' }, h('summary', null, `What the pad moves (${keys.filter((k) => !MOOD.skip.includes(k)).length} of ${keys.length} settings)`),
+      h('p', { class: 'hint' }, 'Untick a setting to leave it out: the pad will not touch it, whatever the corners say.'),
+      h('div', { class: 'moodlist' }, keys.map((k) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: !MOOD.skip.includes(k), testid: `mood-key-${k}`, onChange: (e) => { MOOD.skip = e.target.checked ? MOOD.skip.filter((x) => x !== k) : [...MOOD.skip, k]; if (MOOD.base) setMoodPad(MOOD.x, MOOD.y); else { save(); renderPanel(); } } }), h('span', null, wordsFor(figKey())(P_CONTROL[k]?.label || k)))))));
+}
 function sceneSection() {
   const host = h('div', { testid: 'scene-section' });
-  const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIGS.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) })) });
+  const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIG_GROUPS.flatMap(([, list], i) => [...(i ? [{ separator: true }] : []), ...list.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) }))]) });
   const sceneFile = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a picture for the scene', testid: 'scene-picture-file', onChange: (e) => { pickScenePicture(e.target.files?.[0]); e.target.value = ''; } });
   const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => (k.kind === 'image' ? sceneFile.click() : addProp(k.id)) })) });
   host.append(sceneFile);
@@ -860,8 +925,9 @@ function setFrame(i) {
 }
 function markCustom() { if (S.preset !== 'Custom') { S.preset = 'Custom'; const sel = document.getElementById('preset'); if (sel) sel.value = 'Custom'; } }
 function setParam(c, v) {
-  const val = clampTo(c, v);
+  const val = clampTo(c, v); const was = S[c.scope][c.id];
   S[c.scope][c.id] = val;
+  if (c.scope === 'p' && MOOD.base && typeof val === 'number' && typeof MOOD.base[c.id] === 'number' && typeof was === 'number') MOOD.base[c.id] += val - was; // a slider moved while the pad is off centre moves the walk in the middle too
   if (c.scope === 'p') { markCustom(); refreshGaitLine(); }
   // Choosing the Moebius style for the first time brings its colours too: sand, a pale sky grey and a dark ink, unless the colours have been chosen already.
   if (c.scope === 's' && c.id === 'style' && val === 'moebius' && S.s.fillColor === STYLE_DEFAULTS.fillColor && S.s.lineColor === STYLE_DEFAULTS.lineColor && S.s.farTint === STYLE_DEFAULTS.farTint) { S.s.fillColor = '#efe3c6'; S.s.lineColor = '#1e1b2e'; S.s.farTint = '#8fa9bd'; setMessage('Moebius style: sand, sky grey and dark ink. Change the colours in Figure if you want others.'); if (S.tab === 'View') renderPanel(); }
@@ -876,6 +942,7 @@ function setParam(c, v) {
 const DOG_KEYS = Object.keys(DEFAULTS).filter((k) => k.startsWith('dog'));
 const SHARED_KEYS = ['rig', 'fps', 'cycleFrames', 'exposure', 'travel'];
 function applyPreset(name) {
+  MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null; // a new walk starts in the middle of the mood pad
   const rig = S.p.rig; const fig = figKey();
   const mine = rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'weight', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop', 'hoseWobble', 'hoseWobbleRate'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
   const reset = Object.fromEntries(mine.map((k) => [k, DEFAULTS[k]]));
@@ -892,6 +959,8 @@ function setRig(rig) { setFigure(rig === 'human' ? 'human' : rig === 'dog' ? 'do
 /** Switches figure. Each keeps its own attachments, saved performances and automation; a species also brings its own bones, so it starts from its first preset. */
 function setFigure(fig) {
   if (!FIGS.includes(fig) || fig === figKey()) return;
+  if (MOOD.base) { Object.assign(S.p, Object.fromEntries(Object.entries(MOOD.base).filter(([k]) => typeof S.p[k] === 'number'))); } MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null; // the figure leaves with its own walk, not the mood
+  { const d = newMood().corners; for (const c of CORNERS) if (MOOD.corners[c].kind !== 'mood') MOOD.corners[c] = d[c]; MOOD.skip = []; } // a corner holding another figure's walk means nothing to this one
   pause(); closeEditor(true); setArmed(false);
   S.bank[figKey()] = { lanes: S.lanes, perfLen: S.perfLen };
   const b = S.bank[fig];
@@ -1468,8 +1537,8 @@ function collapsible(host) {
     else if (S.tab === 'View') sec.dataset.hue = { View: '0', Look: '1', Guides: '2' }[sec.dataset.area] ?? '2'; // blue for the camera, amber for the look, teal for the guides
     else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
-    // The rarely used groups start folded (proportions, hips and shoulders, onion skin, colours, names, target app); a choice you make is remembered.
-    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and shoulders$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
+    // The rarely used groups start folded (proportions, hips and legs, left and right feet, onion skin, colours, names, target app); a choice you make is remembered.
+    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^left and right feet$|^variety$|^ground$|^direction$|^feet$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
     const body = h('div', { class: 'group-body' });
     while (hd.nextSibling) body.append(hd.nextSibling);
     sec.append(body); body.hidden = folded;
@@ -1493,7 +1562,7 @@ function renderPanel() {
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
     if (S.tab === 'Speech') host.append(speechSection());
-    if (S.tab === 'Gait') { host.append(sceneSection()); host.append(gaitChartSection()); }
+    if (S.tab === 'Gait') { host.append(sceneSection()); host.append(moodSection()); host.append(gaitChartSection()); }
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
     for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
     if (S.tab === 'View') host.append(viewExtras(), arcSection(), refSection());
@@ -1975,7 +2044,7 @@ function build() {
     iconBtn('help', 'Help: a quick guide to the screen', 'help', openHelp, { title: 'Help (F1 or ?)' }),
     h('div', { class: 'bar-fields' },
       h('label', { class: 'pillfield' }, h('small', null, 'Figure'), h('select', { id: 'rig', class: 'select', 'aria-label': 'Which figure', testid: 'rig', onChange: (e) => setFigure(e.target.value) },
-        FIGS.map((f) => h('option', { value: f, selected: f === figKey() }, FIG_LABELS[f])))),
+        FIG_GROUPS.map(([g, list]) => h('optgroup', { label: g }, list.map((f) => h('option', { value: f, selected: f === figKey() }, FIG_LABELS[f])))))),
       h('label', { class: 'pillfield' }, h('small', null, 'Preset'), presetSel),
       h('label', { class: 'pillfield' }, h('small', null, 'Speed'), speedSel),
       h('label', { class: 'pillfield' }, h('small', null, 'Source'), h('select', { id: 'source', class: 'select', 'aria-label': 'What is on the stage', testid: 'source', onChange: (e) => setSource(e.target.value) },
@@ -2366,6 +2435,7 @@ window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
   buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
+  setMoodPad, mood: () => MOOD,
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),
   frame: (i, part = null, over = {}) => renderFrame(P(), S.s, { ...S.x, ...over }, i, part),

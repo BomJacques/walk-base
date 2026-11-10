@@ -1,6 +1,8 @@
 // Movements for the running figure and a few more actions and gestures. Written like moves.js: poses along the clip, each starting from whatever the figure is doing.
 import { targetOfParam as P, targetOfChannel as C, CADENCE } from './automation.js';
 import { HUMAN_MOVES, DOG_MOVES, poseBuild, at, BASE_ARMS } from './moves.js';
+import { MOODS } from './mood.js';
+import { DEFAULTS as RIG_DEFAULTS } from './rig.js';
 
 /** Settings of a jog and a sprint, the same as the presets on the Gait tab (a run has a moment with neither foot down). */
 const JOG = { stepLength: 0.9, duty: 0.46, footLift: 0.26, bob: 0.09, downPhase: 0.2, lean: 7, armSwing: 40, elbowBase: 70, elbowSwing: 8 };
@@ -94,6 +96,25 @@ HUMAN_MOVES.push(
       [P('stepLength')]: at(D, [[0, b.stepLength], [0.15, b.stepLength * 0.85], [0.75, b.stepLength * 0.85], [1, b.stepLength]]),
     })),
   },
+);
+// ---- Moods over time: the walk drifts into a mood across a long stretch, instead of switching.
+const drift = (mood) => (b, D) => Object.fromEntries(Object.entries(mood).filter(([n]) => typeof b[n] === 'number' && n !== 'cycleFrames' && n !== 'noiseAmount').map(([n, v]) => [P(n), at(D, [[0, b[n]], [1, b[n] + (v - RIG_DEFAULTS[n])]])]));
+HUMAN_MOVES.push(
+  { id: 'gettired', label: 'Get tired', frames: 240, ends: 'stays tired',
+    help: 'Over a long stretch the walk runs down: the steps shorten, the feet drag, the back rounds and the head sinks. Make it longer for a slower slide. Perk up undoes it.',
+    build: (b, D) => ({ ...drift(MOODS.Tired)(b, D), [CADENCE]: at(D, [[0, 1], [1, 0.78]]) }) },
+  { id: 'perkup', label: 'Perk up', frames: 60, ends: 'walks normally',
+    help: 'The walk comes back to life: the back straightens, the head lifts, the steps lengthen.',
+    build: (b, D) => ({ ...Object.fromEntries(Object.keys(MOODS.Tired).filter((n) => typeof b[n] === 'number' && n !== 'cycleFrames').map((n) => [P(n), at(D, [[0, b[n]], [0.85, RIG_DEFAULTS[n]]])])), [CADENCE]: at(D, [[0, 0.78], [0.85, 1]]) }) },
+  { id: 'cheerup', label: 'Cheer up', frames: 90, ends: 'stays happy',
+    help: 'The walk lifts into a happy one: a bounce comes in, the chest comes out, the head lifts and the arms swing.',
+    build: drift(MOODS.Happy) },
+  { id: 'getangry', label: 'Get angry', frames: 60, ends: 'stays angry',
+    help: 'The walk hardens: the body leans in, the head drops, the elbows bend and the heels hit hard.',
+    build: drift(MOODS.Angry) },
+  { id: 'gosneaky', label: 'Go sneaky', frames: 60, ends: 'stays sneaking',
+    help: 'The figure crouches into a creep: short careful steps on bent legs, the arms held up in front.',
+    build: drift(MOODS.Sneaky) },
 );
 // ---- Wobbly movements, for the rubber hose figures. Each ramps a few settings up and back, so it sits on top of whatever walk is playing.
 const there = (b, D, o, f0 = 0.25, f1 = 0.72) => Object.fromEntries(Object.entries(o).map(([n, v]) => [P(n), at(D, [[0, b[n]], [f0, typeof v === 'function' ? v(b[n]) : v], [f1, typeof v === 'function' ? v(b[n]) : v], [1, b[n]]])]));

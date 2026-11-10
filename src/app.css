@@ -427,3 +427,17 @@ select, select option, select optgroup { background-color: var(--panel-2); color
 .scene-line .btn.icon { flex: none; }
 .scene-line .btn.icon[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .scene-row .dim { opacity: .5; }
+
+/* the mood pad */
+.moodrow { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr); gap: 8px; align-items: start; }
+.moodside { display: grid; gap: 6px; min-width: 0; }
+.mcorner { display: grid; gap: 2px; min-width: 0; font-size: 11px; color: var(--ink-2); }
+.mcorner .select { width: 100%; min-width: 0; }
+.moodpad { position: relative; aspect-ratio: 1; border: 1px solid var(--line); border-radius: var(--r); background: var(--ctl); touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; overflow: hidden; }
+.moodpad:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.moodpad .mcross { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(var(--line), var(--line)) 50% 0 / 1px 100% no-repeat, linear-gradient(var(--line), var(--line)) 0 50% / 100% 1px no-repeat; opacity: 0.7; }
+.moodpad .mlab { position: absolute; font-size: 11px; color: var(--ink-2); pointer-events: none; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moodpad .m-tl { left: 5px; top: 4px; } .moodpad .m-tr { right: 5px; top: 4px; text-align: right; } .moodpad .m-bl { left: 5px; bottom: 4px; } .moodpad .m-br { right: 5px; bottom: 4px; text-align: right; }
+.moodpad .mdot { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--accent); transform: translate(-50%, -50%); pointer-events: none; }
+.moodkeys summary { cursor: pointer; font-size: var(--fs); color: var(--ink-2); padding: 13px 0; min-height: 44px; box-sizing: border-box; }
+.moodlist { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }

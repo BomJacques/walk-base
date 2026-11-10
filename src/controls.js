@@ -51,10 +51,16 @@ const RAW_CONTROLS = [
   n('p', 'asymArm', 'Gait', 'Left and right', 'Far arm swing', '', -0.8, 0.8, 0.01, 'The far arm swings more or less than the near one.'),
   // Body
   n('p', 'lean', 'Body', 'Torso', 'Forward lean', '°', -15, 30, 0.5, 'Torso tilt. Negative leans back.'),
+  n('p', 'sideLean', 'Body', 'Torso', 'Lean to the side', '°', -10, 10, 0.5, 'The body leans to one side all the time: positive toward the near side, negative toward the far side. The head stays nearly upright.'),
+  n('p', 'chestOut', 'Body', 'Torso', 'Chest out or slouch', '°', -15, 15, 0.5, 'Positive arches the back and brings the chest out, with the head held level. Negative slouches: the back rounds forward and the head comes forward with it.'),
+  n('p', 'carry', 'Body', 'Torso', 'Carrying a load', '', -1, 1, 0.01, 'A heavy bag in one hand: positive in the near hand, negative in the far hand. That arm hangs straight and still, the body leans away to balance it and the other arm comes out.'),
   n('p', 'torsoSway', 'Body', 'Torso', 'Torso rock', '°', 0, 10, 0.1, 'Extra tilt that rocks with each step.'),
   n('p', 'headBob', 'Body', 'Head', 'Head steadiness', '', 0, 1, 0.01, '0 lets the head ride the hips, 1 holds it level.'),
+  n('p', 'headTilt', 'Body', 'Head', 'Look down or up', '°', -20, 20, 0.5, 'The head held looking down (positive) or up (negative).'),
+  n('p', 'headTurn', 'Body', 'Head', 'Head turned', '°', -45, 45, 1, 'The head held turned to one side: positive toward the near side.'),
   n('p', 'headNod', 'Body', 'Head', 'Head nod', '°', 0, 12, 0.1, 'Small nod with each step.'),
   n('p', 'armSwing', 'Body', 'Arms', 'Arm swing', '°', 0, 60, 1, 'Each way, opposite the legs.'),
+  n('p', 'armCarry', 'Body', 'Arms', 'Arms forward or back', '°', -30, 45, 1, 'Where the arms swing about: positive carries both arms forward of where they hang, negative behind the body.'),
   n('p', 'armLag', 'Body', 'Arms', 'Arm lag', 'cycle', -0.2, 0.3, 0.005, 'How far the arms trail the legs. A little drag reads as natural.'),
   n('p', 'elbowBase', 'Body', 'Arms', 'Elbow bend', '°', 0, 80, 1, 'Resting bend.'),
   n('p', 'elbowSwing', 'Body', 'Arms', 'Elbow bend, forward', '°', 0, 80, 1, 'Extra bend as the arm swings forward.'),
@@ -134,7 +140,7 @@ const RAW_CONTROLS = [
   b('s', 'showGizmo', 'View', 'Pivot around the figure', 'Axes gizmo', 'Small x, y, z guide: x forward, y up, z the figure right side.'),
   c('s', 'selectColor', 'View', 'Pivot around the figure', 'Selection colour', 'Highlight for the selected part.'),
   // Look
-  e('s', 'style', 'Look', 'Figure', 'Style', ['mannequin', 'outline', 'stick', 'silhouette', 'moebius'], 'Moebius is a pen drawing: a thin ink line round the figure, flat soft colour, and shading by fine hatching, cross-hatching and a few dots on the side away from the light, on a paper-coloured stage. Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape.'),
+  e('s', 'style', 'Look', 'Figure', 'Style', ['mannequin', 'outline', 'stick', 'silhouette', 'moebius', 'comic', 'ink', 'pencil'], 'Comic is flat colour inside a heavy black line with printed dots for the shadow. Ink is a rough brush line that swells and thins, with flat colour. Pencil is a sketch: a pale wash, light hatching and the outline gone over three times. The light direction and shadow reach in the Moebius style group set the shading of Comic and Pencil too. Moebius is a pen drawing: a thin ink line round the figure, flat soft colour, and shading by fine hatching, cross-hatching and a few dots on the side away from the light, on a paper-coloured stage. Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape.'),
   n('s', 'lineWidth', 'Look', 'Figure', 'Line width', 'px', 0.5, 12, 0.25, 'At 1080 pixels tall. It scales with the canvas.'),
   e('s', 'handStyle', 'Look', 'Figure', 'Hands', ['default', 'mitten', 'fist', 'fingers', 'pointing'], 'Default is each figure\'s own hand: a ball on the mannequin, a round glove on the rubber hose figure. Mitten has a thumb, Fist is closed, Fingers is an open hand and Pointing holds one finger out. Hand size is in the body proportions.'),
   e('s', 'footStyle', 'Look', 'Figure', 'Feet', ['default', 'boot', 'bare', 'round'], 'Default is each figure\'s own foot: a shoe on the mannequin, a round foot on the rubber hose figure. Boot adds a shaft up the shin, Bare is a low foot with toes, Round is the rubber hose foot. Foot size is in the body proportions.'),
@@ -224,7 +230,7 @@ const RAW_CONTROLS = [
  * a proportion goes from a little over half its smallest to nearly twice its largest. Fractions with a natural limit (time on the ground, heel timing and the like), counts, the weight, the
  * heading and the terrain are left as they are, and the code that uses each value clamps it where the figure would break.
  */
-const KEEP_RANGE = new Set(['cycleFrames', 'fps', 'exposure', 'weight', 'heading', 'terrainGrade', 'terrainRun', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'dogNeckSegs', 'duty', 'dogDuty', 'headBob', 'legExtend', 'heelDown', 'heelUp', 'liftPeak', 'swingReach', 'downPhase', 'hoseFollow', 'hoseStretch', 'hoseWobble', 'hoseWobbleRate']);
+const KEEP_RANGE = new Set(['cycleFrames', 'fps', 'exposure', 'weight', 'heading', 'terrainGrade', 'terrainRun', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'dogNeckSegs', 'duty', 'dogDuty', 'headBob', 'legExtend', 'heelDown', 'heelUp', 'liftPeak', 'swingReach', 'downPhase', 'hoseFollow', 'hoseStretch', 'hoseWobble', 'hoseWobbleRate', 'carry']);
 const widen = (c) => {
   if (c.type !== 'number' || (c.scope !== 'p' && c.scope !== 'r') || KEEP_RANGE.has(c.id)) return c;
   const r = (v) => +v.toFixed(4);
@@ -233,7 +239,32 @@ const widen = (c) => {
   if (c.unit === '°' || c.unit === 'legs' || c.unit === 'heights') return { ...c, max: r(c.max * 2) };
   return c;
 };
-export const CONTROLS = RAW_CONTROLS.map((c) => widen(c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : c.tab === 'Look' || c.tab === 'Guides' ? { ...c, tab: 'View', area: c.tab } : { ...c, area: c.tab }));
+/**
+ * How the walk and body settings of the two-legged figures are laid out in the Body tab: [area, group, settings in order]. One part of the body, one group:
+ * everything about the arms is under Shoulders and arms (the far arm's swing too), everything about where the feet go is under Stride, and so on.
+ * The list above says what each setting is; this says where it is shown.
+ */
+export const BODY_LAYOUT = [
+  ['Gait', 'Timing', ['exposure', 'travel', 'cycleFrames', 'fps']],
+  ['Gait', 'Stride', ['stepLength', 'duty', 'legExtend', 'stepWidth', 'toeOut']],
+  ['Gait', 'Bounce and weight', ['bob', 'downPhase', 'weight']],
+  ['Gait', 'Feet', ['footLift', 'liftPeak', 'swingReach', 'heelStrike', 'heelDown', 'heelUp', 'toeOff', 'swingToe']],
+  ['Gait', 'Left and right feet', ['asymTiming', 'asymDuty', 'asymLift']],
+  ['Gait', 'Variety', ['noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop']],
+  ['Gait', 'Rubber hose', ['hoseFollow', 'hoseStretch', 'hoseWobble', 'hoseWobbleRate']],
+  ['Gait', 'Direction', ['heading']],
+  ['Gait', 'Ground', ['terrain', 'terrainGrade', 'terrainRise', 'terrainRun']],
+  ['Body', 'Torso', ['lean', 'sideLean', 'chestOut', 'torsoSway', 'carry']],
+  ['Body', 'Hips and legs', ['pelvisYaw', 'pelvisRoll', 'pelvisPitch', 'sway', 'kneeOut']],
+  ['Body', 'Shoulders and arms', ['armSwing', 'asymArm', 'armCarry', 'armOut', 'armLag', 'elbowBase', 'elbowSwing', 'shoulderCounter']],
+  ['Body', 'Head', ['headBob', 'headKeep', 'headTilt', 'headTurn', 'headNod']],
+];
+const PLACE = Object.fromEntries(BODY_LAYOUT.flatMap(([area, group, ids], g) => ids.map((id, i) => [id, { area, group, at: g * 100 + i }])));
+const arrange = (list) => { // the settings in the layout come first, in its order; everything else follows as it was
+  const placed = list.filter((c) => c.scope === 'p' && PLACE[c.id]).map((c) => ({ ...c, area: PLACE[c.id].area, group: PLACE[c.id].group })).sort((a, b) => PLACE[a.id].at - PLACE[b.id].at);
+  return [...placed, ...list.filter((c) => !(c.scope === 'p' && PLACE[c.id]))];
+};
+export const CONTROLS = arrange(RAW_CONTROLS.map((c) => widen(c.tab === 'Body' ? { ...c, tab: 'Gait', area: 'Body' } : c.tab === 'Look' || c.tab === 'Guides' ? { ...c, tab: 'View', area: c.tab } : { ...c, area: c.tab })));
 
 /** Which figure a control belongs to: 'both', 'human' or 'dog'. Timing, camera, look, guides and export are shared. */
 const SHARED_P = new Set(['cycleFrames', 'fps', 'exposure', 'travel', 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'hoseWobble', 'hoseWobbleRate']); // the wobble is for every rubber hose figure, on two legs or four
@@ -264,6 +295,10 @@ export const PRESETS = {
   Strut: { stepLength: 0.8, duty: 0.58, footLift: 0.15, bob: 0.09, lean: -2, armSwing: 30, headBob: 0.7, pelvisRoll: 7, pelvisYaw: 12, sway: 0.05, torsoSway: 3, shoulderCounter: 14, toeOut: 12, cycleFrames: 28 },
   Waddle: { stepLength: 0.5, duty: 0.64, bob: 0.06, pelvisRoll: 9, sway: 0.07, torsoSway: 5, toeOut: 22, stepWidth: 0.12, armSwing: 10, armOut: 14, lean: 2, cycleFrames: 34, headNod: 4 },
   Tired: { stepLength: 0.5, bob: 0.05, footLift: 0.05, lean: 11, armSwing: 8, duty: 0.68, cycleFrames: 32, headNod: 4, headBob: 0, heelStrike: 6, toeOff: 20, legExtend: 0.95 },
+  'Carrying a bag': { carry: 0.9, stepLength: 0.66, bob: 0.06, duty: 0.63, cycleFrames: 28, lean: 3, armSwing: 20, sway: 0.045, weight: 0.4, asymTiming: 0.02 },
+  Slouch: { chestOut: -14, headTilt: 8, stepLength: 0.66, bob: 0.05, armSwing: 14, footLift: 0.1, lean: 6, cycleFrames: 28, toeOut: 12 },
+  'Chest out': { chestOut: 13, headTilt: -6, lean: -2, stepLength: 0.84, armSwing: 34, elbowSwing: 30, shoulderCounter: 13, bob: 0.09, cycleFrames: 24, footLift: 0.18 },
+  'Looking back': { headTurn: 70, sideLean: 3, stepLength: 0.7, armSwing: 18, cycleFrames: 26, shoulderCounter: 12, camYaw: -35 },
 };
 
 /** Markdown reference generated from this list. */

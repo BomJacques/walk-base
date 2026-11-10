@@ -23,7 +23,9 @@ const pick = async (v) => { await page.locator('[data-testid="rig"]').selectOpti
 const presets = () => page.locator('#preset option').evaluateAll((os) => os.map((o) => o.textContent));
 
 const opts = await page.locator('[data-testid="rig"] option').evaluateAll((os) => os.map((o) => o.value));
-check('the Figure menu offers all ten figures', JSON.stringify(opts) === JSON.stringify(['human', 'hose', 'dog', 'horse', 'theropod', 'bird', 'sauropod', 'ceratopsian', 'hosehorse', 'hosebird']), opts);
+check('the Figure menu offers all ten figures', JSON.stringify(opts) === JSON.stringify(['human', 'hose', 'dog', 'horse', 'bird', 'theropod', 'sauropod', 'ceratopsian', 'hosehorse', 'hosebird']), opts);
+const groups = await page.locator('[data-testid="rig"] optgroup').evaluateAll((os) => os.map((o) => o.label + ':' + o.children.length));
+check('grouped as People, Animals, Dinosaurs and Rubber hose animals', JSON.stringify(groups) === JSON.stringify(['People:2', 'Animals:3', 'Dinosaurs:3', 'Rubber hose animals:2']), groups);
 
 const expectPresets = { theropod: ['Walk', 'Stalk', 'Run'], bird: ['Walk', 'Hop', 'Flapping'], sauropod: ['Walk'], ceratopsian: ['Walk', 'Charge'] };
 for (const f of ['theropod', 'bird', 'sauropod', 'ceratopsian']) {

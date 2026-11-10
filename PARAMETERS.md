@@ -13,52 +13,58 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Step length | human | legs | 0.3 to 2.8 | 0.78 | Contact to contact, in leg lengths. Longer steps at the same timing walk faster. |
 | Time on the ground | human |  | 0.25 to 0.85 | 0.6 | Fraction of the cycle each foot is down. Under 0.5 there is a moment with neither foot down: a run. Set Hip bob and Lowest point to match (the Run preset shows how). |
 | Leg straightness | human |  | 0.85 to 0.999 | 0.985 | How straight the leg is at contact. Lower crouches the whole walk. |
+| Feet width | human | legs | 0 to 0.6 | 0.075 | Distance of each foot from the centre line. |
+| Toe out | human | ° | -30 to 80 | 8 | Feet turn outward. |
 | Hip bob | human | legs | 0 to 0.6 | 0.075 | Vertical travel of the hips, lowest to highest. |
 | Down position | human | cycle | 0.03 to 0.22 | 0.125 | When the body is lowest after contact. 0.125 is a quarter of a step. |
+| Weight | human |  | -1 to 1 | 0 | How heavy the figure feels. Heavy (positive): longer on the ground, flatter and lower feet, a deeper drop into each step, shorter steps, less arm swing, a forward lean. Light (negative): springy, higher feet, quicker. Use a longer Cycle length for a heavy walk and a shorter one for a light walk. |
 | Foot lift | human | legs | 0 to 1 | 0.16 | How high the swing foot clears the ground. |
-| Heel strike | human | ° | 0 to 80 | 14 | Toe-up angle at contact. |
-| Toe off | human | ° | 0 to 120 | 32 | Heel-up angle at push-off. |
-| Swing toe | human | ° | -40 to 80 | 8 | Toe angle while the foot swings through. |
-| Heel comes down over | human | stance | 0.04 to 0.4 | 0.18 | How much of the time on the ground the foot takes to roll from heel to flat. Small is a stamp, large is a slow roll. |
-| Heel lifts at | human | stance | 0.35 to 0.85 | 0.52 | When in the time on the ground the heel starts to rise. Early is a long push off the toes, late is a flat-footed walk. |
 | Foot is highest at | human | swing | 0.25 to 0.7 | 0.42 | Where in the swing the foot reaches its highest point. Early is a quick pick-up, late is a high step that stamps down. |
 | Foot reaches forward early | human |  | 0 to 1 | 0.85 | 0 swings the foot at an even pace. 1 brings it forward early and lets it hang before it lands. |
+| Heel strike | human | ° | 0 to 80 | 14 | Toe-up angle at contact. |
+| Heel comes down over | human | stance | 0.04 to 0.4 | 0.18 | How much of the time on the ground the foot takes to roll from heel to flat. Small is a stamp, large is a slow roll. |
+| Heel lifts at | human | stance | 0.35 to 0.85 | 0.52 | When in the time on the ground the heel starts to rise. Early is a long push off the toes, late is a flat-footed walk. |
+| Toe off | human | ° | 0 to 120 | 32 | Heel-up angle at push-off. |
+| Swing toe | human | ° | -40 to 80 | 8 | Toe angle while the foot swings through. |
 | Far foot lands late | human | cycle | -0.24 to 0.24 | 0 | Moves the far foot off its half-cycle: the two steps become unequal, one short and one long. |
 | Far foot time on ground | human |  | -0.3 to 0.3 | 0 | Added to the far foot only. Less is a leg that is hurried off the ground, as in a limp. |
 | Far foot lift | human |  | -1.6 to 1.6 | 0 | The far foot lifts more (positive) or less (negative) than the near one. |
-| Weight | human |  | -1 to 1 | 0 | How heavy the figure feels. Heavy (positive): longer on the ground, flatter and lower feet, a deeper drop into each step, shorter steps, less arm swing, a forward lean. Light (negative): springy, higher feet, quicker. Use a longer Cycle length for a heavy walk and a shorter one for a light walk. |
 | Noise | human |  | 0 to 1 | 0 | Small wobble added to the bounce, sway, back, head and arms so the walk is not a metronome. 0 is none. |
 | Noise speed | human |  | 1 to 4 | 2 | How quickly the wobble changes: 1 is slow, 4 is busy. |
 | Noise seed | human |  | 1 to 999 | 7 | Which wobble you get. The same seed always gives the same take; change it to try another. |
 | Keep the wobble looping | human |  | bool | true | On: the wobble repeats every cycle, so the loop stays seamless. Off: it carries on changing from cycle to cycle over a longer performance (the Loop button turns it back on). |
 | Follow-through | human |  | 0 to 1.5 | 0.6 | Hands and swinging feet trail behind the arm or leg they are on and catch up after, so a limb flows instead of moving all at once. 0 is stiff. |
+| Stretchy limbs | human |  | 0 to 1.5 | 0.5 | An arm that reaches, or a leg that swings out, stretches longer, up to half again at 1. 0 keeps every limb the same length. |
 | Wobble | both |  | 0 to 1.5 | 0 | A wave runs along every arm, leg and tail and bends it like jelly. The hands and feet stay where they are; the limb between wobbles. 0 is off. |
 | Wobbles per cycle | both |  | 1 to 4 | 2 | How many times each limb wobbles in one cycle. Whole numbers, so the cycle still loops. |
-| Stretchy limbs | human |  | 0 to 1.5 | 0.5 | An arm that reaches, or a leg that swings out, stretches longer, up to half again at 1. 0 keeps every limb the same length. |
 | Heading | both | ° | -180 to 180 | 0 | Which way the figure faces and walks. 0 is straight along the stage; a positive angle turns it toward you, a negative one away. Automate it on the Auto tab (or use Turn right, Turn left, U-turn and Walk a curve) to turn a corner or follow a curve. Footprints are hidden while the path bends. |
 | Ground | both |  | flat, slope, steps | flat | What the figure walks on. A slope or a flight of steps makes the walk four cycles long so there is room to climb; the hips rise, each foot stands on the ground where it lands, and the swinging foot clears the next step. |
 | Slope | both | ° | -30 to 30 | 8 | How steeply the ground rises along the slope (negative goes downhill). |
 | Step height | both | legs | -0.6 to 0.6 | 0.14 | Height of each step, in leg lengths (negative goes down). |
 | Step length | both | legs | 0.3 to 2.5 | 1 | Length of the flat top of each step. |
-| Far arm swing | human |  | -1.6 to 1.6 | 0 | The far arm swings more or less than the near one. |
 | Forward lean | human | ° | -30 to 60 | 4 | Torso tilt. Negative leans back. |
+| Lean to the side | human | ° | -20 to 20 | 0 | The body leans to one side all the time: positive toward the near side, negative toward the far side. The head stays nearly upright. |
+| Chest out or slouch | human | ° | -30 to 30 | 0 | Positive arches the back and brings the chest out, with the head held level. Negative slouches: the back rounds forward and the head comes forward with it. |
 | Torso rock | human | ° | 0 to 20 | 1.6 | Extra tilt that rocks with each step. |
-| Head steadiness | human |  | 0 to 1 | 0.35 | 0 lets the head ride the hips, 1 holds it level. |
-| Head nod | human | ° | 0 to 24 | 2.5 | Small nod with each step. |
-| Arm swing | human | ° | 0 to 120 | 26 | Each way, opposite the legs. |
-| Arm lag | human | cycle | -0.4 to 0.6 | 0.07 | How far the arms trail the legs. A little drag reads as natural. |
-| Elbow bend | human | ° | 0 to 160 | 14 | Resting bend. |
-| Elbow bend, forward | human | ° | 0 to 160 | 26 | Extra bend as the arm swings forward. |
+| Carrying a load | human |  | -1 to 1 | 0 | A heavy bag in one hand: positive in the near hand, negative in the far hand. That arm hangs straight and still, the body leans away to balance it and the other arm comes out. |
 | Hip twist | human | ° | 0 to 50 | 6 | How far the hips turn each way. The right hip leads at contact. |
 | Hip drop | human | ° | 0 to 30 | 3 | The swing-side hip drops this much. |
 | Hip tilt | human | ° | 0 to 30 | 1.5 | Forward and back rock of the pelvis. |
 | Side sway | human | legs | 0 to 0.24 | 0.03 | Hips shift over the supporting foot. |
-| Shoulder counter-twist | human | ° | 0 to 60 | 9 | Shoulders turn against the hips. |
-| Head keeps facing | human |  | 0 to 1 | 0.8 | How much the head cancels the twist and tilt of the body below it. |
-| Arms out | human | ° | -20 to 80 | 4 | How far the arms hang from the body. |
 | Knees out | human | ° | -30 to 60 | 3 | Knee direction away from straight ahead. |
-| Feet width | human | legs | 0 to 0.6 | 0.075 | Distance of each foot from the centre line. |
-| Toe out | human | ° | -30 to 80 | 8 | Feet turn outward. |
+| Arm swing | human | ° | 0 to 120 | 26 | Each way, opposite the legs. |
+| Far arm swing | human |  | -1.6 to 1.6 | 0 | The far arm swings more or less than the near one. |
+| Arms forward or back | human | ° | -60 to 90 | 0 | Where the arms swing about: positive carries both arms forward of where they hang, negative behind the body. |
+| Arms out | human | ° | -20 to 80 | 4 | How far the arms hang from the body. |
+| Arm lag | human | cycle | -0.4 to 0.6 | 0.07 | How far the arms trail the legs. A little drag reads as natural. |
+| Elbow bend | human | ° | 0 to 160 | 14 | Resting bend. |
+| Elbow bend, forward | human | ° | 0 to 160 | 26 | Extra bend as the arm swings forward. |
+| Shoulder counter-twist | human | ° | 0 to 60 | 9 | Shoulders turn against the hips. |
+| Head steadiness | human |  | 0 to 1 | 0.35 | 0 lets the head ride the hips, 1 holds it level. |
+| Head keeps facing | human |  | 0 to 1 | 0.8 | How much the head cancels the twist and tilt of the body below it. |
+| Look down or up | human | ° | -40 to 40 | 0 | The head held looking down (positive) or up (negative). |
+| Head turned | human | ° | -90 to 90 | 0 | The head held turned to one side: positive toward the near side. |
+| Head nod | human | ° | 0 to 24 | 2.5 | Small nod with each step. |
 | Hip width | human | × | 0.3 to 3.24 | 1 | Scale of the distance between the hips. |
 | Shoulder width | human | × | 0.3 to 3.24 | 1 | Scale of the distance between the shoulders. |
 | Torso length | human | × | 0.36 to 2.7 | 1 | Scale of the spine. |
@@ -154,7 +160,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Turntable speed | both | °/s | -120 to 120 | 24 | Degrees per second. Negative circles the other way. |
 | Axes gizmo | both |  | bool | true | Small x, y, z guide: x forward, y up, z the figure right side. |
 | Selection colour | both |  | color | #e0662e | Highlight for the selected part. |
-| Style | both |  | mannequin, outline, stick, silhouette, moebius | mannequin | Moebius is a pen drawing: a thin ink line round the figure, flat soft colour, and shading by fine hatching, cross-hatching and a few dots on the side away from the light, on a paper-coloured stage. Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
+| Style | both |  | mannequin, outline, stick, silhouette, moebius, comic, ink, pencil | mannequin | Comic is flat colour inside a heavy black line with printed dots for the shadow. Ink is a rough brush line that swells and thins, with flat colour. Pencil is a sketch: a pale wash, light hatching and the outline gone over three times. The light direction and shadow reach in the Moebius style group set the shading of Comic and Pencil too. Moebius is a pen drawing: a thin ink line round the figure, flat soft colour, and shading by fine hatching, cross-hatching and a few dots on the side away from the light, on a paper-coloured stage. Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
 | Line width | both | px | 0.5 to 12 | 3 | At 1080 pixels tall. It scales with the canvas. |
 | Hands | both |  | default, mitten, fist, fingers, pointing | default | Default is each figure's own hand: a ball on the mannequin, a round glove on the rubber hose figure. Mitten has a thumb, Fist is closed, Fingers is an open hand and Pointing holds one finger out. Hand size is in the body proportions. |
 | Feet | both |  | default, boot, bare, round | default | Default is each figure's own foot: a shoe on the mannequin, a round foot on the rubber hose figure. Boot adds a shaft up the shin, Bare is a low foot with toes, Round is the rubber hose foot. Foot size is in the body proportions. |

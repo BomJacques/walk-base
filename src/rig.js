@@ -71,6 +71,13 @@ export const DEFAULTS = Object.freeze({
   headKeep: 0.8,
   armOut: 4,
   shrug: 0,
+  // posture: held all the time, on top of the walk
+  sideLean: 0,          // degrees the body leans to one side (positive toward the near side)
+  chestOut: 0,          // degrees the back arches and the chest comes out (negative slouches, the back rounding forward)
+  headTilt: 0,          // degrees the head looks down (negative looks up)
+  headTurn: 0,          // degrees the head is turned to one side (positive toward the near side)
+  armCarry: 0,          // degrees both arms are carried forward of where they hang (negative behind)
+  carry: 0,             // a heavy load in one hand: positive the near hand, negative the far hand. That arm hangs still, the body leans away, the other arm comes out
   kneeOut: 3,
   stepWidth: 0.075,
   toeOut: 8,
