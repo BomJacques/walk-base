@@ -24,6 +24,7 @@ import { paintMouth } from './mouth.js';
 import { icon } from './icons.js';
 import { makeSeamless, loopGap } from './loop.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
+import { PHYS_MODES } from './propphys.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
@@ -742,6 +743,16 @@ function sceneSection() {
       it.kind === 'box' ? row('Depth of it', 'd', 0.05, 4, 0.01, 'scene-d') : null, isPic ? null : row('Height', 'h', 0.05, 5, 0.01, 'scene-h'), isPic ? null : colour(isLine ? 'Leaf colour' : 'Colour', 'color', 'scene-color'),
       isPic ? h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Flip')), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: Boolean(it.flip), testid: 'scene-flip', onChange: (e) => { it.flip = e.target.checked; sceneChanged(true); } }), h('span', null, 'Mirror it'))) : null,
       isPic ? h('div', { class: 'btnrow' }, h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Tolerance'), h('input', { type: 'range', class: 'rng', min: 5, max: 80, step: 1, value: S.cutTol ?? 30, testid: 'scene-cut-tol', 'aria-label': 'How close to the corner colour counts as background', onInput: (e) => { S.cutTol = Number(e.target.value); } })), h('button', { type: 'button', class: 'btn', testid: 'scene-cut', onClick: () => cutOutBackground(it, S.cutTol ?? 30) }, 'Cut out the background')) : null);
+  }
+  if (!actor && (it.kind === 'box' || it.kind === 'ball')) { // scenery that falls, bounces, rolls or is pushed over
+    const modes = PHYS_MODES.filter(([id]) => id !== 'tip' || it.kind === 'box'); const mode = modes.some(([id]) => id === it.phys) ? it.phys : 'none';
+    const last = Math.max(1, (S.perfLen > 0 ? S.perfLen : Math.round(S.p.cycleFrames)) - 1);
+    body.push(h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Physics'), h('select', { class: 'select', 'aria-label': 'Physics', testid: 'scene-phys', onChange: (e) => { it.phys = e.target.value; if (it.phys === 'drop' && it.y < 0.05 && !it.throwX) { it.y = 1.5; setMessage('Raised it to 1.5 so it has somewhere to fall from. Set Raise for the height and Throw to send it along.'); } sceneChanged(true); } }, modes.map(([id, label]) => h('option', { value: id, selected: id === mode }, label)))));
+    if (mode !== 'none') body.push(row('Starts at frame', 'physStart', 0, last, 1, 'scene-phys-start'), row('Bounce', 'bounce', 0, 0.95, 0.01, 'scene-bounce'),
+      mode === 'drop' ? row('Friction', 'friction', 0, 1, 0.01, 'scene-friction') : null,
+      mode === 'drop' ? row('Throw', 'throwX', -8, 8, 0.1, 'scene-throw') : row('Push', 'push', -3, 3, 0.05, 'scene-push'),
+      h('p', { class: 'hint' }, mode === 'drop' ? 'It falls from its Raise height at that frame, bounces and comes to rest. Throw is its speed along the ground in metres a second (negative goes the other way); a ball rolls on, a box scrapes to a stop. The same settings always give the same motion. It starts again when the cycle does, so use a performance for a longer take.'
+        : 'At that frame it is pushed over about its bottom edge. Push 1 is just enough to bring it to the point of balance: less and it rocks back, more and it goes over and lands on its side. Negative pushes it the other way.'));
   }
   body.push(h('div', { class: 'btnrow' }, ...(actor ? [resetMenu(it)] : []),
     h('button', { type: 'button', class: 'btn', testid: 'scene-hide', onClick: () => set({ visible: !it.visible }, true) }, it.visible ? 'Hide' : 'Show'),

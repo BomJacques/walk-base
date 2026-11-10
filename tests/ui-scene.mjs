@@ -191,6 +191,33 @@ await ev(() => { const w = window.__walkBase; w.S.s.camYaw = -35; w.S.s.camPitch
 if (shots) await page.screenshot({ path: path.join(shots, `wb-scene-${name}.png`) });
 for (const fig of ['dog', 'bird', 'human']) { await ev((f) => window.__walkBase.setFigure(f), fig); await wait(120); }
 check('switching the main figure leaves the scene alone', (await ev(() => window.__walkBase.S.scene.actors.length)) === 2 && errors.length === 0, errors);
+// ---- scenery physics: a ball that drops and a box that is pushed over
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.lanes = {}; w.S.perfLen = 0; w.S.s.camYaw = 0; w.S.s.camPitch = 0; w.setFrame(0); w.render(); }); await wait(150);
+await q('tab-Gait').click(); await wait(100);
+await q('scene-add-prop').click(); await q('scene-prop-ball').click(); await wait(200);
+const ballId = await ev(() => window.__walkBase.S.sceneSel);
+const hitBox = (id) => ev((i) => { const w = window.__walkBase; w.render(); const hh = (w.S.last.sceneHits || []).find((x) => x.id === i); if (!hh) return null; const pts = hh.shapes.flatMap((s) => s.pts); const xs = pts.map((p) => p[0] ?? p.x); const ys = pts.map((p) => p[1] ?? p.y); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; }, id);
+check('a ball has a Physics choice, and no Push over', (await q('scene-phys').count()) === 1 && (await ev(() => [...document.querySelector('[data-testid="scene-phys"]').options].map((o) => o.value).join())) === 'none,drop');
+await q('scene-phys').selectOption('drop'); await wait(200);
+check('choosing Drop raises a ball that was on the ground, and shows its settings', (await ev((i) => window.__walkBase.S.scene.props.find((x) => x.id === i).y, ballId)) === 1.5 && (await q('scene-bounce').count()) === 1 && (await q('scene-throw').count()) === 1);
+await ev(() => window.__walkBase.setFrame(0)); const b0 = await hitBox(ballId);
+await ev(() => window.__walkBase.setFrame(8)); const b8 = await hitBox(ballId);
+await ev(() => window.__walkBase.setFrame(13)); const b13 = await hitBox(ballId);
+check('the ball is lower on the stage as the frames go by, and lands', b0 && b8 && b13 && b8.y1 > b0.y1 + 5 && b13.y1 > b8.y1 + 5, { b0, b8, b13 });
+await ev(() => { const e = document.querySelector('[data-testid="scene-phys-start"]'); e.value = 10; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(100);
+await ev(() => window.__walkBase.setFrame(8)); const w8 = await hitBox(ballId);
+check('before its start frame it waits where it was put', Math.abs(w8.y1 - b0.y1) < 1, { w8, b0 });
+await q('scene-add-prop').click(); await q('scene-prop-box').click(); await wait(200);
+const boxId = await ev(() => window.__walkBase.S.sceneSel);
+await q('scene-phys').selectOption('tip'); await wait(200);
+check('a box can be pushed over, with a Push setting', (await q('scene-push').count()) === 1 && (await q('scene-throw').count()) === 0);
+await ev(() => window.__walkBase.setFrame(0)); const x0 = await hitBox(boxId);
+await ev(() => window.__walkBase.setFrame(Math.round(window.__walkBase.S.p.cycleFrames) - 1)); const x1 = await hitBox(boxId);
+check('by the end of the cycle the box has gone over: it lies on its side on the ground, as wide as it was tall', x0 && x1 && Math.abs((x1.x1 - x1.x0) - (x0.y1 - x0.y0)) < 3 && Math.abs((x1.y1 - x1.y0) - (x0.x1 - x0.x0)) < 3 && Math.abs(x1.y1 - x0.y1) < 3, { x0, x1 });
+const savedPhys = await ev(() => JSON.parse(localStorage.getItem('walkbase.scene') || 'null')?.props?.map((p) => p.phys).join());
+check('the physics settings are kept with the scene', savedPhys === undefined || /drop/.test(savedPhys) && /tip/.test(savedPhys), savedPhys);
+if (shots) { await ev(() => window.__walkBase.setFrame(12)); await page.screenshot({ path: path.join(shots, `wb-propphys-${name}.png`) }); }
+check('no errors from the scenery physics', errors.length === 0, errors);
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

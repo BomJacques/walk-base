@@ -133,6 +133,8 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Selection colour | both |  | color | #e0662e | Highlight for the selected part. |
 | Style | both |  | mannequin, outline, stick, silhouette, moebius | mannequin | Moebius is a pen drawing: a thin ink line round the figure, flat soft colour, and shading by fine hatching, cross-hatching and a few dots on the side away from the light, on a paper-coloured stage. Mannequin is outlined limbs. Outline is only the outer edge of the figure, arms included, with no lines crossing inside. Stick is joints and bones. Silhouette is one solid shape. |
 | Line width | both | px | 0.5 to 12 | 3 | At 1080 pixels tall. It scales with the canvas. |
+| Hands | both |  | default, mitten, fist, fingers, pointing | default | Default is each figure's own hand: a ball on the mannequin, a round glove on the rubber hose figure. Mitten has a thumb, Fist is closed, Fingers is an open hand and Pointing holds one finger out. Hand size is in the body proportions. |
+| Feet | both |  | default, boot, bare, round | default | Default is each figure's own foot: a shoe on the mannequin, a round foot on the rubber hose figure. Boot adds a shaft up the shin, Bare is a low foot with toes, Round is the rubber hose foot. Foot size is in the body proportions. |
 | Limb thickness | both | × | 0.5 to 2 | 1 | How thick the tube arms and legs are. |
 | Limb curve | both |  | 0 to 1 | 1 | 1 bends each limb in one smooth curve, with no elbow or knee. 0 bends it sharply at the joint. |
 | Squash and stretch | both |  | 0 to 2 | 1 | At the bottom of the bounce the body squashes down and swells; at the top it stretches up and thins, legs and arms with it. 1 is clear, 2 is cartoon. |

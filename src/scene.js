@@ -26,7 +26,7 @@ export const PROP_BY_ID = Object.fromEntries(PROP_KINDS.map((k) => [k.id, k]));
 
 export function newProp(id, over = {}) {
   const k = PROP_BY_ID[id] || PROP_KINDS[0];
-  return { id: sceneId(), type: k.id, name: k.label, kind: k.kind, x: 0.8, y: 0, z: -0.9, rot: 0, w: k.w, d: k.d, h: k.h, color: k.color, visible: true, locked: false, img: '', asp: 0.6, flip: false, ...over };
+  return { id: sceneId(), type: k.id, name: k.label, kind: k.kind, x: 0.8, y: 0, z: -0.9, rot: 0, w: k.w, d: k.d, h: k.h, color: k.color, visible: true, locked: false, img: '', asp: 0.6, flip: false, phys: 'none', physStart: 0, bounce: 0.5, friction: 0.4, throwX: 0, push: 1.3, ...over };
 }
 /** A figure to put in the scene. params is the whole parameter set of its walk (the same keys as the main figure), r its proportions. */
 export function newActor(fig, name, params, proportions, over = {}) {
@@ -51,7 +51,8 @@ export function cleanScene(raw, figs, defaults) {
     if (!q || !PROP_BY_ID[q.type]) continue;
     const k = PROP_BY_ID[q.type];
     out.props.push({ id: String(q.id || sceneId()).slice(0, 40), type: k.id, name: String(q.name || k.label).slice(0, 40), kind: k.kind, x: num(q.x, 0, -12, 12), y: num(q.y, 0, -3, 8), z: num(q.z, 0, -8, 8), rot: num(q.rot, 0, -360, 360),
-      w: num(q.w, k.w, 0.03, 8), d: num(q.d, k.d, 0.03, 8), h: num(q.h, k.h, 0.03, 8), color: col(q.color, k.color), visible: q.visible !== false, locked: Boolean(q.locked), img: typeof q.img === 'string' ? q.img.slice(0, 40) : '', asp: num(q.asp, 0.6, 0.05, 20), flip: Boolean(q.flip) });
+      w: num(q.w, k.w, 0.03, 8), d: num(q.d, k.d, 0.03, 8), h: num(q.h, k.h, 0.03, 8), color: col(q.color, k.color), visible: q.visible !== false, locked: Boolean(q.locked), img: typeof q.img === 'string' ? q.img.slice(0, 40) : '', asp: num(q.asp, 0.6, 0.05, 20), flip: Boolean(q.flip),
+      phys: ['drop', 'tip'].includes(q.phys) ? q.phys : 'none', physStart: Math.round(num(q.physStart, 0, 0, 14400)), bounce: num(q.bounce, 0.5, 0, 0.95), friction: num(q.friction, 0.4, 0, 1), throwX: num(q.throwX, 0, -12, 12), push: num(q.push, 1.3, -3, 3) });
   }
   return out;
 }
@@ -60,7 +61,13 @@ export function cleanScene(raw, figs, defaults) {
 // Props as faces
 // ---------------------------------------------------------------------------------------------------------------
 /** The place a point of a prop goes in the world: turned about its own middle, then moved to x, z. */
-const place = (q, lx, y, lz) => { const a = rad(q.rot); const c = Math.cos(a); const s = Math.sin(a); return [q.x + c * lx + s * lz, y + (q.y || 0), q.z - s * lx + c * lz]; };
+const place = (q, lx0, y0, lz) => {
+  let lx = lx0; let y = y0;
+  if (q.tilt) { // pushed over: turned about its bottom edge on the side it falls towards
+    const s = q.tilt < 0 ? -1 : 1; const t = rad(Math.abs(q.tilt)); const px = (s * q.w) / 2; const u = (lx0 - px) * s;
+    lx = px + s * (u * Math.cos(t) + y0 * Math.sin(t)); y = -u * Math.sin(t) + y0 * Math.cos(t);
+  }
+  const a = rad(q.rot); const c = Math.cos(a); const s = Math.sin(a); return [q.x + c * lx + s * lz, y + (q.y || 0), q.z - s * lx + c * lz]; };
 
 /** A box or an upright prism as faces, each { pts: world points, normal: world vector }. */
 export function prismFaces(q, sides = 4, radiusRatio = 1, y0 = 0, y1 = q.h, w = q.w, d = q.d) {
@@ -76,7 +83,10 @@ export function prismFaces(q, sides = 4, radiusRatio = 1, y0 = 0, y1 = q.h, w = 
     const n = [e2[1] * e1[2] - e2[2] * e1[1], e2[2] * e1[0] - e2[0] * e1[2], e2[0] * e1[1] - e2[1] * e1[0]]; const l = Math.hypot(...n) || 1;
     faces.push({ pts, normal: [n[0] / l, n[1] / l, n[2] / l] });
   }
-  faces.push({ pts: hi.slice(), normal: [0, 1, 0] }); faces.push({ pts: lo.slice().reverse(), normal: [0, -1, 0] });
+  // the top and the bottom: straight up and down unless the prop has been tipped over
+  const mid = (r) => [0, 1, 2].map((k) => r.reduce((t, p) => t + p[k], 0) / r.length); const mh = mid(hi); const ml = mid(lo);
+  const up = [mh[0] - ml[0], mh[1] - ml[1], mh[2] - ml[2]]; const ul = Math.hypot(...up) || 1; const un = [up[0] / ul, up[1] / ul, up[2] / ul];
+  faces.push({ pts: hi.slice(), normal: un }); faces.push({ pts: lo.slice().reverse(), normal: [-un[0], -un[1], -un[2]] });
   return faces;
 }
 

@@ -16,6 +16,7 @@ import { speechAt, VISEME_BY_ID } from './lipsync.js';
 import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
 import { propParts, faceLight } from './scene.js';
+import { movedProp } from './propphys.js';
 
 export const STYLE_DEFAULTS = Object.freeze({
   style: 'mannequin',        // mannequin | outline | stick | silhouette | moebius
@@ -63,6 +64,8 @@ export const STYLE_DEFAULTS = Object.freeze({
   guideColor: '#e0662e',
   selectColor: '#e0662e',
   // the rubber hose figure
+  handStyle: 'default',      // default (each figure's own) | mitten | fist | fingers | pointing
+  footStyle: 'default',      // default (each figure's own) | boot | bare | round
   hoseLimb: 1, hoseBend: 1, hoseSquash: 1, hoseEars: 'none', hoseEyes: 'pie',
   hoseBody: '#2d2a2e', hoseFace: '#fff8e8', hoseGlove: '#ffffff', hoseShoe: '#ffffff', hoseShorts: '#2d2a2e',
 });
@@ -92,7 +95,7 @@ export function makeCam(st, w, h, target, yawOffset = 0, zoomMul = 1, centered =
 }
 
 /** Builds every body shape for a pose as screen polygons with a depth, a part and a side. */
-function buildShapes(pz, cam) {
+function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
   const shapes = [];
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
   const sc = cam.scale;
@@ -150,12 +153,22 @@ function buildShapes(pz, cam) {
     const fh = hull([...fa, ...fb]); const big = area(fa) >= area(fb) ? fa : fb;
     // Side on, one face is the shoe (with its dip at the instep). Turned toward the camera the faces spread apart, so the outline is their hull.
     const shoePts = area(big) >= 0.9 * area(fh) ? big : fh;
-    shapes.push({ pts: shoePts, depth: S(sd.ankle).d, part: 'foot', side, role });
+    const fk = pr.footSize ?? 1; const footAt = (x, y, z = 0) => add(sd.ankle, add(mul(sd.foot.fx, x * fk), add(mul(sd.foot.fy, y), mul(sd.foot.lat, z * fk))));
+    if (st.footStyle === 'round') capsule(footAt(-0.02, -0.075 + 0.056 * fk), footAt(0.25, -0.075 + 0.05 * fk), 0.056 * fk, 0.05 * fk, 'foot', side, role); // a round, rubber hose foot
+    else if (st.footStyle === 'bare') { // a bare foot: a low sole and five toes
+      capsule(footAt(-0.03, -0.075 + 0.04 * fk), footAt(0.17, -0.075 + 0.032 * fk), 0.04 * fk, 0.032 * fk, 'foot', side, role);
+      for (let j = 0; j < 5; j++) { const T = S(footAt(0.225 - Math.abs(j - 1) * 0.008, -0.075 + 0.02 * fk, (j - 2) * 0.021 * (side === 'R' ? -1 : 1))); shapes.push({ pts: circlePts(T, (0.021 - j * 0.0018) * fk * sc, 10), depth: T.d + 0.0002, part: 'foot', side, role }); }
+    } else {
+      shapes.push({ pts: shoePts, depth: S(sd.ankle).d, part: 'foot', side, role });
+      if (st.footStyle === 'boot') capsule(sd.ankle, lerp3(sd.ankle, sd.knee, 0.45), 0.062, 0.072, 'foot', side, role, gk); // the shaft of a boot up the shin
+    }
     capsule(sd.shoulder, sd.elbow, 0.05, 0.038, 'arm', side, role, gk);
     capsule(sd.elbow, sd.wrist, 0.036, 0.028, 'forearm', side, role, gk);
     const hc2 = add(sd.wrist, mul([sd.hand[0] - sd.wrist[0], sd.hand[1] - sd.wrist[1], sd.hand[2] - sd.wrist[2]], 0.6));
     const H = S(hc2);
-    shapes.push({ pts: circlePts(H, 0.045 * (pr.handSize ?? 1) * sc, 14), depth: H.d, part: 'hand', side, role });
+    const hp = handPolys(H, S(sd.wrist), 0.045 * (pr.handSize ?? 1) * sc, st.handStyle);
+    if (hp) hp.forEach((pts, i) => shapes.push({ pts, depth: H.d + i * 0.00002, part: 'hand', side, role }));
+    else shapes.push({ pts: circlePts(H, 0.045 * (pr.handSize ?? 1) * sc, 14), depth: H.d, part: 'hand', side, role });
     const SH = S(sd.shoulder);
     shapes.push({ pts: circlePts(SH, 0.052 * sc, 14), depth: SH.d + 0.0005, part: 'girdle', side, role });
   }
@@ -165,6 +178,30 @@ function buildShapes(pz, cam) {
 
 // ---------- the rubber hose figure ----------
 const mixHex = (a, b, t) => { const pa = parseInt(a.slice(1), 16); const pb = parseInt(b.slice(1), 16); const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t); return '#' + [16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join(''); };
+/**
+ * A hand drawn in one of the styles, on the screen: H is the middle of the hand, W the wrist (both { x, y }), r the size of the palm in pixels.
+ * Returns the outlines to fill, the palm first, or null for the figure's own hand.
+ */
+export function handPolys(H, W, r, style) {
+  if (!style || style === 'default') return null;
+  let dx = H.x - W.x; let dy = H.y - W.y; const dl = Math.hypot(dx, dy); if (dl < 1e-6) { dx = 0; dy = 1; } else { dx /= dl; dy /= dl; }
+  const nx = -dy; const ny = dx; // across the hand, towards the thumb
+  const P = (a, b) => ({ x: H.x + (dx * a + nx * b) * r, y: H.y + (dy * a + ny * b) * r });
+  const disc = (c, k, n = 10) => circlePts(c, k * r, n); const cap = (A, B, ka, kb) => hull([...disc(A, ka), ...disc(B, kb)]);
+  const fist = () => hull([...disc(P(-0.25, -0.45), 0.5), ...disc(P(0.65, -0.45), 0.5), ...disc(P(-0.25, 0.45), 0.5), ...disc(P(0.65, 0.45), 0.5)]);
+  switch (style) {
+    case 'mitten': return [hull([...disc(P(0, 0), 0.9, 16), ...disc(P(0.8, 0), 0.8, 16), ...disc(P(0.15, 0.95), 0.38)])];
+    case 'fist': return [fist(), cap(P(0.1, 0.8), P(0.6, 0.85), 0.26, 0.24)];
+    case 'pointing': return [fist(), cap(P(0.7, -0.45), P(2.2, -0.45), 0.23, 0.19), cap(P(0.1, 0.8), P(0.6, 0.85), 0.26, 0.24)];
+    case 'fingers': {
+      const out = [hull([...disc(P(0, 0), 0.85, 16), ...disc(P(0.5, 0), 0.8, 16)])];
+      for (let i = 0; i < 4; i++) { const k = i - 1.5; const a = (k * 11 * Math.PI) / 180; const len = i === 0 || i === 3 ? 1.05 : 1.3; const b = P(0.9, k * 0.4); out.push(cap(b, { x: b.x + (dx * Math.cos(a) + nx * Math.sin(a)) * len * r, y: b.y + (dy * Math.cos(a) + ny * Math.sin(a)) * len * r }, 0.21, 0.17)); }
+      out.push(cap(P(0.05, 0.7), P(0.7, 1.4), 0.24, 0.19));
+      return out;
+    }
+    default: return null;
+  }
+}
 const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 /** A limb as one curve through three joints. bend 1 is a single smooth curve that passes through the middle joint; 0 is the joint's sharp corner. */
 function hoseCurve(a, m, b, bend, n = 14) {
@@ -237,12 +274,21 @@ function buildHoseShapes(pz, cam, st) {
     // the foot: a short, round tube along the sole, the same colour as the leg so the two read as one hose
     const k = pr.footSize ?? 1; const f = sd.foot; const r = 0.055 * k; const cy = -0.075 + r; // its underside rests on the ground
     const along = (x) => add(sd.ankle, add(mul(f.fx, x * k), mul(f.fy, cy)));
-    tubeOf([along(-0.02), along(0.12), along(0.27)], [r, r * 1.02, r * 0.9], 'foot', side, role, st.hoseShoe);
+    if (st.footStyle === 'bare') {
+      const rb = r * 0.7; const low = (x, z = 0) => add(sd.ankle, add(mul(f.fx, x * k), add(mul(f.fy, -0.075 + rb), mul(f.lat, z * k))));
+      tubeOf([low(-0.02), low(0.1), low(0.2)], [rb, rb, rb * 0.85], 'foot', side, role, st.hoseShoe);
+      for (let j = 0; j < 5; j++) { const T = S(add(low(0.25 - Math.abs(j - 1) * 0.008, (j - 2) * 0.024 * (side === 'R' ? -1 : 1)), mul(f.fy, -rb * 0.45))); add1(circlePts(T, (0.024 - j * 0.002) * k * sc, 10), T.d + 0.0004, 'foot', side, role, st.hoseShoe); }
+    } else {
+      tubeOf([along(-0.02), along(0.12), along(0.27)], [r, r * 1.02, r * 0.9], 'foot', side, role, st.hoseShoe);
+      if (st.footStyle === 'boot') tubeOf([sd.ankle, lerp3(sd.ankle, sd.knee, 0.22), lerp3(sd.ankle, sd.knee, 0.45)], [0.07 * limbK, 0.074 * limbK, 0.08 * limbK], 'foot', side, role, st.hoseShoe, 0.0002);
+    }
     // a round glove with a thumb
     const hs = pr.handSize ?? 1; const hc2 = add(sd.wrist, mul([sd.hand[0] - sd.wrist[0], sd.hand[1] - sd.wrist[1], sd.hand[2] - sd.wrist[2]], 0.6));
     const H = S(hc2); const Wr = S(sd.wrist); const dx = H.x - Wr.x; const dy = H.y - Wr.y; const dl = Math.hypot(dx, dy) || 1;
     const th = { x: H.x + (-dy / dl) * 0.05 * hs * sc + (dx / dl) * 0.02 * hs * sc, y: H.y + (dx / dl) * 0.05 * hs * sc + (dy / dl) * 0.02 * hs * sc };
-    add1(hull([...circlePts(H, 0.062 * hs * sc, 18), ...circlePts(th, 0.03 * hs * sc, 10)]), H.d + 0.0003, 'hand', side, role, st.hoseGlove);
+    const hp = handPolys(H, Wr, 0.058 * hs * sc, st.handStyle);
+    if (hp) hp.forEach((pts, i) => add1(pts, H.d + 0.0003 + i * 0.00002, 'hand', side, role, st.hoseGlove));
+    else add1(hull([...circlePts(H, 0.062 * hs * sc, 18), ...circlePts(th, 0.03 * hs * sc, 10)]), H.d + 0.0003, 'hand', side, role, st.hoseGlove);
   }
   shapes.sort((x, y) => x.depth - y.depth);
   return { shapes, face: { eyes: [], nose: null } };
@@ -382,8 +428,9 @@ function sceneDrawables(ctx, params, st, cam, env) {
     const st2 = a.fill || a.line || a.tint ? { ...st, ...(a.fill ? { fillColor: a.fill, hoseBody: a.fill, hoseShorts: a.fill } : {}), ...(a.line ? { lineColor: a.line } : {}), ...(a.tint ? { farTint: a.tint } : {}) } : st;
     out.push({ d: cA.p([pzA.pelvisX, 0, 0]).d, paint: () => { const r = drawFigureShapes(ctx, pzA, cA, st2, {}); hits.push({ id: a.id, shapes: r.shapes || [] }); } });
   }
-  for (const q of sc.props || []) {
-    if (!q.visible) continue;
+  for (const q0 of sc.props || []) {
+    if (!q0.visible) continue;
+    const q = movedProp(q0, env.frame ?? 0, params.fps || 24); // dropped or pushed over: where it has got to by this frame
     out.push({ d: cam.p([q.x, 0, q.z]).d, paint: () => { hits.push({ id: q.id, shapes: paintProp(ctx, q, cam, st).map((pts) => ({ pts, part: 'prop', side: null })) }); } });
   }
   void pz;
@@ -546,7 +593,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     return { shapes: [], placed: placedLines };
   }
   const hose = !pz.legs && pz.params?.model === 'hose';
-  const built = pz.legs ? buildDogShapes(pz, cam) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam);
+  const built = pz.legs ? buildDogShapes(pz, cam) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam, st);
   const { face } = built; let shapes = built.shapes;
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
@@ -765,7 +812,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   }
 
   let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null; const sceneHits = [];
-  const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz, hits: sceneHits }) : [];
+  const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz, hits: sceneHits, frame: perf ? t0 : frame }) : [];
   const dMain = camF.p([pz.pelvisX, 0, 0]).d;
   if (layers.figure) {
     for (const it of sceneItems) if (it.d < dMain) it.paint();

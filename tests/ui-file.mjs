@@ -203,6 +203,22 @@ const pl = await ev(() => window.__walkBase.S.perfLen); check('Undo puts the per
 await q('menu-perf').click(); await wait(100);
 check('the Performance menu has it too', (await page.locator('[data-testid="pm-loop"]').count()) === 1); await page.keyboard.press('Escape');
 check('no page errors', errors.length === 0, errors);
+// ---- hand and foot styles
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.lanes = {}; w.S.perfLen = 0; w.S.s.style = 'mannequin'; w.S.s.handStyle = 'default'; w.S.s.footStyle = 'default'; w.S.s.camYaw = -30; w.S.ver++; w.setTab('View'); w.setFrame(4); w.render(); }); await wait(200);
+const stageShot = async () => (await page.locator('[data-testid="stage"]').screenshot()).toString('base64');
+const plainFig = await stageShot(); const seenLooks = new Set([plainFig]);
+check('the View tab has Hands and Feet choices', (await q('opt-handStyle-fingers').count()) === 1 && (await q('opt-footStyle-bare').count()) === 1);
+for (const o of ['mitten', 'fist', 'fingers', 'pointing']) { await q(`opt-handStyle-${o}`).click(); await wait(120); seenLooks.add(await stageShot()); }
+for (const o of ['boot', 'bare', 'round']) { await q(`opt-footStyle-${o}`).click(); await wait(120); seenLooks.add(await stageShot()); }
+check('every hand and foot style changes the drawing', seenLooks.size === 8, seenLooks.size);
+await q('opt-handStyle-default').click(); await q('opt-footStyle-default').click(); await wait(120);
+check('default brings back the hands and feet of the figure', (await stageShot()) === plainFig);
+await ev(() => { window.__walkBase.S.s.handStyle = 'fingers'; window.__walkBase.S.s.footStyle = 'bare'; });
+for (const fig of ['hose', 'dog', 'human']) { await ev((f) => { window.__walkBase.setFigure(f); window.__walkBase.render(); }, fig); await wait(120); }
+await ev(() => { const w = window.__walkBase; for (const st of ['outline', 'stick', 'silhouette', 'moebius', 'mannequin']) { w.S.s.style = st; w.render(); } });
+check('they draw on the rubber hose figure and in every style without an error', errors.length === 0, errors);
+await ev(() => { window.__walkBase.S.s.handStyle = 'default'; window.__walkBase.S.s.footStyle = 'default'; });
+await ev(() => { const w = window.__walkBase; w.S.s.camYaw = 0; w.setTab('Gait'); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);
