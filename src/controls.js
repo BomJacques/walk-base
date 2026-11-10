@@ -87,6 +87,7 @@ const RAW_CONTROLS = [
   n('r', 'upperArm', 'Body', 'Proportions', 'Upper arm length', '×', 0.6, 1.6, 0.01, 'Scale of the upper arm only, on top of Arm length.'),
   n('r', 'foreArm', 'Body', 'Proportions', 'Forearm length', '×', 0.6, 1.6, 0.01, 'Scale of the forearm only, on top of Arm length.'),
   n('r', 'handSize', 'Body', 'Proportions', 'Hand size', '×', 0.5, 2.5, 0.01, 'Scale of the hand, in length and in the drawing.'),
+  n('r', 'leg', 'Body', 'Proportions', 'Leg length', '×', 0.7, 1.4, 0.01, 'Scale of both legs. The steps stay the same length, so longer legs stand taller and straighter over them, and shorter legs bend and work harder. Lengthen the step to match if you want the same walk on longer legs.'),
   n('r', 'thighShare', 'Body', 'Proportions', 'Upper leg share', '×', 0.75, 1.25, 0.01, 'How much of the leg is thigh and how much is shin. The leg stays the same total length, so the walk does not change.'),
   n('r', 'footSize', 'Body', 'Proportions', 'Foot size', '×', 0.6, 2, 0.01, 'Scale of the drawn foot. Large for a clown shoe, small for a dancer.'),
   n('r', 'limbGirth', 'Body', 'Proportions', 'Limb thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the arms and legs in the drawing.'),

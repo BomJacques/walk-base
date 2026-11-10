@@ -35,8 +35,12 @@ export const TORSO = Object.freeze({ lower: 0.2, mid: 0.22, upper: 0.24 });
 function contactHeight(p) {
   const d = p.stepLength * p.duty;
   const f0 = foot(0, p, d);
-  return f0.y + Math.sqrt(Math.max(0.01, (p.legExtend * LEG_LENGTH) ** 2 - f0.x ** 2));
+  // Longer legs over the same steps would stand nearly straight, with no give left for the bounce. The hips are set as if the step had grown with the leg, so the knees keep the bend they have on a standard leg.
+  const LL = legLength(p); const k = Math.max(1, LL / LEG_LENGTH);
+  return f0.y + Math.sqrt(Math.max(0.01, (p.legExtend * LL) ** 2 - (f0.x * k) ** 2));
 }
+/** How long this figure's legs are: the standard leg, scaled by the Leg length proportion. The walk's distances stay as they are, so longer legs stand taller over the same steps. */
+export const legLength = (p) => LEG_LENGTH * Math.min(3, Math.max(0.3, (p?.proportions || {}).leg ?? 1));
 
 export function ik3(hip, ankle, l1, l2, pole) {
   let d = sub(ankle, hip);
@@ -142,8 +146,9 @@ export function pose3(params, motion, u, extra = null) {
     const out = k('knee.out');
     const pole = norm(add(mul(fwdDir, Math.cos(out)), [0, 0, s * Math.sin(out)]));
     // the thigh takes a bigger or smaller share of the same leg length, so the gait is untouched
-    const l1 = clamp(BODY.thigh * sc('thighShare'), 0.35 * LEG_LENGTH, 0.65 * LEG_LENGTH);
-    const leg = ik3(hip, ankle, l1, LEG_LENGTH - l1, pole);
+    const LL = legLength(p);
+    const l1 = clamp(BODY.thigh * sc('thighShare') * (LL / LEG_LENGTH), 0.35 * LL, 0.65 * LL);
+    const leg = ik3(hip, ankle, l1, LL - l1, pole);
 
     const psi = -s * k('foot.yaw');
     let theta = f.theta + k('foot.pitch') + (tf[side]?.slope ?? 0);

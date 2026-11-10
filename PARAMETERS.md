@@ -76,6 +76,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Upper arm length | human | × | 0.36 to 2.88 | 1 | Scale of the upper arm only, on top of Arm length. |
 | Forearm length | human | × | 0.36 to 2.88 | 1 | Scale of the forearm only, on top of Arm length. |
 | Hand size | human | × | 0.3 to 4.5 | 1 | Scale of the hand, in length and in the drawing. |
+| Leg length | human | × | 0.42 to 2.52 | 1 | Scale of both legs. The steps stay the same length, so longer legs stand taller and straighter over them, and shorter legs bend and work harder. Lengthen the step to match if you want the same walk on longer legs. |
 | Upper leg share | human | × | 0.45 to 2.25 | 1 | How much of the leg is thigh and how much is shin. The leg stays the same total length, so the walk does not change. |
 | Foot size | human | × | 0.36 to 3.6 | 1 | Scale of the drawn foot. Large for a clown shoe, small for a dancer. |
 | Limb thickness | human | × | 0.3 to 3.96 | 1 | Thickness of the arms and legs in the drawing. |

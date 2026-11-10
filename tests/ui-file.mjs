@@ -411,6 +411,20 @@ check('a pad tapped in a take writes its blend as automation, from the walk that
 const padEnd = await ev(() => { const w = window.__walkBase; w.setFrame(w.S.perfLen - 1); return w.nowValues().p.lean; });
 check('and it holds: the performance is still the sneaking walk at its last frame, even recorded in Touch', Math.abs(padEnd - padTake.target) < 1e-6 && errors.length === 0, [padEnd, errors]);
 await ev(() => { const w = window.__walkBase; w.setArmed(false); w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.padBank().pads.fill(null); w.padBank().active = null; w.padBank().blend = 1; w.applyPreset('Normal'); w.setFrame(0); });
+// ---- leg length, for the human and the rubber hose figure
+await page.mouse.move(4, 4);
+for (const fig of ['human', 'hose']) {
+  await ev((f) => { const w = window.__walkBase; w.pause(); w.setFigure(f); w.S.s.camYaw = 0; w.setTab('Gait'); w.setFrame(3); w.render(); }, fig); await wait(250);
+  check(`${fig}: Leg length is in the proportions`, (await q('rng-leg').count()) === 1);
+  const before = await stageShot();
+  await ev(() => { const e = document.querySelector('[data-testid="rng-leg"]'); e.value = 1.4; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
+  const tall = await ev(() => window.__walkBase.S.r.leg);
+  check(`${fig}: the slider makes the legs longer and the figure changes`, tall === 1.4 && (await stageShot()) !== before, tall);
+  await ev(() => { const w = window.__walkBase; delete w.S.r.leg; w.S.ver++; w.render(); });
+}
+await ev(() => { const w = window.__walkBase; w.setFigure('dog'); w.setTab('Gait'); }); await wait(200);
+check('the dog keeps its own Leg length', (await q('rng-leg').count()) === 0 && (await q('rng-dLeg').count()) === 1 && errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.setTab('Gait'); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);
