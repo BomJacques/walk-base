@@ -25,6 +25,7 @@ import { icon } from './icons.js';
 import { makeSeamless, loopGap } from './loop.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PHYS_MODES } from './propphys.js';
+import { PAD_COUNT, BLENDS, newBank, capturePad, transitionValues, blendFrames, cleanBank, cleanBanks } from './pads.js';
 import { newMood, cleanMood, blendMood, moodKeys, moodsFor, moodWeights, CORNERS, CORNER_LABELS } from './mood.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
@@ -37,6 +38,9 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 const FIG_GROUPS = [['People', ['human', 'hose']], ['Animals', ['dog', 'horse', 'bird']], ['Dinosaurs', ['theropod', 'sauropod', 'ceratopsian']], ['Rubber hose animals', ['hosehorse', 'hosebird']]];
 const FIGS = FIG_GROUPS.flatMap(([, list]) => list);
 const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
+let BANKS = {}; // the pad bank of each figure: eight walks to switch between
+let PADRUN = null; // a blend to a pad that is waiting or under way
+let PADMODE = 'play'; // what a tap on a pad does: play | store | clear
 let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
@@ -134,7 +138,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -181,7 +185,7 @@ function adopt(raw) {
   if (raw.attach && typeof raw.attach === 'object') S.attach = cleanAttach(raw.attach);
   if (raw.perfs && typeof raw.perfs === 'object') for (const r of FIGS) { const o = {}; for (const [name, v] of Object.entries(raw.perfs[r] || {})) { const nm = String(name).slice(0, 40); if (nm && v) o[nm] = { lanes: cleanLanes(v.lanes), perfLen: Math.max(0, Math.round(finite(v.perfLen))) }; } S.perfs[r] = o; }
   S.motion = cleanMotion(raw.motion);
-  MOOD = cleanMood(raw.mood);
+  MOOD = cleanMood(raw.mood); if (raw.pads) BANKS = cleanBanks(raw.pads, FIGS); PADRUN = null;
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
@@ -698,6 +702,103 @@ const resetMenu = (target) => menuButton({ label: 'Reset', testid: 'fig-reset', 
   { label: 'Reset the body (proportions)', testid: 'reset-body', onClick: () => resetFigure(target, 'body') },
   { label: 'Reset the colours', testid: 'reset-colours', onClick: () => resetFigure(target, 'colours') },
   { separator: true }, { label: 'Reset everything about this figure…', testid: 'reset-fig-all', onClick: () => resetFigure(target, 'all') }] });
+// ---------- the pad bank ----------
+const padBank = () => (BANKS[figKey()] ||= newBank());
+/** Keeps the walk as it is now on a pad. */
+function storePad(i, name) {
+  const b = padBank(); const w = moodWeights(MOOD.x, MOOD.y); const mix = CORNERS.filter((c) => w[c] > 0.2).map((c) => MOOD.corners[c].name || 'walk').join(' + ');
+  b.pads[i] = capturePad(S.p, MOOD, name || (S.preset && S.preset !== 'Custom' ? S.preset : mix || `Walk ${i + 1}`)); b.active = i; PADMODE = 'play';
+  save(); renderPanel(); setMessage(`Pad ${i + 1} now holds this walk (${b.pads[i].name}). Tap it to come back to it.`);
+}
+/** Starts the blend that is waiting: fixes where it begins and switches the choices that cannot be blended. */
+function padBegin() {
+  const r = PADRUN; if (!r || !r.waiting) return; r.waiting = false; r.done = 0;
+  r.from = Object.fromEntries(Object.keys(r.pad.values).map((k) => [k, typeof S.p[k] === 'number' ? S.p[k] : r.pad.values[k]]));
+  r.dur = blendFrames(padBank(), S.p.cycleFrames);
+  if (r.rec) { for (const k of Object.keys(r.pad.values)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs(r.from[k] - r.pad.values[k]) > 1e-9) rec.touch(targetOfParam(k), S.frame, r.from[k]); }
+  else { for (const [k, v] of Object.entries(r.pad.flags || {})) if (k in S.p && typeof S.p[k] === typeof v) S.p[k] = v; MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null; markCustom(); }
+  if (r.dur <= 0) padFinish();
+}
+/** One frame of a blend. While it waits for the end of the cycle it only watches for the cycle to come round. */
+function padStep() {
+  const r = PADRUN; if (!r) return;
+  if (r.waiting) { const n = Math.max(2, Math.round(S.p.cycleFrames)); if (S.frame % n !== 0) return; padBegin(); if (!PADRUN) return; }
+  r.done++;
+  padApply(transitionValues(r.from, r.pad.values, r.done / Math.max(1, r.dur)));
+  if (r.done >= r.dur) padFinish();
+}
+function padApply(vals, r = PADRUN) {
+  if (r?.rec) { for (const [k, v] of Object.entries(vals)) if (k !== 'cycleFrames' && k in DEFAULTS && Math.abs((r.from[k] ?? v) - r.pad.values[k]) > 1e-9) rec.set(targetOfParam(k), S.frame, v); return; } // while recording, the blend is written into the take
+  const before = Math.max(2, Math.round(S.p.cycleFrames));
+  for (const [k, v] of Object.entries(vals)) if (typeof S.p[k] === 'number') S.p[k] = P_CONTROL[k]?.type === 'number' ? clampTo(P_CONTROL[k], v) : v;
+  const now = Math.max(2, Math.round(S.p.cycleFrames)); S.ver++;
+  if (now !== before && S.perfLen <= 0) { S.frame = Math.min(now - 1, Math.round((S.frame / before) * now)); buildStrip(); } // the same place in the step, in a cycle of another length
+}
+function padFinish(quiet = false) {
+  const r = PADRUN; if (!r) return; PADRUN = null; stopPadPump();
+  if (r.waiting) { if (!quiet) renderPanel(); return; }
+  if (r.rec) { for (const k of Object.keys(r.pad.values)) if (k !== 'cycleFrames' && k in DEFAULTS) rec.release(targetOfParam(k), S.frame); }
+  else { padApply(transitionValues({}, r.pad.values, 1), r); if (r.pad.mood) MOOD = cleanMood(r.pad.mood); padBank().active = r.idx; refreshGaitLine(); }
+  if (!quiet) { save(); renderPanel(); render(); }
+}
+/** A tap on a pad: store the walk on it, clear it, or blend to the walk it holds. */
+function triggerPad(i) {
+  const b = padBank(); if (i < 0 || i >= PAD_COUNT) return;
+  if (PADMODE === 'clear') { b.pads[i] = null; if (b.active === i) b.active = null; PADMODE = 'play'; save(); renderPanel(); return; }
+  if (PADMODE === 'store' || !b.pads[i]) { storePad(i); return; }
+  if (PADRUN) padFinish(true);
+  const recording = recOn();
+  PADRUN = { idx: i, pad: b.pads[i], waiting: true, rec: recording, done: 0, dur: 0, from: {} };
+  if (b.when === 'cycle' && S.playing && S.frame % Math.max(2, Math.round(S.p.cycleFrames)) !== 0) { renderPanel(); setMessage(`Pad ${i + 1} (${b.pads[i].name}) starts when this cycle ends.`); return; }
+  padBegin();
+  if (PADRUN && !S.playing) startPadPump(); // paused: the blend still plays out, on its own clock
+  renderPanel(); render();
+}
+let padRaf = 0; let padLast = 0; let padAcc = 0;
+function stopPadPump() { if (padRaf) cancelAnimationFrame(padRaf); padRaf = 0; }
+function startPadPump() {
+  stopPadPump(); padLast = performance.now(); padAcc = 0;
+  const loop = (t) => { if (!PADRUN || S.playing) { padRaf = 0; return; } padAcc += t - padLast; padLast = t; const per = 1000 / S.p.fps; let moved = false;
+    while (padAcc >= per && PADRUN) { padAcc -= per; if (PADRUN.waiting) padBegin(); else padStep(); moved = true; }
+    if (moved) render(); padRaf = PADRUN ? requestAnimationFrame(loop) : 0; };
+  padRaf = requestAnimationFrame(loop);
+}
+function savePadBank() {
+  const b = padBank(); const n = typeof prompt === 'function' ? prompt('Name this bank', b.name) : b.name; const name = fileSafe(n); if (!name) return; b.name = name;
+  deliver(new Blob([JSON.stringify({ format: 'walk-base-pad-bank', version: 1, figure: figKey(), bank: b }, null, 1)], { type: 'application/json' }), `${name}.padbank.json`).then(() => { save(); renderPanel(); setMessage(`Saved the bank as ${name}.padbank.json.`); });
+}
+async function loadPadBank(e) {
+  const f = e.target.files?.[0]; if (!f) return;
+  try {
+    const raw = JSON.parse(await f.text()); if (raw.format !== 'walk-base-pad-bank') throw new Error('This is not a Walk Base pad bank.');
+    if (rigOfFig(raw.figure) !== rigOfFig(figKey())) throw new Error(`This bank is for the ${FIG_LABELS[raw.figure] || raw.figure}. Choose that figure first.`);
+    if (PADRUN) padFinish(true); BANKS[figKey()] = cleanBank(raw.bank); BANKS[figKey()].active = null; save(); renderPanel(); setMessage(`Loaded the bank ${BANKS[figKey()].name}.`);
+  } catch (err) { setMessage(`Could not load it: ${err.message}`); }
+  e.target.value = '';
+}
+function padSection() {
+  const b = padBank(); const filled = b.pads.filter(Boolean).length;
+  const seg = (items, cur, on, tid) => h('div', { class: 'seg', role: 'group' }, items.map(([v, label]) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(cur === v), testid: `${tid}-${v}`, onClick: () => on(v) }, label)));
+  const fileIn = h('input', { type: 'file', accept: '.json,application/json', class: 'sr', tabindex: '-1', 'aria-label': 'Load a pad bank', testid: 'pad-load-file', onChange: loadPadBank });
+  const grid = h('div', { class: 'padgrid', role: 'group', 'aria-label': 'Pads', testid: 'pad-grid' }, b.pads.map((p, i) => {
+    const queued = PADRUN?.idx === i && PADRUN.waiting; const going = PADRUN?.idx === i && !PADRUN.waiting;
+    return h('button', { type: 'button', class: `padbtn${p ? '' : ' empty'}${queued ? ' queued' : ''}${going ? ' going' : ''}`, 'aria-pressed': String(b.active === i && !PADRUN), testid: `pad-${i + 1}`,
+      'aria-label': p ? `Pad ${i + 1}: ${p.name}${queued ? ', waiting for the end of the cycle' : ''}` : `Pad ${i + 1}, empty. Tap to keep this walk on it`, onClick: () => triggerPad(i) },
+      h('small', null, String(i + 1)), h('span', null, p ? p.name : 'empty'));
+  }));
+  const act = b.active != null && b.pads[b.active] ? b.pads[b.active] : null;
+  return h('section', { class: 'group', 'data-area': 'Gait', testid: 'pad-section' }, h('h3', null, filled ? `Pads (${filled})` : 'Pads'), fileIn,
+    grid,
+    h('p', { class: 'hint', testid: 'pad-hint' }, PADMODE === 'store' ? 'Tap a pad to keep the walk as it is now on it.' : PADMODE === 'clear' ? 'Tap a pad to empty it.' : filled ? 'Tap a pad to change to its walk. End of cycle waits for the first frame; with Rec on (Latch) the blend is written into the take.' : 'Set up a walk (a preset, the sliders, the mood pad), then tap an empty pad to keep it there. Do the same for other walks, and tap between them while it plays.'),
+    h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Change')), seg([['now', 'Now'], ['cycle', 'End of cycle']], b.when, (v) => { b.when = v; save(); renderPanel(); }, 'pad-when')),
+    h('div', { class: 'row noreset row-enum' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Blend over'), h('span', { class: 'unit' }, 'cycles')), seg(BLENDS, b.blend, (v) => { b.blend = v; save(); renderPanel(); }, 'pad-blend')),
+    act ? h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, `Pad ${b.active + 1} name`), h('input', { type: 'text', class: 'txt', value: act.name, maxlength: 24, 'aria-label': 'Name of this pad', testid: 'pad-name', onChange: (e) => { act.name = e.target.value.slice(0, 24) || act.name; save(); renderPanel(); } })) : null,
+    h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn', 'aria-pressed': String(PADMODE === 'store'), testid: 'pad-store', title: 'Then tap a pad: the walk as it is now is kept on it', onClick: () => { PADMODE = PADMODE === 'store' ? 'play' : 'store'; renderPanel(); } }, 'Store'),
+      h('button', { type: 'button', class: 'btn', 'aria-pressed': String(PADMODE === 'clear'), testid: 'pad-clear', title: 'Then tap a pad to empty it', onClick: () => { PADMODE = PADMODE === 'clear' ? 'play' : 'clear'; renderPanel(); } }, 'Clear'),
+      h('button', { type: 'button', class: 'btn', testid: 'pad-save', disabled: !filled, onClick: savePadBank }, 'Save bank'),
+      h('button', { type: 'button', class: 'btn', testid: 'pad-load', onClick: () => fileIn.click() }, 'Load bank')));
+}
 // ---------- the mood pad ----------
 const P_CONTROL = Object.fromEntries(CONTROLS.filter((c) => c.scope === 'p').map((c) => [c.id, c]));
 const moodLimit = (k, v) => (P_CONTROL[k]?.type === 'number' ? clampTo(P_CONTROL[k], v) : v);
@@ -959,6 +1060,7 @@ function setRig(rig) { setFigure(rig === 'human' ? 'human' : rig === 'dog' ? 'do
 /** Switches figure. Each keeps its own attachments, saved performances and automation; a species also brings its own bones, so it starts from its first preset. */
 function setFigure(fig) {
   if (!FIGS.includes(fig) || fig === figKey()) return;
+  if (PADRUN) padFinish(true);
   if (MOOD.base) { Object.assign(S.p, Object.fromEntries(Object.entries(MOOD.base).filter(([k]) => typeof S.p[k] === 'number'))); } MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null; // the figure leaves with its own walk, not the mood
   { const d = newMood().corners; for (const c of CORNERS) if (MOOD.corners[c].kind !== 'mood') MOOD.corners[c] = d[c]; MOOD.skip = []; } // a corner holding another figure's walk means nothing to this one
   pause(); closeEditor(true); setArmed(false);
@@ -1059,7 +1161,7 @@ function tick(t) {
   const per = 1000 / S.p.fps;
   if (acc >= per) {
     const steps = Math.floor(acc / per); acc -= steps * per;
-    const n = cycleFrames(P()).frames.length;
+    let n = cycleFrames(P()).frames.length;
     for (let i = 0; i < steps; i++) {
       let nf = S.frame + 1;
       if (nf >= n) {
@@ -1068,6 +1170,7 @@ function tick(t) {
       }
       S.frame = nf;
       if (S.recording) rec.tick(nf);
+      if (PADRUN) { padStep(); n = cycleFrames(P()).frames.length; if (S.frame >= n) S.frame = 0; } // a blend to a pad moves on one frame; the cycle may have changed length
     }
   }
   paint();
@@ -1538,7 +1641,7 @@ function collapsible(host) {
     else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and legs, left and right feet, onion skin, colours, names, target app); a choice you make is remembered.
-    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^left and right feet$|^variety$|^ground$|^direction$|^feet$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
+    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
     const body = h('div', { class: 'group-body' });
     while (hd.nextSibling) body.append(hd.nextSibling);
     sec.append(body); body.hidden = folded;
@@ -1562,7 +1665,7 @@ function renderPanel() {
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
     if (S.tab === 'Speech') host.append(speechSection());
-    if (S.tab === 'Gait') { host.append(sceneSection()); host.append(moodSection()); host.append(gaitChartSection()); }
+    if (S.tab === 'Gait') { host.append(sceneSection()); host.append(moodSection()); host.append(padSection()); host.append(gaitChartSection()); }
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
     for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
     if (S.tab === 'View') host.append(viewExtras(), arcSection(), refSection());
@@ -1825,7 +1928,7 @@ function saveAs() {
   S.fileName = name; saveSettings();
 }
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, images: usedImages() }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, images: usedImages() }, null, 1)], { type: 'application/json' });
   deliver(blob, `${S.fileName}.json`).then(() => { S.savedState = snapState(); S.everSaved = true; refreshSaveState(); setMessage(`Saved ${S.fileName}.json.`); });
 }
 async function loadSettings(e) {
@@ -2435,7 +2538,7 @@ window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
   buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
-  setMoodPad, mood: () => MOOD,
+  setMoodPad, mood: () => MOOD, triggerPad, storePad, padBank, padRun: () => PADRUN, padMode: (m) => { PADMODE = m; },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),
   frame: (i, part = null, over = {}) => renderFrame(P(), S.s, { ...S.x, ...over }, i, part),

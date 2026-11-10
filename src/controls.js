@@ -248,8 +248,7 @@ export const BODY_LAYOUT = [
   ['Gait', 'Timing', ['exposure', 'travel', 'cycleFrames', 'fps']],
   ['Gait', 'Stride', ['stepLength', 'duty', 'legExtend', 'stepWidth', 'toeOut']],
   ['Gait', 'Bounce and weight', ['bob', 'downPhase', 'weight']],
-  ['Gait', 'Feet', ['footLift', 'liftPeak', 'swingReach', 'heelStrike', 'heelDown', 'heelUp', 'toeOff', 'swingToe']],
-  ['Gait', 'Left and right feet', ['asymTiming', 'asymDuty', 'asymLift']],
+  ['Gait', 'Feet', ['footLift', 'liftPeak', 'swingReach', 'heelStrike', 'heelDown', 'heelUp', 'toeOff', 'swingToe', 'asymTiming', 'asymDuty', 'asymLift']], // the far foot against the near one is here too: one group for the feet
   ['Gait', 'Variety', ['noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop']],
   ['Gait', 'Rubber hose', ['hoseFollow', 'hoseStretch', 'hoseWobble', 'hoseWobbleRate']],
   ['Gait', 'Direction', ['heading']],

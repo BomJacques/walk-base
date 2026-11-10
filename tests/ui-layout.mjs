@@ -38,7 +38,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
   const folded = await ev(() => [...document.querySelectorAll('#panel-body section.group')].map((s) => ({ t: s.querySelector('.sec-toggle')?.textContent.trim(), open: s.querySelector('.sec-toggle')?.getAttribute('aria-expanded') === 'true' })));
   check(`${label}: Body starts with Proportions and Hips and legs folded`, folded.filter((x) => /proportions|hips and legs/i.test(x.t)).every((x) => !x.open) && folded.some((x) => x.open), folded);
   const bodyScreens = await ev(() => document.getElementById('panel-body').scrollHeight / document.getElementById('panel-body').clientHeight);
-  check(`${label}: the Body tab is now about ${bodyScreens.toFixed(1)} screens of scrolling (the walk, the body and the scene are one tab now; folded groups keep it manageable)`, bodyScreens < 6, bodyScreens.toFixed(2));
+  check(`${label}: the Body tab is now about ${bodyScreens.toFixed(1)} screens of scrolling (the walk, the body and the scene are one tab now; folded groups keep it manageable; the mood pad and the pad bank are in it too)`, bodyScreens < 6.5, bodyScreens.toFixed(2));
   await page.locator('#panel-body .sec-toggle', { hasText: /proportions/i }).first().click(); await page.waitForTimeout(150);
   check('tapping a folded group opens it and the choice is remembered', await ev(() => [...document.querySelectorAll('#panel-body .sec-toggle')].find((b) => /proportions/i.test(b.textContent))?.getAttribute('aria-expanded')) === 'true');
   await ev(() => window.__walkBase.setTab('Gait')); await tab('Body');
