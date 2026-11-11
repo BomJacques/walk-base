@@ -867,7 +867,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   const pz = poseAt(t0);
   const sp = perf ? valuesAt(t0).p : params;
   const step = dog ? sp.dogStride / 2 : sp.stepLength;
-  const bodyTarget = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? 0.45 : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? 0.45 : 0)), dog ? speciesOf(params).view.y + Math.min(1, params.dogFlight || 0) * (params.dogFlightHeight ?? 0) * 0.85 : 0.9, 0];
+  const bodyTarget = [perf ? (params.travel === 'across' ? (perf.x[0] + perf.x[perf.T]) / 2 : pz.pelvisX + (dog ? (pz.centreX ?? 0.45) : 0)) : (params.travel === 'across' ? step : pz.pelvisX + (dog ? (pz.centreX ?? 0.45) : 0)), dog ? speciesOf(params).view.y + Math.min(1, params.dogFlight || 0) * (params.dogFlightHeight ?? 0) * 0.85 : 0.9, 0];
   bodyTarget[1] += gyf(bodyTarget[0]);
   // The head view looks at the face: the camera is centred on the head and zoomed in, and still orbits around it.
   const headView = st.focus === 'head' && !dog;
@@ -876,7 +876,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   const hRad = (hDeg * Math.PI) / 180; const ch = Math.cos(hRad); const sh = Math.sin(hRad);
   const Pw = perf ? [perf.px[t0], perf.pz[t0]] : [pz.pelvisX * ch, pz.pelvisX * sh];
   const toWorld = pathOn ? (pt) => { const lx = pt[0] - pz.pelvisX; return [Pw[0] + lx * ch - pt[2] * sh, pt[1], Pw[1] + lx * sh + pt[2] * ch]; } : (pt) => pt;
-  if (pathOn) { const across = params.travel === 'across' && perf; const c = toWorld([pz.pelvisX + (dog ? 0.45 : 0), 0, 0]); bodyTarget[0] = across ? (perf.px[0] + perf.px[perf.T]) / 2 : c[0]; bodyTarget[2] = across ? (perf.pz[0] + perf.pz[perf.T]) / 2 : c[2]; }
+  if (pathOn) { const across = params.travel === 'across' && perf; const c = toWorld([pz.pelvisX + (dog ? (pz.centreX ?? 0.45) : 0), 0, 0]); bodyTarget[0] = across ? (perf.px[0] + perf.px[perf.T]) / 2 : c[0]; bodyTarget[2] = across ? (perf.pz[0] + perf.pz[perf.T]) / 2 : c[2]; }
   const target = headView ? toWorld([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]) : bodyTarget;
   const mouthId = dog ? null : (opts.mouth ?? speechAt(params.speech, perf ? t0 : frame) ?? (headView ? 'rest' : null));
   const cam = makeCam(st, w, h, target, opts.yawOffset || 0, headView ? st.headZoom : dog ? speciesOf(params).view.zoom / (1 + 0.15 * Math.min(1, params.dogFlight || 0)) : 1, headView);

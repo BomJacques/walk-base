@@ -38,9 +38,9 @@ const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The figures. The human has its own rig; the others are species of the dog's legged rig, each with its own attachments, saved performances and presets. */
 /** The figures, in the groups the menus show them in. */
-const FIG_GROUPS = [['People', ['human', 'hose']], ['Animals', ['dog', 'horse', 'bird']], ['Dinosaurs', ['theropod', 'sauropod', 'ceratopsian']], ['Rubber hose animals', ['hosehorse', 'hosebird']]];
+const FIG_GROUPS = [['People', ['human', 'hose']], ['Animals', ['dog', 'horse', 'bird', 'lizard', 'snake', 'spider', 'crab']], ['Dinosaurs and reptiles', ['theropod', 'sauropod', 'ceratopsian', 'pterodactyl', 'plesiosaur']], ['Rubber hose animals', ['hosehorse', 'hosebird']]];
 const FIGS = FIG_GROUPS.flatMap(([, list]) => list);
-const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
+const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', lizard: 'Lizard', snake: 'Snake', spider: 'Spider', crab: 'Crab', pterodactyl: 'Pterodactyl', plesiosaur: 'Plesiosaur', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
 let BANKS = {}; // the pad bank of each figure: eight walks to switch between
 let PADRUN = null; // a blend to a pad that is waiting or under way
 const MOODREC = new Set(); // the settings the mood pad is writing in the take being recorded
@@ -644,7 +644,7 @@ async function pickRef(file) {
 /** The whole parameter set of a walk for a figure, from its preset: the same keys the main figure uses. */
 function actorParams(fig, name) {
   const rig = rigOfFig(fig); const preset = presetsForFigure(fig)[name] || presetsForFigure(fig)[Object.keys(presetsForFigure(fig))[0]] || {};
-  const { camYaw, ...pp } = preset; void camYaw;
+  const { camYaw, camPitch, ...pp } = preset; void camYaw; void camPitch;
   const p = { ...DEFAULTS, ...pp, rig, model: fig === 'hose' ? 'hose' : 'mannequin' };
   if (rig === 'dog') p.dogSpecies = fig;
   p.fps = S.p.fps; p.cycleFrames = S.p.cycleFrames; p.travel = S.p.travel; p.exposure = pp.exposure ?? 1;
@@ -1077,9 +1077,10 @@ function applyPreset(name) {
   const rig = S.p.rig; const fig = figKey();
   const mine = rig === 'dog' ? [...DOG_KEYS, 'terrain', 'terrainGrade', 'terrainRise', 'terrainRun', 'heading', 'weight', 'noiseAmount', 'noiseSpeed', 'noiseSeed', 'noiseLoop', 'hoseWobble', 'hoseWobbleRate'] : Object.keys(DEFAULTS).filter((k) => !k.startsWith('dog') && k !== 'rig' && k !== 'model');
   const reset = Object.fromEntries(mine.map((k) => [k, DEFAULTS[k]]));
-  const { camYaw, ...presetP } = presetsForFigure(fig)[name] || {}; // a preset may also turn the camera, to show its movement best
+  const { camYaw, camPitch, ...presetP } = presetsForFigure(fig)[name] || {}; // a preset may also turn the camera, to show its movement best
   S.p = { ...S.p, ...reset, ...presetP, rig, model: S.p.model };
   if (camYaw != null) S.s.camYaw = camYaw;
+  if (camPitch != null) S.s.camPitch = camPitch;
   for (const k of SHARED_KEYS) if (!(k in (presetsForFigure(fig)[name] || {})) && k !== 'rig') S.p[k] = DEFAULTS[k];
   for (const id of Object.keys(S.motion)) if (rig === 'dog' ? id.startsWith('dog.') : !id.startsWith('dog.')) delete S.motion[id];
   S.preset = name; S.frame = 0;
@@ -1890,7 +1891,7 @@ function gaitFactsText() {
   let rows; const facts = [];
   if (dog) {
     const names = { HR: 'Hind right', HL: 'Hind left', FR: 'Front right', FL: 'Front left' };
-    rows = legsOf(S.p).map((l) => ({ name: names[l], start: pawGait(S.p, l).ph, duty: pawGait(S.p, l).duty }));
+    rows = legsOf(S.p).map((l) => ({ name: names[l] || l, start: pawGait(S.p, l).ph, duty: pawGait(S.p, l).duty }));
     const st = supportStats(rows); const cps = S.p.fps / Math.max(1, S.p.cycleFrames);
     facts.push(`${st.mean.toFixed(1)} feet down on average`, st.flight > 0.01 ? `in the air ${Math.round(st.flight * 100)}% of the cycle` : 'never in the air', `${cps.toFixed(1)} cycles a second`, `stride ${S.p.dogStride.toFixed(2)}`);
   } else {
@@ -2237,7 +2238,7 @@ const HELP_STOPS = [
   ['.bar-fields', 'The figure and its walk', 'Choose the figure, its walk (the preset), the preview speed, and whether the stage shows the 3D walk or your own drawings.'],
   ['.viewbar', 'Stage tools', 'Select is for tapping and moving things. Orbit and Pan move the camera with one finger. View and the angle buttons jump to a view; the face button looks at the head.'],
   ['[data-testid="stage"]', 'The stage', 'Tap a part, a picture or a figure to select it. Press and hold (right-click on a mouse) for a menu for what is under your finger. Two fingers pan and zoom. Mouse: middle button pivots, Shift with it pans, the wheel zooms.'],
-  ['.tabs', 'Tabs', 'Body: the scene, the walk, the body and the proportions. Parts: every joint and its curve. Attach: shapes and pictures. Auto: moves, recording and lanes. Speech, View, Sampler and Export.'],
+  ['.tabs', 'Tabs', 'Body: the scene, the walk, the body and the proportions. Parts: every joint and its curve. Attach: shapes and pictures. Design: a look, a skin and a shadow for each part. Auto: moves, recording and lanes. Speech, View, Sampler and Export.'],
   ['.timeline', 'The timeline', 'Play, step and scrub the frames. Letters under a frame mark the key poses. Tap a frame to go there. Loop makes the join seamless; Length makes the playback longer without changing the speed of the walk.'],
   ['[data-testid="mood-pad"]', 'Mood pad', 'The middle is the walk as it is. Drag the dot toward a corner for that mood, or along an edge to mix two. Each corner can be a mood, one of the walks, or a walk you captured.'],
   ['[data-testid="pad-grid"]', 'Pads', 'Eight walks to switch between. Tap an empty pad to keep the walk on it; tap a full one to change to it, at once or at the end of the cycle, blending over the cycles you choose.'],

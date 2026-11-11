@@ -8,12 +8,12 @@ import { legsOf } from '../src/dog3.js';
 import { wordsFor } from '../src/words.js';
 import { integrate } from '../src/automation.js';
 
-const mk = (pr, extra = {}) => { const { camYaw, ...p } = pr; return { ...DEFAULTS, rig: 'dog', motion: {}, ...p, ...extra }; };
+const mk = (pr, extra = {}) => { const { camYaw, camPitch, ...p } = pr; return { ...DEFAULTS, rig: 'dog', motion: {}, ...p, ...extra }; };
 const presets = Object.entries(PRESETS_SPECIES).flatMap(([sp, set]) => Object.entries(set).map(([name, pr]) => [`${sp} ${name}`, pr]));
 
 test('every species has complete bones and the presets name their species', () => {
   for (const [id, s] of Object.entries(SPECIES)) {
-    assert.ok([2, 4].includes(s.legs), id);
+    assert.ok([0, 2, 4, 8].includes(s.legs), id);
     assert.ok(['leg', 'arm', 'wing'].includes(s.front), id);
     for (const k of Object.keys(s.bones)) assert.ok(Array.isArray(s.bones[k]) ? s.bones[k].every((v) => v > 0) : s.bones[k] >= 0, `${id}.${k}`);
     assert.ok(s.view.zoom > 0 && s.look.body > 0);
@@ -25,7 +25,7 @@ test('every species has complete bones and the presets name their species', () =
 test('every preset value is inside its control range', () => {
   const by = Object.fromEntries(CONTROLS.filter((c) => c.scope === 'p').map((c) => [c.id, c]));
   for (const [name, pr] of presets) for (const [k, v] of Object.entries(pr)) {
-    if (k === 'dogSpecies' || k === 'camYaw') continue;
+    if (k === 'dogSpecies' || k === 'camYaw' || k === 'camPitch') continue;
     const c = by[k]; assert.ok(c, `${name}: ${k} has no control`);
     if (c.type === 'number') assert.ok(v >= c.min && v <= c.max, `${name}: ${k}=${v} outside ${c.min}..${c.max}`);
     if (c.type === 'enum') assert.ok(c.options.includes(v), `${name}: ${k}=${v}`);

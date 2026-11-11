@@ -563,6 +563,27 @@ await q('menu-file').click(); await wait(150);
 check('File has Export this character and Import a character', (await page.locator('[data-testid="file-char-export"]:visible').count()) === 1 && (await page.locator('[data-testid="file-char-import"]:visible').count()) === 1);
 await page.keyboard.press('Escape'); await wait(100);
 await ev(() => { const w = window.__walkBase; w.S.design = {}; w.S.attach.human = []; w.S.s.eyeStyle = 'default'; w.applyPreset('Normal'); w.setTab('Gait'); w.render(); });
+// ---- the new animals: lizard, snake, spider, crab, pterodactyl and plesiosaur
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.S.s.style = 'mannequin'; w.S.s.shadowMode = 'off'; w.S.s.camYaw = -30; w.S.s.camPitch = 15; w.setTab('Gait'); }); await wait(200);
+const newAnimalLooks = new Set();
+for (const [fig, expectedPreset] of [['lizard', 'Walk'], ['snake', 'Slither'], ['spider', 'Walk'], ['crab', 'Sidle'], ['pterodactyl', 'Walk'], ['plesiosaur', 'Cruise']]) {
+  await ev((f) => { const w = window.__walkBase; w.setFigure(f); w.setTab('Gait'); w.setFrame(5); w.render(); }, fig); await wait(250);
+  const st = await ev(() => ({ fig: window.__walkBase.figKey(), preset: window.__walkBase.S.preset, shapes: window.__walkBase.S.last.shapes.length, pickable: window.__walkBase.S.last.shapes.filter((s) => s.part).length }));
+  check(`${fig}: chosen, on its first walk (${expectedPreset}), drawn as parts`, st.fig === fig && st.preset === expectedPreset && st.shapes >= 6 && st.pickable === st.shapes, st);
+  newAnimalLooks.add(await stageShot());
+  const presetOpts = await ev(() => [...document.querySelectorAll('#preset option')].map((o) => o.textContent)); check(`${fig}: has walks to choose from`, presetOpts.length >= 3, presetOpts);
+  for (const stl of ['outline', 'stick', 'moebius', 'comic', 'lowpoly', 'mannequin']) await ev((s) => { const w = window.__walkBase; w.S.s.style = s; for (let f = 0; f < 4; f++) w.setFrame(f); w.render(); }, stl);
+  await ev(() => { const w = window.__walkBase; w.play(); }); await wait(250); await ev(() => window.__walkBase.pause());
+  await ev(() => { const w = window.__walkBase; w.S.s.showArcs = true; w.render(); w.S.s.showArcs = false; w.S.s.shadowMode = 'both'; w.render(); w.S.s.shadowMode = 'off'; });
+}
+check('the six look different from each other, in every drawing style, playing, with arcs and shadows, with no errors', newAnimalLooks.size === 6 && errors.length === 0, [newAnimalLooks.size, errors]);
+await ev(() => { const w = window.__walkBase; w.setFigure('spider'); w.setTab('Gait'); }); await wait(200);
+check('a spider has leg settings and a thickness, and no wing or neck settings; a snake has no leg settings', (await q('rng-dogLift').count()) === 1 && (await q('rng-dGirth').count()) === 1 && (await q('rng-dogWingOpen').count()) === 0 && (await q('rng-dogNeckAngle').count()) === 0);
+await ev(() => window.__walkBase.setFigure('snake')); await wait(200);
+check('and the snake has Wavelength, Wave height and Rear up', (await q('rng-dogStride').count()) === 1 && (await q('rng-dogFlex').count()) === 1 && (await q('rng-dogNeckAngle').count()) === 1 && (await q('rng-dogLift').count()) === 0 && (await q('rng-dogDuty').count()) === 0);
+await ev(() => { const w = window.__walkBase; w.setFigure('pterodactyl'); w.setTab('Gait'); }); await wait(200);
+check('the pterodactyl has its wing settings', (await q('rng-dogWingOpen').count()) === 1 && (await q('rng-dogFlap').count()) === 1);
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.applyPreset('Normal'); w.S.s.style = 'mannequin'; w.S.s.camYaw = 0; w.S.s.camPitch = 0; w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

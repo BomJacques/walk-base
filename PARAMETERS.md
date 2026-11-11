@@ -119,6 +119,7 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Leg length | dog | × | 0.42 to 2.52 | 1 | Scale of all four legs. |
 | Neck length | dog | × | 0.3 to 3.24 | 1 | Scale of the neck. |
 | Head size | dog | × | 0.36 to 3.24 | 1 | Scale of the head and snout. |
+| Body thickness | dog | × | 0.3 to 3.96 | 1 | How thick the body and limbs of a snake, spider or crab are, as a multiple of what they were. |
 | Tail length | dog | × | 0.18 to 4.5 | 1 | Scale of the tail. |
 | Ear length | dog | × | 0.24 to 4.5 | 1 | Scale of the ears. |
 
@@ -180,6 +181,19 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Shadow reach | both |  | 0 to 1 | 0.5 | How far the shadow reaches round each form. 0 is none, 1 is nearly all of it. |
 | Stipple | both |  | 0 to 1 | 0.4 | Dots along the edge of the shadow, for texture. |
 | Paper-coloured stage | both |  | bool | true | In the Moebius style the stage is the colour of paper instead of the background colour. |
+| Shadow | both |  | off, ground, drop, both | off | Ground is a soft oval on the floor under every figure and piece of scenery, fainter as the feet leave the ground. Drop casts the drawing itself a little way down and to the side, like a sticker lifted off the page. Both does both. Each attachment has a drop shadow of its own in the Attach tab. |
+| Strength | both |  | 0 to 1 | 0.35 | How dark the shadow is. |
+| Softness | both | px | 0 to 60 | 14 | How soft the edge is, at the 1080 line frame. |
+| Drop across | both | px | -80 to 80 | 14 | How far the drop shadow falls to the right (negative is the left). |
+| Drop down | both | px | -80 to 80 | 18 | How far the drop shadow falls down (negative is up). |
+| Ground size | both | × | 0.3 to 3 | 1 | How big the oval on the ground is. |
+| Shadow colour | both |  | color | #000000 | The colour of the shadow. |
+| Boil | both | px | 0 to 8 | 0 | The outline wobbles a little, and a new wobble comes every few frames, as a hand-drawn line does. The colour moves with it. 0 is perfectly still. |
+| Frames per wobble | both |  | 1 to 8 | 2 | How many frames each wobble lasts: 1 is a frantic boil, 4 is a slow shimmer. |
+| Line pattern | both |  | solid, dashed, dotted | solid | Solid, dashed or dotted outlines. |
+| Corners | both |  | round, miter, bevel | round | Round corners, sharp points, or cut-off corners where the line turns. |
+| Weight by depth | both |  | 0 to 1 | 0 | 0 makes every line the same weight. Higher makes the lines on the far side of the figure lighter, so it reads as further away. |
+| Colour off the line | both | px | -12 to 12 | 0 | The colour sits a little off its outline, as in a badly printed page. For the Outline, Moebius, Comic, Ink and Clay looks. |
 | Block size | both | px | 3 to 40 | 7 | The side of each block in the Blocks look. Large blocks are chunky voxels; small ones are fine pixel art. |
 | Facets round each limb | both |  | 4 to 12 | 6 | The Lowpoly look builds every limb as a prism with this many flat sides: 4 is a box, 6 is chunky, 12 is nearly round. |
 | Body colour | both |  | color | #2d2a2e | The head, body, arms and legs. |

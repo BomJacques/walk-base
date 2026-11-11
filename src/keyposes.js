@@ -34,6 +34,7 @@ export function trackedPoints(pz) {
     }
   } else if (pz.legs) {
     for (const k of ['FL', 'FR', 'HL', 'HR']) {
+      if (!pz.legs[k]) continue;
       const paw = rel(pz.legs[k].paw);
       out.push({ name: `${k} paw forward`, v: paw[0] }, { name: `${k} paw height`, v: paw[1] });
     }

@@ -42,7 +42,7 @@ Both play on the same timeline and export the same way.
 
 Pick **Figure** in the header. They are in groups: People (Human, Rubber hose), Animals (Dog, Horse, Bird), Dinosaurs (Theropod, Sauropod, Ceratopsian) and Rubber hose animals (horse, bird). Switching away from a figure and back leaves it with the walk, proportions and performance it had.
 
-The first two were a human and a dog. Each has its own presets (the dog: Walk, Brisk walk, Trot, Pace, Gallop, Sniffing, Old dog), its own gait and body settings, its own Parts, and keeps its own edits and automation when you switch.
+The first two were a human and a dog. Later came a horse, a bird, a lizard, a snake, a spider and a crab, the theropod, sauropod and ceratopsian, a pterodactyl and a plesiosaur, and rubber hose versions of the horse and bird. Each has its own presets (the dog: Walk, Brisk walk, Trot, Pace, Gallop, Sniffing, Old dog), its own gait and body settings, its own Parts, and keeps its own edits and automation when you switch.
 
 The dog walks, trots, paces or gallops with the right paw order (the walk follows the dog walk chart in The Animator's Survival Kit: hips and chest bob in opposition, shoulder blades that slide and drop, a twisting torso; the gallop gathers the legs under the body, with a flight phase and a curling back), planted paws, a bending spine, a neck and head that can reach and tilt, a jaw, ears and a three-joint tail. Every part has the same channels as the human: scale, offset, repeat faster (a quicker wag), shift in time, or draw the curve by hand.
 
@@ -89,6 +89,20 @@ Each figure offers only the gaits it can do: the dog walk, trot, pace and gallop
 The Auto tab lists the lanes of the take; open one to redraw it or remove it, and Ctrl+Z undoes the whole take. A take keeps one cycle length, so a pad whose walk is quicker or slower is recorded as the speed lane: a pad with a 16 frame cycle, tapped over a 24 frame walk, is written as speed 1.5 and holds.
 
 **Help.** Rest the mouse on any slider or choice for a line about it; on a touch screen, tap its name. The **?** button in the top bar opens the guide to the screen, with these steps in it.
+
+## Design: skins, UV maps, sprite sheets, shadows and character files
+
+**Design tab.** Tap a part on the stage (or choose it from the list) and give it its own look: fill and line colour, line weight, opacity, a drop shadow, or hide it. A **skin** is a picture laid over the part through its UV map. The map lies on the part and turns with it: u runs from the joint the part swings from toward its far end, v across it, so the picture stays put on the part as it moves. Slide, scale, turn and flip it, stretch or tile it, choose a blend (multiply, screen, overlay). Set **columns and rows** and the picture is a **sprite sheet**: hold one cell, or have them play (loop or ping-pong, so many frames to a cell), so a part can be coloured frame by frame.
+
+To colour the whole figure on one flat sheet: **Save a UV template** (one cell for every part, with its outline in it), paint over it in any app, and bring it back with **Import painted sheet**. Every part takes its own cell.
+
+**Shadows.** View > Shadow: Ground (a soft oval on the floor), Drop (the drawing cast down and to the side) or Both. Each attachment has a drop shadow of its own in the Attach tab, each part in the Design tab, and each scene figure and piece of scenery can opt out.
+
+**Line.** View > Line: Boil (the outline wobbles, a new wobble every few frames), a dashed or dotted line, the style of corners, lighter lines on the far side, and the colour sitting off its outline like a badly printed page.
+
+**Character files.** File > Export this character writes the figure, its walk, proportions, look, attachments, design and pads, with their pictures, to one file; Import a character puts it on the stage as the main figure.
+
+**Speech.** While there is speech, a close-up of the face from the front sits in the corner of the stage, since in the side view the face is edge on.
 
 ## Corrections: fix a part without losing the animation
 

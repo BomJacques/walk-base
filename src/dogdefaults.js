@@ -80,6 +80,36 @@ const SPECIES_BASE = Object.freeze({
     bones: { spine: [0.33, 0.33, 0.33], neck: 0.56, skull: 0.26, snout: 0.3, jaw: 0.34, upper: 0.27, fore: 0.34, pastern: 0.25, thigh: 0.34, shin: 0.35, meta: 0.27, paw: 0.05, pawLen: 0.09, tail: [0.24, 0.24, 0.22], ear: 0.1, hipWidth: 0.085, shoulderWidth: 0.09 },
     lean: { hock: 0.26, pastern: 0.07 }, look: { body: 1.3, leg: 0.85, neck: 1.3, tail: 1.5, wing: 1, snout: 1.6, ear: 0.55 }, view: { zoom: 1.15, y: 0.65 }, // a deep muzzle that covers the jaw, and small pointed ears
   },
+  snake: {
+    label: 'Snake', crawler: 'snake', legs: 0, legKeys: [], front: 'leg',
+    bones: { spine: [1, 1, 1], neck: 0.8, skull: 0.2, snout: 0.12, jaw: 0.2, tail: [0.9, 0.8, 0.7], upper: 0.1, fore: 0.1, pastern: 0.05, thigh: 0.1, shin: 0.1, meta: 0.05, paw: 0.02, pawLen: 0.05, ear: 0.02 },
+    lean: { hock: 0, pastern: 0 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 0.42, y: 0.12 },
+  },
+  spider: {
+    label: 'Spider', crawler: 'spider', legs: 8, legKeys: ['FR', 'FL', 'AR', 'AL', 'BR', 'BL', 'HR', 'HL'], front: 'leg',
+    bones: { spine: [0.28, 0.2, 0.2], neck: 0.05, skull: 0.12, snout: 0.05, jaw: 0.1, tail: [0.1, 0.1, 0.1], upper: 0.55, fore: 0.7, pastern: 0.22, thigh: 0.4, shin: 0.4, meta: 0.2, paw: 0.02, pawLen: 0.05, ear: 0.02 },
+    lean: { hock: 0, pastern: 0 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 1.0, y: 0.4 },
+  },
+  crab: {
+    label: 'Crab', crawler: 'crab', legs: 8, legKeys: ['FR', 'FL', 'AR', 'AL', 'BR', 'BL', 'HR', 'HL'], front: 'leg',
+    bones: { spine: [0.2, 0.3, 0.2], neck: 0.05, skull: 0.08, snout: 0.05, jaw: 0.08, tail: [0.1, 0.1, 0.1], upper: 0.3, fore: 0.34, pastern: 0.12, thigh: 0.3, shin: 0.28, meta: 0.12, paw: 0.02, pawLen: 0.05, ear: 0.02 },
+    lean: { hock: 0, pastern: 0 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 1.5, y: 0.3 },
+  },
+  lizard: {
+    label: 'Lizard', legs: 4, front: 'leg',
+    bones: { spine: [0.4, 0.4, 0.4], neck: 0.28, skull: 0.3, snout: 0.24, jaw: 0.3, upper: 0.2, fore: 0.19, pastern: 0.1, thigh: 0.22, shin: 0.2, meta: 0.1, paw: 0.045, pawLen: 0.16, shoulderDrop: 0.06, scapula: 0.14, tail: [0.75, 0.65, 0.55], ear: 0.02, hipWidth: 0.1, shoulderWidth: 0.11, scapulaWidth: 0.09 },
+    lean: { hock: 0.3, pastern: 0.12 }, look: { body: 0.95, leg: 1.2, neck: 1.2, tail: 1.6, wing: 1 }, view: { zoom: 1.0, y: 0.45 },
+  },
+  pterodactyl: {
+    label: 'Pterodactyl', like: 'bird', legs: 2, front: 'wing', armRest: [-0.3, -0.02, 0], crest: true, membrane: true,
+    bones: { spine: [0.17, 0.17, 0.17], neck: 0.55, skull: 0.3, snout: 0.5, jaw: 0.3, upper: 0.55, fore: 0.6, pastern: 0.5, thigh: 0.28, shin: 0.34, meta: 0.3, paw: 0.03, pawLen: 0.14, shoulderDrop: 0.06, shoulderBack: 0.02, scapula: 0.1, tail: [0.1, 0.1, 0.08], ear: 0.02, hipWidth: 0.06, shoulderWidth: 0.07, scapulaWidth: 0.05 },
+    lean: { hock: 0.5, pastern: 0.1 }, look: { body: 1.3, leg: 0.5, neck: 0.7, tail: 0.8, wing: 1.5 }, view: { zoom: 0.95, y: 0.7 },
+  },
+  plesiosaur: {
+    label: 'Plesiosaur', legs: 4, front: 'wing', hind: 'wing', flipper: true, armRest: [-0.12, -0.12, 0.28], hindRest: [-0.1, -0.1, 0.26],
+    bones: { spine: [0.5, 0.5, 0.5], neck: 1.8, skull: 0.2, snout: 0.16, jaw: 0.2, upper: 0.4, fore: 0.36, pastern: 0.26, thigh: 0.4, shin: 0.36, meta: 0.26, paw: 0.03, pawLen: 0.1, shoulderDrop: 0.1, scapula: 0.2, tail: [0.45, 0.35, 0.28], ear: 0.02, hipWidth: 0.14, shoulderWidth: 0.15, scapulaWidth: 0.12 },
+    lean: { hock: 0.1, pastern: 0.05 }, look: { body: 2.1, leg: 1.6, neck: 1.1, tail: 1.4, wing: 1.8 }, view: { zoom: 0.7, y: 1.0 },
+  },
   bird: {
     label: 'Bird', legs: 2, front: 'wing', armRest: [-0.2, -0.04, 0],
     bones: { spine: [0.15, 0.15, 0.15], neck: 0.5, skull: 0.13, snout: 0.15, jaw: 0.13, upper: 0.34, fore: 0.34, pastern: 0.22, thigh: 0.3, shin: 0.38, meta: 0.34, paw: 0.03, pawLen: 0.14, shoulderDrop: 0.06, shoulderBack: 0.02, scapula: 0.1, tail: [0.12, 0.12, 0.1], ear: 0.02, hipWidth: 0.06, shoulderWidth: 0.07, scapulaWidth: 0.05 },

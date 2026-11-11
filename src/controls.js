@@ -131,6 +131,7 @@ const RAW_CONTROLS = [
   n('r', 'dLeg', 'Body', 'Dog proportions', 'Leg length', '×', 0.7, 1.4, 0.01, 'Scale of all four legs.'),
   n('r', 'dNeck', 'Body', 'Dog proportions', 'Neck length', '×', 0.5, 1.8, 0.01, 'Scale of the neck.'),
   n('r', 'dHead', 'Body', 'Dog proportions', 'Head size', '×', 0.6, 1.8, 0.01, 'Scale of the head and snout.'),
+  n('r', 'dGirth', 'Body', 'Dog proportions', 'Body thickness', '×', 0.5, 2.2, 0.01, 'How thick the body and limbs of a snake, spider or crab are, as a multiple of what they were.'),
   n('r', 'dTail', 'Body', 'Dog proportions', 'Tail length', '×', 0.3, 2.5, 0.01, 'Scale of the tail.'),
   n('r', 'dEar', 'Body', 'Dog proportions', 'Ear length', '×', 0.4, 2.5, 0.01, 'Scale of the ears.'),
   // View
@@ -367,6 +368,41 @@ export const PRESETS_SPECIES = {
   sauropod: {
     Walk: sp('sauropod', { dogNeckSegs: 7, dogNeckCurve: 25, dogNeckWave: 2.5, dogNeckSway: 4, dogGait: 'walk', dogStride: 1.3, dogDuty: 0.74, dogLift: 0.07, dogBob: 0.008, dogFlex: 1.5, dogArch: 0.5, dogTwist: 2, dogShoulder: 0.03, dogWidth: 0.16, dogElbowOut: 1, dogNeckAngle: 48, dogHeadAngle: 36, dogHeadNod: 1.5, dogTailAngle: -2, dogWag: 6, cycleFrames: 44 }),
     'Neck up': sp('sauropod', { dogNeckSegs: 7, dogNeckCurve: -10, dogNeckWave: 2, dogNeckSway: 3, dogGait: 'walk', dogStride: 0.9, dogDuty: 0.78, dogLift: 0.05, dogBob: 0.006, dogTwist: 1.5, dogShoulder: 0.025, dogWidth: 0.16, dogNeckAngle: 74, dogHeadAngle: 52, dogTailAngle: 4, dogWag: 4, cycleFrames: 52 }),
+  },
+  snake: {
+    Slither: sp('snake', { dogStride: 2.4, dogFlex: 30, dogNeckAngle: 10, dogBob: 0.01, cycleFrames: 32, camYaw: -25, camPitch: 55 }),
+    Creep: sp('snake', { dogStride: 1.8, dogFlex: 18, dogNeckAngle: 6, dogBob: 0.004, cycleFrames: 56, camYaw: -25, camPitch: 55 }),
+    Rear: sp('snake', { dogStride: 3, dogFlex: 14, dogNeckAngle: 62, dogBob: 0.006, cycleFrames: 52, camYaw: -25, camPitch: 20 }),
+    'Fast glide': sp('snake', { dogStride: 3.2, dogFlex: 36, dogNeckAngle: 12, dogBob: 0.012, cycleFrames: 14, camYaw: -25, camPitch: 55 }),
+  },
+  spider: {
+    Walk: sp('spider', { dogStride: 0.7, dogDuty: 0.62, dogLift: 0.22, dogBob: 0.012, cycleFrames: 24, camYaw: -35, camPitch: 18 }),
+    Scuttle: sp('spider', { dogStride: 1.4, dogDuty: 0.5, dogLift: 0.3, dogBob: 0.02, cycleFrames: 12, camYaw: -35, camPitch: 18 }),
+    Creep: sp('spider', { dogStride: 0.3, dogDuty: 0.75, dogLift: 0.15, dogBob: 0.006, cycleFrames: 40, camYaw: -35, camPitch: 18 }),
+  },
+  crab: {
+    Sidle: sp('crab', { dogStride: 0.6, dogDuty: 0.62, dogLift: 0.18, dogBob: 0.01, dogWag: 14, cycleFrames: 24, camYaw: -70, camPitch: 12 }),
+    Scuttle: sp('crab', { dogStride: 0.8, dogDuty: 0.46, dogLift: 0.26, dogBob: 0.018, dogWag: 24, cycleFrames: 10, camYaw: -70, camPitch: 12 }),
+    Threat: sp('crab', { dogStride: 0.25, dogDuty: 0.75, dogLift: 0.12, dogBob: 0.004, dogWag: 40, cycleFrames: 36, camYaw: -70, camPitch: 12 }),
+  },
+  lizard: {
+    Walk: sp('lizard', { dogGait: 'walk', dogStride: 0.7, dogDuty: 0.7, dogLift: 0.07, dogBob: 0.006, dogFlex: 15, dogArch: 0, dogTwist: 6, dogWidth: 0.12, dogElbowOut: 45, dogNeckAngle: 10, dogHeadAngle: 10, dogHeadNod: 2, dogTailAngle: 0, dogWag: 26, cycleFrames: 36 }),
+    Stalk: sp('lizard', { dogGait: 'walk', dogStride: 0.35, dogDuty: 0.82, dogLift: 0.05, dogBob: 0.004, dogFlex: 8, dogTwist: 4, dogWidth: 0.12, dogElbowOut: 40, dogNeckAngle: 16, dogHeadAngle: 6, dogTailAngle: 0, dogWag: 14, cycleFrames: 56 }),
+    Scuttle: sp('lizard', { dogGait: 'trot', dogStride: 1.5, dogDuty: 0.5, dogLift: 0.12, dogBob: 0.01, dogFlex: 20, dogTwist: 8, dogWidth: 0.12, dogElbowOut: 50, dogNeckAngle: 12, dogHeadAngle: 8, dogTailAngle: 0, dogWag: 34, cycleFrames: 14 }),
+    Sprint: sp('lizard', { dogGait: 'trot', dogStride: 2.2, dogDuty: 0.4, dogLift: 0.16, dogBob: 0.014, dogFlex: 13, dogTwist: 6, dogWidth: 0.1, dogElbowOut: 38, dogNeckAngle: 14, dogHeadAngle: 6, dogTailAngle: 6, dogWag: 20, cycleFrames: 10 }),
+  },
+  pterodactyl: {
+    Walk: sp('pterodactyl', { dogGait: 'walk', dogStride: 0.7, dogDuty: 0.66, dogLift: 0.18, dogBob: 0.02, dogFlex: 3, dogTwist: 4, dogWidth: 0.05, dogTilt: 34, dogNeckAngle: 30, dogHeadAngle: 50, dogTailAngle: 10, dogWag: 3, dogHeadHold: 0.6, dogWingOpen: 0, cycleFrames: 26 }),
+    Flying: sp('pterodactyl', { dogGait: 'walk', dogStride: 3.4, dogDuty: 0.5, dogLift: 0.05, dogBob: 0, dogFlex: 0, dogTwist: 0, dogWidth: 0.05, dogTilt: 8, dogNeckAngle: 14, dogHeadAngle: 20, dogTailAngle: 6, dogWag: 0, dogHeadHold: 0, dogWingOpen: 1, dogFlap: 45, dogFlapRate: 1, dogFlapFrames: 18, dogFlight: 1, dogFlightHeight: 1.2, cycleFrames: 18, camYaw: 35 }),
+    Gliding: sp('pterodactyl', { dogGait: 'walk', dogStride: 3.2, dogDuty: 0.5, dogLift: 0.05, dogBob: 0, dogFlex: 0, dogTwist: 0, dogWidth: 0.05, dogTilt: 4, dogNeckAngle: 10, dogHeadAngle: 16, dogTailAngle: 4, dogWag: 0, dogHeadHold: 0, dogWingOpen: 1, dogFlap: 5, dogFlapRate: 1, dogFlight: 1, dogFlightHeight: 1.5, cycleFrames: 48, camYaw: 35 }),
+    Flapping: sp('pterodactyl', { dogGait: 'walk', dogStride: 0.2, dogDuty: 0.8, dogLift: 0.05, dogBob: 0, dogTilt: 28, dogNeckAngle: 36, dogHeadAngle: 46, dogTailAngle: 10, dogWag: 0, dogHeadHold: 0, dogWingOpen: 1, dogFlap: 40, dogFlapRate: 2, cycleFrames: 24 }),
+    'Take-off run': sp('pterodactyl', { dogGait: 'run', dogStride: 1.0, dogDuty: 0.45, dogLift: 0.14, dogBob: 0.05, dogCurl: 6, dogTwist: 3, dogWidth: 0.05, dogTilt: 18, dogNeckAngle: 36, dogHeadAngle: 44, dogTailAngle: 10, dogWag: 2, dogHeadHold: 0.2, dogWingOpen: 0.3, dogFlap: 12, dogFlapRate: 2, cycleFrames: 12 }),
+  },
+  plesiosaur: {
+    Cruise: sp('plesiosaur', { dogNeckSegs: 9, dogNeckCurve: 18, dogNeckWave: 2, dogNeckSway: 3, dogGait: 'walk', dogStride: 1.6, dogDuty: 0.5, dogLift: 0.05, dogBob: 0, dogFlex: 2, dogTwist: 2, dogWidth: 0.12, dogNeckAngle: 35, dogHeadAngle: 30, dogHeadNod: 2, dogTailAngle: -5, dogWag: 6, dogWingOpen: 1, dogFlap: 32, dogFlapRate: 1, dogFlight: 1, dogFlightHeight: 0.7, cycleFrames: 40 }),
+    Fast: sp('plesiosaur', { dogNeckSegs: 9, dogNeckCurve: 10, dogNeckWave: 1.5, dogNeckSway: 2, dogGait: 'walk', dogStride: 3, dogDuty: 0.5, dogLift: 0.05, dogBob: 0, dogFlex: 3, dogTwist: 3, dogWidth: 0.12, dogNeckAngle: 22, dogHeadAngle: 24, dogHeadNod: 1, dogTailAngle: -8, dogWag: 10, dogWingOpen: 1, dogFlap: 46, dogFlapRate: 1, dogFlight: 1, dogFlightHeight: 0.7, cycleFrames: 24 }),
+    'Neck up': sp('plesiosaur', { dogNeckSegs: 9, dogNeckCurve: -18, dogNeckWave: 2, dogNeckSway: 4, dogGait: 'walk', dogStride: 1, dogDuty: 0.5, dogLift: 0.05, dogBob: 0, dogFlex: 2, dogTwist: 2, dogWidth: 0.12, dogNeckAngle: 72, dogHeadAngle: 40, dogHeadNod: 3, dogTailAngle: -3, dogWag: 6, dogWingOpen: 1, dogFlap: 18, dogFlapRate: 1, dogFlight: 1, dogFlightHeight: 0.6, cycleFrames: 52 }),
+    Glide: sp('plesiosaur', { dogNeckSegs: 9, dogNeckCurve: 14, dogNeckWave: 1, dogNeckSway: 2, dogGait: 'walk', dogStride: 2, dogDuty: 0.5, dogLift: 0.05, dogBob: 0, dogFlex: 1, dogTwist: 1, dogWidth: 0.12, dogNeckAngle: 28, dogHeadAngle: 28, dogHeadNod: 1, dogTailAngle: -4, dogWag: 4, dogWingOpen: 1, dogFlap: 6, dogFlapRate: 1, dogFlight: 1, dogFlightHeight: 0.7, cycleFrames: 56 }),
   },
   horse: {
     Walk: sp('horse', { dogGait: 'walk', dogStride: 1.15, dogDuty: 0.64, dogLift: 0.16, dogBob: 0.02, dogFlex: 2, dogArch: 1, dogTwist: 3, dogShoulder: 0.03, dogWidth: 0.09, dogNeckAngle: 46, dogHeadAngle: 86, dogHeadNod: 6, dogTailAngle: -38, dogWag: 6, dogEar: 4, cycleFrames: 28 }),

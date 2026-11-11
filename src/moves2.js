@@ -120,4 +120,10 @@ export const SPECIES_MOVES = {
   ],
 };
 const SHARED = { bird: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake'], theropod: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff'], sauropod: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'], ceratopsian: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'] };
+SPECIES_MOVES.lizard = []; SPECIES_MOVES.snake = []; SPECIES_MOVES.spider = []; SPECIES_MOVES.crab = [];
+SHARED.snake = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown'];
+SHARED.spider = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown'];
+SHARED.crab = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown']; SPECIES_MOVES.plesiosaur = [];
+SHARED.lizard = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake', 'sniff'];
+SHARED.plesiosaur = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'neckswing'];
 export const speciesSharedIds = (fig) => SHARED[fig] || null;

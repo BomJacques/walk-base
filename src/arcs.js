@@ -44,9 +44,9 @@ function dogPoints() {
   for (const [k, Name] of LEGS) {
     const side = k[1]; const pre = k[0] === 'F' ? 'dog.fpaw' : 'dog.hpaw';
     out.push(
-      { id: `joint.${k}`, label: `${Name} ${k[0] === 'F' ? 'elbow' : 'knee'}`, group: 'Legs', pick: (z) => z.legs[k].mid, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`, `${k[0] === 'F' ? 'dog.fleg' : 'dog.hleg'}.out.${side}`] },
-      { id: `paw.${k}`, label: `${Name} paw`, group: 'Legs', pick: (z) => z.legs[k].paw, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`] },
-      { id: `toe.${k}`, label: `${Name} toe`, group: 'Legs', pick: (z) => z.legs[k].toe, chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`, `${pre}.pitch.${side}`] },
+      { id: `joint.${k}`, label: `${Name} ${k[0] === 'F' ? 'elbow' : 'knee'}`, group: 'Legs', pick: (z) => (z.legs[k] || z.pelvis ? (z.legs[k] ? z.legs[k].mid : z.pelvis) : z.headC), chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`, `${k[0] === 'F' ? 'dog.fleg' : 'dog.hleg'}.out.${side}`] },
+      { id: `paw.${k}`, label: `${Name} paw`, group: 'Legs', pick: (z) => (z.legs[k] ? z.legs[k].paw : z.pelvis), chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`] },
+      { id: `toe.${k}`, label: `${Name} toe`, group: 'Legs', pick: (z) => (z.legs[k] ? z.legs[k].toe : z.pelvis), chain: [`${pre}.x.${side}`, `${pre}.y.${side}`, `${pre}.z.${side}`, `${pre}.pitch.${side}`] },
     );
   }
   return out;

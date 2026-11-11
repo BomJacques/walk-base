@@ -5,6 +5,7 @@ import { pawGait, poseDog, legsOf, bonesOf, DOGB } from './dog3.js';
 import { speciesOf, kindOf } from './dogdefaults.js';
 import { hosePath, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
+import { buildCrawlerShapes } from './crawldraw.js';
 
 const mixHex = (a, b, t) => { const pa = parseInt(a.slice(1), 16); const pb = parseInt(b.slice(1), 16); const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t); return '#' + [16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join(''); };
 /**
@@ -64,12 +65,14 @@ function buildHoseAnimal(pz, cam, st) {
 }
 
 export function buildDogShapes(pz, cam, st = {}) {
+  if (pz.crawler) return buildCrawlerShapes(pz, cam, st);
   if (speciesOf(pz.params).hose) return buildHoseAnimal(pz, cam, st);
+  const ptero = Boolean(speciesOf(pz.params).membrane);
   const shapes = []; const lp = st.style === 'lowpoly'; const NS = Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)));
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
   const sc = cam.scale;
   const hs = (pz.params.proportions?.dHead ?? 1) * (bonesOf(pz.params).skull / DOGB.skull); // head drawn in proportion to this species' skull
-  const sp = speciesOf(pz.params); const K = sp.look; const bird = kindOf(pz.params.dogSpecies) === 'bird'; const cera = pz.params.dogSpecies === 'ceratopsian';
+  const sp = speciesOf(pz.params); const K = sp.look; const bird = kindOf(pz.params.dogSpecies) === 'bird' && !sp.membrane; const cera = pz.params.dogSpecies === 'ceratopsian';
   const capsule = (a, b, ra, rb, part, side, role) => {
     const A = S(a); const B = S(b);
     const sh = { pts: hull([...circlePts(A, ra * sc), ...circlePts(B, rb * sc)]), depth: (A.d + B.d) / 2, part, side, role }; shapes.push(sh);
@@ -119,6 +122,7 @@ export function buildDogShapes(pz, cam, st = {}) {
     const ends = [-1, -0.5, 0, 0.5, 1].map((a) => add(tip, [0, a * 0.02, a * 0.16 * spread]));
     const P = [S(base), ...ends.map(S)]; shapes.push({ pts: hull(P.map((q) => [q.x, q.y])), depth: S(pz.tail[3]).d, part: 'dog.tail3', side: null, role: 'body' });
   }
+  if (sp.crest) { const Lc = bonesOf(pz.params).skull * (pz.params.proportions?.dHead ?? 1); const Hc = (x, y) => add(pz.neckTop, apply(pz.Rh, [x * Lc, y * Lc, 0])); capsule(Hc(0.35, 0.12), Hc(-1.0, 0.85), 0.07 * Lc, 0.015 * Lc, 'dog.head', null, 'body'); } // a long bony crest sweeping back from the head
   if (cera) { // a bony frill rising behind the head, a brow horn over each eye and a horn on the nose, sized from the skull
     const Ls = bonesOf(pz.params).skull * (pz.params.proportions?.dHead ?? 1); const H = (x, y, z) => add(pz.neckTop, apply(pz.Rh, [x * Ls, y * Ls, z * Ls]));
     const ring = []; for (const z of [-0.05, 0.05]) for (let i = 0; i < 20; i++) { const t = (i / 20) * TAU; const q = S(H(0.1 + Math.cos(t) * 0.5, 0.45 + Math.sin(t) * 0.6, z)); ring.push([q.x, q.y]); }
@@ -129,6 +133,15 @@ export function buildDogShapes(pz, cam, st = {}) {
   for (const leg4 of ['HR', 'HL', 'FR', 'FL']) {
     const l = pz.legs[leg4]; const role = l.side === 'R' ? 'near' : 'far';
     const pre = l.front ? 'dog.f' : 'dog.h';
+    if (ptero && l.front && l.free) { // the wing membrane: skin stretched from the long finger back to the hip, behind the wing bones
+      const hipPt = add(pz.pelvis, apply(pz.Rp, [-0.05, -0.03, l.s * 0.05])); const mem = [l.root, l.mid, l.wrist, l.paw, hipPt].map(S);
+      shapes.push({ pts: hull(mem.map((q) => [q.x, q.y])), depth: S(l.mid).d - 0.0004, part: `${pre}leg`, side: l.side, role, fill: mixHex(st.fillColor ?? '#f2eee6', '#b98a62', 0.5) });
+    }
+    if (speciesOf(pz.params).flipper && l.free) { // a flipper: a leaf-shaped paddle, thin at the shoulder, broad in the middle and pointed at the tip
+      const path = [l.root, l.mid, l.wrist, l.paw]; const dense = []; for (let i = 0; i < 3; i++) for (let t = 0; t < 1; t += 0.25) dense.push(add(path[i], mul(sub(path[i + 1], path[i]), t))); dense.push(path[3]);
+      const n = dense.length; const circles = dense.flatMap((q, i) => { const t = i / (n - 1); const r = (0.03 + 0.085 * Math.sin(Math.PI * Math.min(1, t * 1.15))) * (K.wing / 1.8) * 1.4; return circlePts(S(q), Math.max(0.006, r) * sc, 10); });
+      shapes.push({ pts: hull(circles), depth: S(l.mid).d, part: `${pre}leg`, side: l.side, role }); continue;
+    }
     // The blade: a flat plate from the withers down to the shoulder joint, drawn first so the upper arm tucks under it.
     if (bird && l.front && l.free) { // flight feathers, drawn as separate quills behind the wing bones
       const open = Math.min(1, pz.params.dogWingOpen || 0); const back = apply(pz.R3, [-1, 0, 0]);
@@ -157,7 +170,7 @@ export function dogSticks(pz) {
     [pz.tail, false],
   ];
   for (const side of ['R', 'L']) out.push([[pz.ears[side].root, pz.ears[side].tip], side === 'L']);
-  for (const k of ['HR', 'HL', 'FR', 'FL']) { const l = pz.legs[k]; out.push([l.top ? [l.top, l.root, l.mid, l.wrist, l.paw, l.toe] : [l.root, l.mid, l.wrist, l.paw, l.toe], l.side === 'L']); }
+  for (const k of Object.keys(pz.legs)) { const l = pz.legs[k]; out.push([l.top ? [l.top, l.root, l.mid, l.wrist, l.paw, l.toe] : [l.root, l.mid, l.wrist, l.paw, l.toe], l.side === 'L']); }
   return out;
 }
 

@@ -4,6 +4,7 @@ import { DEFAULTS, groundAt, withWeight, noiseOf } from './rig.js';
 import { DOG_GAITS, speciesOf } from './dogdefaults.js';
 import { makeEvaluator } from './motion.js';
 import { paramsAt } from './automation.js';
+import { poseCrawler } from './crawler.js';
 import { add, sub, mul, norm, apply, mm, Rpitch, seg, ik3 } from './rig3.js';
 
 const TAU = Math.PI * 2;
@@ -25,7 +26,7 @@ export const DOGB = Object.freeze({
 /** The bones of this figure's species, in shoulder heights. */
 export const bonesOf = (p) => ({ ...DOGB, ...speciesOf(p).bones });
 /** The limbs that carry the body: two for a theropod or a bird, four otherwise. */
-export const legsOf = (p) => (speciesOf(p).legs === 2 ? ['HR', 'HL'] : ['HR', 'HL', 'FR', 'FL']);
+export const legsOf = (p) => { const sp = speciesOf(p); return sp.legKeys ? sp.legKeys.filter((k) => k[0] !== 'C') : sp.legs === 2 ? ['HR', 'HL'] : ['HR', 'HL', 'FR', 'FL']; }; // a spider's eight, a snake's none
 
 /** One paw relative to its joint, at foot phase w in [0,1) where 0 is its contact. D is the ground it covers while planted. */
 export function pawPath(w, duty, D, lift) {
@@ -50,7 +51,7 @@ export function pawGait(params, leg) {
   const p = withWeight(params);
   const left = leg[1] === 'L';
   return {
-    ph: wrap(pawPhase(p.dogGait, leg) + (left ? p.dogAsymTiming || 0 : 0)),
+    ph: wrap((speciesOf(p).phases?.[leg] ?? (speciesOf(p).legKeys ? ((Math.floor(speciesOf(p).legKeys.indexOf(leg) / 2) + (left ? 1 : 0)) % 2) * 0.5 : pawPhase(p.dogGait, leg))) + (left ? p.dogAsymTiming || 0 : 0)),
     duty: clamp(p.dogDuty + (left ? p.dogAsymDuty || 0 : 0), 0.15, 0.9),
     lift: p.dogLift * (left ? Math.max(0, 1 + (p.dogAsymLift || 0)) : 1),
   };
@@ -117,6 +118,7 @@ export function standHeights(p, sc) {
 }
 
 export function poseDog(params, motion, u, extra = null) {
+  if (speciesOf(params).crawler) return poseCrawler(params, motion, u, extra); // the snake, the spider and the crab have a rig of their own
   const p = withWeight({ ...DEFAULTS, ...params });
   const ev = makeEvaluator(p, motion, extra?.freeU ?? null);
   const uw = wrap(u);
@@ -239,22 +241,22 @@ export function poseDog(params, motion, u, extra = null) {
     const out = k('leg.out');
     const pole = front ? norm([-Math.cos(out), 0, s * Math.sin(out)]) : norm([Math.cos(out), 0, s * Math.sin(out)]);
     const l1 = (front ? L.upper : L.thigh) * leg; const l2 = (front ? L.fore : L.shin) * leg;
-    if (front && sp.front !== 'leg') {
-      // An arm or a wing hangs free: it is placed, not planted. Arms swing a little against the legs; a wing folds or spreads and beats.
-      const ar = sp.armRest; let reach = (l1 + l2) * 0.93;
+    if ((front && sp.front !== 'leg') || (!front && sp.hind === 'wing')) {
+      // An arm, a wing or a flipper hangs free: it is placed, not planted. Arms swing a little against the legs; a wing or flipper folds or spreads and beats (a hind one a quarter beat behind).
+      const ar = front ? sp.armRest : (sp.hindRest || sp.armRest); const off = [k('paw.x'), k('paw.y'), s * k('paw.z')]; let reach = Math.min((l1 + l2) * 0.93, 0.98 * (l1 + l2) - Math.hypot(...off)); // the paw offsets (how far apart the paws are) move the goal too, so they come out of the reach
       let loc; let lag = 0; let handScale = 1;
-      if (sp.front === 'wing') {
+      if ((front ? sp.front : sp.hind) === 'wing') {
         // The wing sweeps back a little, folds at the elbow on the up-stroke, and the tip trails behind the beat (it lags below going up, above going down).
-        const open = clamp(p.dogWingOpen, 0, 1); const ph = flapPhase; const beat = rad(p.dogFlap) * Math.sin(ph); const amp = clamp(p.dogFlap / 30, 0, 1);
+        const open = clamp(p.dogWingOpen, 0, 1); const ph = front ? flapPhase : flapPhase - Math.PI / 2; const beat = rad(p.dogFlap) * Math.sin(ph); const amp = clamp(p.dogFlap / 30, 0, 1);
         reach *= 1 - 0.28 * Math.max(0, Math.sin(ph)) * amp;
         const ext = mul(norm([-0.3, Math.sin(beat), Math.cos(beat)]), reach);
         loc = [ar[0] * (1 - open) + ext[0] * open, ar[1] * (1 - open) + ext[1] * open, s * (ar[2] * (1 - open) + ext[2] * open)];
         lag = open * amp * 0.9 * Math.cos(ph); handScale = 1 + 0.8 * open;
       } else loc = [ar[0] + p.dogArmSwing * Math.sin(TAU * (uw - (side === 'R' ? 0 : 0.5))), ar[1], s * ar[2]];
-      const goal = add(add(root, apply(R3, loc)), [k('paw.x'), k('paw.y'), s * k('paw.z')]);
+      const goal = add(add(root, apply(front ? R3 : Rp, loc)), off);
       const arm = ik3(root, goal, l1, l2, pole);
       const dir0 = norm(sub(arm.ankle, arm.knee)); const dir = lag ? norm([dir0[0], dir0[1] - lag, dir0[2]]) : dir0;
-      const hand = add(arm.ankle, mul(dir, L.pastern * leg * handScale));
+      const hand = add(arm.ankle, mul(dir, (front ? L.pastern : L.meta) * leg * handScale));
       legs[leg4] = { front, side, s, top, root, mid: arm.knee, wrist: arm.ankle, paw: hand, toe: add(hand, mul(dir, L.pawLen * 0.6)), reached: arm.reached, stance: false, w: 0, theta: 0, free: true };
       continue;
     }
