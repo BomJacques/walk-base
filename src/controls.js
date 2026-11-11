@@ -10,7 +10,7 @@ const c = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, labe
 
 /** What a tab is called on its button. Gait is the one tab for the walk, the body and the scene, and the person using it calls it Body. */
 export const TAB_LABELS = { Gait: 'Body' };
-export const TABS = ['Gait', 'Parts', 'Attach', 'Auto', 'Speech', 'View', 'Sampler', 'Export'];
+export const TABS = ['Gait', 'Parts', 'Attach', 'Design', 'Auto', 'Speech', 'View', 'Sampler', 'Export'];
 
 const RAW_CONTROLS = [
   // Gait
@@ -160,6 +160,19 @@ const RAW_CONTROLS = [
   n('s', 'moebiusShade', 'Look', 'Moebius style', 'Shadow reach', '', 0, 1, 0.01, 'How far the shadow reaches round each form. 0 is none, 1 is nearly all of it.'),
   n('s', 'moebiusStipple', 'Look', 'Moebius style', 'Stipple', '', 0, 1, 0.01, 'Dots along the edge of the shadow, for texture.'),
   b('s', 'moebiusPaper', 'Look', 'Moebius style', 'Paper-coloured stage', 'In the Moebius style the stage is the colour of paper instead of the background colour.'),
+  e('s', 'shadowMode', 'Look', 'Shadow', 'Shadow', ['off', 'ground', 'drop', 'both'], 'Ground is a soft oval on the floor under every figure and piece of scenery, fainter as the feet leave the ground. Drop casts the drawing itself a little way down and to the side, like a sticker lifted off the page. Both does both. Each attachment has a drop shadow of its own in the Attach tab.'),
+  n('s', 'shadowOpacity', 'Look', 'Shadow', 'Strength', '', 0, 1, 0.01, 'How dark the shadow is.'),
+  n('s', 'shadowBlur', 'Look', 'Shadow', 'Softness', 'px', 0, 60, 1, 'How soft the edge is, at the 1080 line frame.'),
+  n('s', 'shadowX', 'Look', 'Shadow', 'Drop across', 'px', -80, 80, 1, 'How far the drop shadow falls to the right (negative is the left).'),
+  n('s', 'shadowY', 'Look', 'Shadow', 'Drop down', 'px', -80, 80, 1, 'How far the drop shadow falls down (negative is up).'),
+  n('s', 'shadowSize', 'Look', 'Shadow', 'Ground size', '×', 0.3, 3, 0.05, 'How big the oval on the ground is.'),
+  c('s', 'shadowColor', 'Look', 'Shadow', 'Shadow colour', 'The colour of the shadow.'),
+  n('s', 'lineBoil', 'Look', 'Line', 'Boil', 'px', 0, 8, 0.25, 'The outline wobbles a little, and a new wobble comes every few frames, as a hand-drawn line does. The colour moves with it. 0 is perfectly still.'),
+  n('s', 'boilRate', 'Look', 'Line', 'Frames per wobble', '', 1, 8, 1, 'How many frames each wobble lasts: 1 is a frantic boil, 4 is a slow shimmer.'),
+  e('s', 'lineDash', 'Look', 'Line', 'Line pattern', ['solid', 'dashed', 'dotted'], 'Solid, dashed or dotted outlines.'),
+  e('s', 'lineJoin', 'Look', 'Line', 'Corners', ['round', 'miter', 'bevel'], 'Round corners, sharp points, or cut-off corners where the line turns.'),
+  n('s', 'lineDepth', 'Look', 'Line', 'Weight by depth', '', 0, 1, 0.01, '0 makes every line the same weight. Higher makes the lines on the far side of the figure lighter, so it reads as further away.'),
+  n('s', 'lineOffset', 'Look', 'Line', 'Colour off the line', 'px', -12, 12, 0.5, 'The colour sits a little off its outline, as in a badly printed page. For the Outline, Moebius, Comic, Ink and Clay looks.'),
   n('s', 'blockSize', 'Look', 'Blocks and facets', 'Block size', 'px', 3, 40, 1, 'The side of each block in the Blocks look. Large blocks are chunky voxels; small ones are fine pixel art.'),
   n('s', 'polySides', 'Look', 'Blocks and facets', 'Facets round each limb', '', 4, 12, 1, 'The Lowpoly look builds every limb as a prism with this many flat sides: 4 is a box, 6 is chunky, 12 is nearly round.'),
   c('s', 'hoseBody', 'Look', 'Rubber hose', 'Body colour', 'The head, body, arms and legs.'),

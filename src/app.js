@@ -19,12 +19,15 @@ import { openCutWindow } from './cutwindow.js';
 import { SLICE_DEFAULTS, numberCuts } from './slicer.js';
 import { History } from './history.js';
 import { findKeyFrames, laneTable, tableCsv } from './keyposes.js';
-import { VISEMES, VISEME_BY_ID, buildSpeech, cleanSpeech, keyOn } from './lipsync.js';
+import { VISEMES, VISEME_BY_ID, buildSpeech, cleanSpeech, keyOn, speechAt } from './lipsync.js';
 import { paintMouth } from './mouth.js';
 import { icon } from './icons.js';
 import { makeSeamless, loopGap } from './loop.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PHYS_MODES } from './propphys.js';
+import { cleanShadow } from './shadow.js';
+import { partKey, newSkin, newPart, isPlain, cleanDesign, cellFor, toUV, uvToCell, atlasLayout, atlasSkin, BLENDS as SKIN_BLENDS } from './design.js';
+import { packCharacter, readCharacter } from './character.js';
 import { PAD_COUNT, BLENDS, newBank, capturePad, transitionValues, blendFrames, cleanBank, cleanBanks } from './pads.js';
 import { newMood, cleanMood, blendMood, moodKeys, moodsFor, moodWeights, CORNERS, CORNER_LABELS } from './mood.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
@@ -45,6 +48,7 @@ let PADMODE = 'play'; // what a tap on a pad does: play | store | clear
 let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
+  design: {}, // each figure's design: { figure: { part key: its own look and skin } }
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, stageOnly: false,
   source: 'walk', tool: 'select', sel: null, link: true, edit: null, busy: null, message: '', video: null, last: null, map: null,
@@ -78,7 +82,7 @@ function perfData() {
   return { ...perfCache, lanes: S.lanes, live: Object.keys(live).length ? live : null };
 }
 /** The parameters every drawing and export reads: gait, proportions and the motion you have changed. */
-const P = () => ({ ...S.p, proportions: S.r, motion: S.motion, attach: S.source === 'sampled' ? [] : (S.attach[figKey()] || []), speech: S.source === 'sampled' ? null : S.speech, scene: S.source === 'sampled' ? null : S.scene, perf: S.source === 'sampled' ? null : perfData(), sampled: S.source === 'sampled' ? sampledSummary() : null });
+const P = () => ({ ...S.p, proportions: S.r, motion: S.motion, attach: S.source === 'sampled' ? [] : (S.attach[figKey()] || []), design: S.source === 'sampled' ? null : (S.design[figKey()] || null), speech: S.source === 'sampled' ? null : S.speech, scene: S.source === 'sampled' ? null : S.scene, perf: S.source === 'sampled' ? null : perfData(), sampled: S.source === 'sampled' ? sampledSummary() : null });
 
 // ---------- small DOM helper ----------
 function h(tag, attrs = {}, ...kids) {
@@ -101,7 +105,7 @@ const hist = new History({ gap: 250 });
 let restoring = false;
 const snapState = () => JSON.stringify({
   p: S.p, s: Object.fromEntries(Object.entries(S.s).filter(([k]) => !/^cam|^autoOrbit/.test(k))), x: S.x, r: S.r, motion: S.motion, lanes: S.lanes,
-  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene,
+  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, design: S.design,
 });
 function refreshHistory() {
   refreshSaveState();
@@ -139,7 +143,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -186,7 +190,7 @@ function adopt(raw) {
   if (raw.attach && typeof raw.attach === 'object') S.attach = cleanAttach(raw.attach);
   if (raw.perfs && typeof raw.perfs === 'object') for (const r of FIGS) { const o = {}; for (const [name, v] of Object.entries(raw.perfs[r] || {})) { const nm = String(name).slice(0, 40); if (nm && v) o[nm] = { lanes: cleanLanes(v.lanes), perfLen: Math.max(0, Math.round(finite(v.perfLen))) }; } S.perfs[r] = o; }
   S.motion = cleanMotion(raw.motion);
-  MOOD = cleanMood(raw.mood); if (raw.pads) BANKS = cleanBanks(raw.pads, FIGS); PADRUN = null;
+  MOOD = cleanMood(raw.mood); if (raw.pads) BANKS = cleanBanks(raw.pads, FIGS); PADRUN = null; S.design = cleanDesign(raw.design, FIGS);
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
@@ -233,6 +237,7 @@ function usedImages() {
   const urls = imageUrls(); const out = {};
   for (const rig of FIGS) for (const a of S.attach[rig] || []) if (a.img && urls[a.img]) out[a.img] = urls[a.img];
   for (const q of S.scene?.props || []) if (q.img && urls[q.img]) out[q.img] = urls[q.img]; // scenery pictures too
+  for (const fig of Object.values(S.design || {})) for (const p of Object.values(fig)) if (p.skin?.img && urls[p.skin.img]) out[p.skin.img] = urls[p.skin.img]; // and the skins of the parts
   return out;
 }
 function saveAttachImages() {
@@ -244,6 +249,7 @@ function loadAttachImages() {
     const raw = JSON.parse(localStorage.getItem(ATT_IMG_KEY) || '{}');
     const want = new Set(); for (const rig of FIGS) for (const a of S.attach[rig] || []) if (a.img) want.add(a.img);
     for (const q of S.scene?.props || []) if (q.img) want.add(q.img);
+    for (const fig of Object.values(S.design || {})) for (const p of Object.values(fig)) if (p.skin?.img) want.add(p.skin.img);
     Promise.all(Object.entries(raw).filter(([id, url]) => want.has(id) && typeof url === 'string' && url.startsWith('data:image/')).map(([id, url]) => registerImage(id, url))).then(() => render());
   } catch { /* none kept */ }
 }
@@ -263,7 +269,7 @@ function cleanAttach(raw) {
         anchor: { mode: an.mode === 'free' ? 'free' : 'boundary', t: num(an.t, 0.12, 0, 1), off: num(an.off, 0, -0.3, 0.3), x: num(an.x, 0, -1.5, 1.5), y: num(an.y, 0, -1.5, 1.5) },
         x: num(a.x, 0, -2, 2), y: num(a.y, 0, -2, 2), rot: num(a.rot, 0, -360, 360), scale: num(a.scale, 1, 0.05, 8), w: num(a.w, 0.26, 0.01, 3), h: num(a.h, 0.18, 0.01, 3),
         fill: col(a.fill, '#f2b84b'), stroke: col(a.stroke, '#26231f'), sw: num(a.sw, 2, 0, 12), opacity: num(a.opacity, 0.92, 0, 1), depth: ['back', 'behind', 'front', 'top'].includes(a.depth) ? a.depth : 'front', flip: Boolean(a.flip), bend: Boolean(a.bend), visible: a.visible !== false,
-        img: a.kind === 'image' ? String(a.img || '') : null,
+        img: a.kind === 'image' ? String(a.img || '') : null, shadow: cleanShadow(a.shadow),
         ...(a.kind === 'strip' ? { phys: cleanPhys(a.phys) } : {}),
       });
     }
@@ -405,6 +411,12 @@ function attachSection() {
       num('Outline width', () => sel.sw, (v) => P_({ sw: v }), 0, 12, 0.5, 'attach-sw'),
       num('Opacity', () => sel.opacity, (v) => P_({ opacity: v }), 0, 1, 0.01, 'attach-opacity')));
   } else host.append(h('section', { class: 'group' }, h('h3', null, 'Look'), num('Opacity', () => sel.opacity, (v) => P_({ opacity: v }), 0, 1, 0.01, 'attach-opacity')));
+  { const sh = sel.shadow || (sel.shadow = cleanShadow(null)); const set = (patch, panel = false) => { sel.shadow = { ...sel.shadow, ...patch }; patchAttach(sel.id, { shadow: sel.shadow }, panel ? { panel: true } : undefined); };
+    host.append(h('section', { class: 'group', testid: 'attach-shadow' }, h('h3', null, 'Drop shadow'),
+      h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Shadow')), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: Boolean(sh.on), testid: 'attach-shadow-on', onChange: (e) => set({ on: e.target.checked }, true) }), h('span', null, sh.on ? 'On' : 'Off'))),
+      sh.on ? num('Across', () => sh.x, (v) => set({ x: v }), -40, 40, 1, 'attach-shadow-x') : null, sh.on ? num('Down', () => sh.y, (v) => set({ y: v }), -40, 40, 1, 'attach-shadow-y') : null,
+      sh.on ? num('Soft', () => sh.blur, (v) => set({ blur: v }), 0, 40, 1, 'attach-shadow-blur') : null, sh.on ? num('Strength', () => sh.opacity, (v) => set({ opacity: v }), 0, 1, 0.01, 'attach-shadow-opacity') : null,
+      sh.on ? h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('input', { type: 'color', class: 'color', value: sh.color, 'aria-label': 'Shadow colour', testid: 'attach-shadow-color', onInput: (e) => set({ color: e.target.value }) })) : null)); }
   const sided = targets.find((t) => t.key === targetKey(sel))?.side;
   host.append(h('section', { class: 'group' }, h('h3', null, 'Actions'),
     h('div', { class: 'btnrow' },
@@ -935,6 +947,7 @@ function sceneSection() {
         : 'At that frame it is pushed over about its bottom edge. Push 1 is just enough to bring it to the point of balance: less and it rocks back, more and it goes over and lands on its side. Negative pushes it the other way.'));
   }
   body.push(h('div', { class: 'btnrow' }, ...(actor ? [resetMenu(it)] : []),
+    h('button', { type: 'button', class: 'btn', testid: 'scene-shadow', 'aria-pressed': String(!it.noShadow), title: 'Whether this one casts a shadow when shadows are on in the View tab', onClick: () => set({ noShadow: !it.noShadow }, true) }, it.noShadow ? 'No shadow' : 'Casts shadow'),
     h('button', { type: 'button', class: 'btn', testid: 'scene-hide', onClick: () => set({ visible: !it.visible }, true) }, it.visible ? 'Hide' : 'Show'),
     h('button', { type: 'button', class: 'btn', testid: 'scene-copy', onClick: () => { const c = JSON.parse(JSON.stringify(it)); c.id = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`; c.name = `${it.name} copy`; c.x += 0.8; (actor ? S.scene.actors : S.scene.props).push(c); S.sceneSel = c.id; sceneChanged(true); } }, 'Copy'),
     h('button', { type: 'button', class: 'btn', testid: 'scene-remove', onClick: () => removeSceneItem(it.id) }, 'Remove')));
@@ -989,11 +1002,12 @@ function paint() {
   const zw = fw * S.zoom; const zh = fh * S.zoom;
   const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
   if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
-  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false });
+  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' });
   const x0 = (cw - zw) / 2 + S.panX * d; const y0 = (ch - zh) / 2 + S.panY * d;
   ctx.imageSmoothingQuality = 'high';
   ctx.fillStyle = '#fff'; ctx.fillRect(x0, y0, zw, zh);
   ctx.drawImage(frameCanvas, x0, y0, zw, zh);
+  paintFaceInset(ctx, cw, ch);
   S.last = info; S.map = { x0, y0, zw, zh, fcw, fch, d, left: r.left, top: r.top };
   updateHud(info);
 }
@@ -1118,7 +1132,7 @@ const liveValue = (id) => { const v = nowValues(); return makeEvaluator(v.p, v.m
 function selectPart(sel, { openTab = true } = {}) {
   if (sel) S.attachSel = null;
   S.sel = sel;
-  if (sel && openTab) { S.tab = 'Parts'; }
+  if (sel && openTab && S.tab !== 'Design') { S.tab = 'Parts'; } // on the Design tab a tap on a part chooses it to design
   if (S.edit) {
     const chans = sel ? partChannels(sel.part, sel.side) : [];
     if (chans.length) openEditor(chans[0].id); else closeEditor();
@@ -1682,6 +1696,7 @@ function renderPanel() {
   if (S.tab === 'Auto') host.append(autoSection());
   else if (S.tab === 'Parts') host.append(partsSection());
   else if (S.tab === 'Attach') host.append(attachSection());
+  else if (S.tab === 'Design') host.append(designSection());
   else if (S.tab === 'Sampler') host.append(samplerSection());
   else {
     if (S.tab === 'Speech') host.append(speechSection());
@@ -1696,6 +1711,156 @@ function renderPanel() {
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
   document.querySelector('.tab[aria-selected="true"]')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
   setTimeout(refreshSparks, 0);
+}
+
+// ---------- the design tab: each part's own look, skins, UV maps and sprite sheets ----------
+const designOf = () => (S.design[figKey()] ||= {});
+/** The parts of this figure as the stage last drew them: { key, part, side }, in a fixed order. */
+function partKeys() {
+  const seen = new Map();
+  for (const sh of S.last?.shapes || []) { if (sh.attach || !sh.part) continue; const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); }
+  return [...seen.values()].sort((a, b) => (a.key < b.key ? -1 : 1));
+}
+function patchPart(key, patch, { panel = false } = {}) {
+  const d = designOf(); const next = { ...(d[key] || newPart()), ...patch };
+  if (isPlain(next)) delete d[key]; else d[key] = next;
+  S.ver++; render(); save(); refreshUv(); if (panel) renderPanel();
+}
+const designKeySel = () => (S.sel?.part ? partKey(S.sel.part, S.sel.side) : null);
+let uvCanvas = null;
+/** The picture the part's skin shows, with the outline of the part where it falls in it: so it is plain what part of the picture lands on the part. */
+function refreshUv() {
+  const cv = uvCanvas; if (!cv || !cv.isConnected) return; const g = cv.getContext('2d'); const W = cv.width; g.clearRect(0, 0, W, W);
+  g.fillStyle = '#e9e9ee'; g.fillRect(0, 0, W, W);
+  const key = designKeySel(); const skin = key ? designOf()[key]?.skin : null; const inf = skin ? imageInfo(skin.img) : null;
+  if (!skin || !inf?.img) { g.fillStyle = '#777'; g.font = '14px sans-serif'; g.textAlign = 'center'; g.fillText('No skin on this part', W / 2, W / 2); return; }
+  const idx = cellFor(skin, S.frame); const cw = inf.img.naturalWidth / skin.cols; const ch = inf.img.naturalHeight / skin.rows; const k = Math.min(W / cw, W / ch); const ox = (W - cw * k) / 2; const oy = (W - ch * k) / 2;
+  g.drawImage(inf.img, (idx % skin.cols) * cw, Math.floor(idx / skin.cols) * ch, cw, ch, ox, oy, cw * k, ch * k);
+  g.strokeStyle = '#888'; g.lineWidth = 1; g.strokeRect(ox + 0.5, oy + 0.5, cw * k - 1, ch * k - 1);
+  const f = S.last?.frames?.[key]?.[0]; if (!f) return;
+  g.beginPath(); f.pts.forEach(([x, y], i) => { const [u, v] = toUV(f.fr, x, y); const [s, t] = uvToCell(skin, u, v); const px = ox + s * cw * k; const py = oy + t * ch * k; if (i) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath();
+  g.fillStyle = 'rgba(0,170,255,0.18)'; g.fill(); g.strokeStyle = '#0088dd'; g.lineWidth = 2; g.stroke();
+}
+async function loadPictureData(file, maxSide = 1024) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That file is not a picture this browser can open.')); i.src = url; });
+    const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); const id = freshId(); await registerImage(id, c.toDataURL(file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.92)); return id;
+  } finally { URL.revokeObjectURL(url); }
+}
+async function pickSkinPicture(file) {
+  const key = designKeySel(); if (!file || !key) return;
+  try { const id = await loadPictureData(file); patchPart(key, { skin: { ...(designOf()[key]?.skin || newSkin(id)), img: id } }, { panel: true }); saveAttachImages(); setMessage('Skin added. Slide, scale and turn it to fit, or set the columns and rows if it is a sprite sheet.'); } catch (e) { setMessage(e.message); }
+}
+/** The UV template: one cell for every part, with its outline drawn where it sits in its UV box, to paint over in another app and bring back with Import painted sheet. */
+function exportUvTemplate() {
+  const keys = partKeys(); if (!keys.length) { setMessage('Nothing to make a template of: this look draws no parts.'); return null; }
+  const lay = atlasLayout(keys.map((e) => e.key)); const cs = 256; const cv = document.createElement('canvas'); cv.width = lay.cols * cs; cv.height = lay.rows * cs; const g = cv.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
+  for (const e of keys) {
+    const i = lay.cells[e.key]; const x0 = (i % lay.cols) * cs; const y0 = Math.floor(i / lay.cols) * cs; const f = S.last?.frames?.[e.key]?.[0];
+    g.fillStyle = '#f6f6f8'; g.fillRect(x0, y0, cs, cs); g.strokeStyle = '#d4d4da'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0 + cs / 2, y0); g.lineTo(x0 + cs / 2, y0 + cs); g.moveTo(x0, y0 + cs / 2); g.lineTo(x0 + cs, y0 + cs / 2); g.stroke(); g.strokeRect(x0 + 0.5, y0 + 0.5, cs - 1, cs - 1);
+    if (f) { g.beginPath(); f.pts.forEach(([x, y], j) => { const [u, v] = toUV(f.fr, x, y); const px = x0 + u * cs; const py = y0 + v * cs; if (j) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath(); g.fillStyle = '#ffffff'; g.fill(); g.strokeStyle = '#9a9aa6'; g.lineWidth = 1.5; g.stroke(); }
+    g.fillStyle = '#6a6a76'; g.font = '13px sans-serif'; g.textAlign = 'left'; g.fillText(`${i + 1}. ${wd(partLabel(e.part, e.side))}`, x0 + 8, y0 + 18); g.fillText('along the part →', x0 + 8, y0 + cs - 8);
+  }
+  return new Promise((res) => cv.toBlob((blob) => { deliver(blob, `uv-template-${figKey()}.png`).then(() => { setMessage(`Saved the UV template: ${keys.length} cells in a ${lay.cols} by ${lay.rows} sheet. Paint on it, then bring it back with Import painted sheet.`); res({ blob, layout: lay, keys: keys.map((e) => e.key) }); }); }, 'image/png'));
+}
+/** Gives every part a skin that is its own cell of one painted sheet. */
+async function applyAtlas(file) {
+  if (!file) return;
+  try {
+    const keys = partKeys().map((e) => e.key); if (!keys.length) { setMessage('Nothing to put a sheet on yet.'); return; }
+    const id = await loadPictureData(file, 2048); const lay = atlasLayout(keys); const d = designOf();
+    for (const k of keys) d[k] = { ...(d[k] || newPart()), skin: atlasSkin(id, lay, k) };
+    S.ver++; render(); save(); renderPanel(); saveAttachImages(); setMessage(`The sheet is on ${keys.length} parts, one cell each. Pick a part to slide or scale its cell.`);
+  } catch (e) { setMessage(e.message); }
+}
+function designSection() {
+  const host = h('div', { class: 'design', testid: 'design-section' });
+  const list = partKeys(); const d = designOf(); const sel = designKeySel(); const cur = sel ? (d[sel] || newPart()) : null;
+  const slider = (label, get, set, min, max, step, tid) => {
+    const val = get(); const n = h('input', { type: 'number', class: 'num', inputmode: 'decimal', min, max, step, value: +Number(val).toFixed(3), 'aria-label': label, testid: `${tid}-num` }); const r = h('input', { type: 'range', class: 'rng', min, max, step, value: val, 'aria-label': `${label} slider`, testid: tid });
+    r.addEventListener('input', () => { set(Number(r.value)); n.value = +Number(r.value).toFixed(3); }); n.addEventListener('change', () => { const v = Math.min(max, Math.max(min, Number(n.value) || 0)); set(v); r.value = v; n.value = v; });
+    return h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, label)), h('div', { class: 'ctl' }, r, n));
+  };
+  const seg = (label, items, curV, on, tid) => h('div', { class: 'row noreset row-enum' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, label)), h('div', { class: 'seg', role: 'group', 'aria-label': label }, items.map(([v, t]) => h('button', { type: 'button', class: 'segbtn', testid: `${tid}-${v}`, 'aria-pressed': String(curV === v), onClick: () => on(v) }, t))));
+  const check = (label, on, set, tid) => h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, label)), h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: on, testid: tid, onChange: (e) => set(e.target.checked) }), h('span', null, on ? 'On' : 'Off')));
+  host.append(h('section', { class: 'group', testid: 'design-parts' }, h('h3', null, 'Parts'),
+    h('p', { class: 'hint' }, 'Tap a part on the stage, or choose one here. Give it its own colour, line, drop shadow and a skin: a picture laid over it through its UV map. A sprite sheet gives it cells that play as it moves.'),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Parts of this figure' }, list.map((e) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(e.key === sel), testid: `design-part-${e.key}`, onClick: () => selectPart({ part: e.part, side: e.side }, { openTab: false }) }, `${wd(partLabel(e.part, e.side))}${d[e.key] ? ' •' : ''}`)))));
+  if (cur) {
+    const set = (patch, panel = false) => patchPart(sel, patch, { panel });
+    const colour = (label, k, tid, fallback) => h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, label)), h('input', { type: 'color', class: 'color', value: cur[k] || fallback, 'aria-label': label, testid: tid, onInput: (e) => set({ [k]: e.target.value }) }), h('button', { type: 'button', class: 'btn ghost', testid: `${tid}-clear`, title: 'Use the colour of the whole stage', onClick: () => set({ [k]: '' }, true) }, 'Stage colour'));
+    const sided = Boolean(S.sel.side);
+    host.append(h('section', { class: 'group', testid: 'design-look' }, h('h3', null, wd(partLabel(S.sel.part, S.sel.side))),
+      check('Shown', cur.visible, (v) => set({ visible: v }, true), 'design-visible'),
+      colour('Fill colour', 'fill', 'design-fill', S.s.fillColor), colour('Line colour', 'line', 'design-line', S.s.lineColor),
+      slider('Line weight', () => cur.lineW, (v) => set({ lineW: v }), 0, 5, 0.05, 'design-linew'), slider('Opacity', () => cur.opacity, (v) => set({ opacity: v }), 0, 1, 0.01, 'design-opacity'),
+      h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'design-reset', onClick: () => { delete designOf()[sel]; S.ver++; render(); save(); renderPanel(); } }, 'Reset this part'),
+        sided ? h('button', { type: 'button', class: 'btn', testid: 'design-copy-side', onClick: () => { const other = partKey(S.sel.part, S.sel.side === 'R' ? 'L' : 'R'); designOf()[other] = JSON.parse(JSON.stringify(d[sel] || newPart())); S.ver++; render(); save(); renderPanel(); setMessage('Copied to the other side.'); } }, 'Copy to the other side') : null)));
+    const sh = cur.shadow;
+    host.append(h('section', { class: 'group', testid: 'design-shadow' }, h('h3', null, 'Drop shadow'),
+      check('Shadow', sh.on, (v) => set({ shadow: { ...sh, on: v } }, true), 'design-shadow-on'),
+      sh.on ? slider('Across', () => sh.x, (v) => set({ shadow: { ...cur.shadow, x: v } }), -40, 40, 1, 'design-shadow-x') : null, sh.on ? slider('Down', () => sh.y, (v) => set({ shadow: { ...cur.shadow, y: v } }), -40, 40, 1, 'design-shadow-y') : null,
+      sh.on ? slider('Soft', () => sh.blur, (v) => set({ shadow: { ...cur.shadow, blur: v } }), 0, 40, 1, 'design-shadow-blur') : null, sh.on ? slider('Strength', () => sh.opacity, (v) => set({ shadow: { ...cur.shadow, opacity: v } }), 0, 1, 0.01, 'design-shadow-opacity') : null,
+      sh.on ? h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('input', { type: 'color', class: 'color', value: sh.color, 'aria-label': 'Shadow colour', testid: 'design-shadow-color', onInput: (e) => set({ shadow: { ...cur.shadow, color: e.target.value } }) })) : null));
+    const sk = cur.skin; const fileIn = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a skin picture', testid: 'design-skin-file', onChange: (e) => { pickSkinPicture(e.target.files?.[0]); e.target.value = ''; } });
+    const sset = (patch, panel = false) => set({ skin: { ...cur.skin, ...patch } }, panel);
+    const sheetCells = sk ? sk.cols * sk.rows : 1;
+    uvCanvas = h('canvas', { class: 'uvprev', width: 240, height: 240, role: 'img', 'aria-label': 'The skin picture, with the part outlined where it falls in it', testid: 'design-uv' });
+    host.append(h('section', { class: 'group', testid: 'design-skin' }, h('h3', null, 'Skin'), fileIn,
+      h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'design-skin-add', onClick: () => fileIn.click() }, sk ? 'Replace the picture…' : 'Choose a picture…'), sk ? h('button', { type: 'button', class: 'btn', testid: 'design-skin-remove', onClick: () => set({ skin: null }, true) }, 'Remove the skin') : null),
+      sk ? h('div', null, uvCanvas,
+        h('p', { class: 'hint' }, 'The blue outline is the part, where it falls on the picture. "Along" runs from the joint the part swings from toward its far end; "across" is the other way.'),
+        seg('Fit', [['stretch', 'Stretch'], ['tile', 'Tile']], sk.fit, (v) => sset({ fit: v }, true), 'design-fit'),
+        slider('Sheet columns', () => sk.cols, (v) => sset({ cols: Math.round(v), cell: Math.min(sk.cell, Math.round(v) * sk.rows - 1) }, true), 1, 16, 1, 'design-cols'), slider('Sheet rows', () => sk.rows, (v) => sset({ rows: Math.round(v), cell: Math.min(sk.cell, sk.cols * Math.round(v) - 1) }, true), 1, 16, 1, 'design-rows'),
+        sheetCells > 1 ? slider('Cell', () => sk.cell, (v) => sset({ cell: Math.round(v) }), 0, sheetCells - 1, 1, 'design-cell') : null,
+        sheetCells > 1 ? seg('Play the cells', [['none', 'Hold'], ['loop', 'Loop'], ['pingpong', 'Ping-pong']], sk.anim, (v) => sset({ anim: v }, true), 'design-anim') : null,
+        sheetCells > 1 && sk.anim !== 'none' ? slider('Frames per cell', () => sk.cellFrames, (v) => sset({ cellFrames: Math.round(v) }), 1, 24, 1, 'design-cellframes') : null,
+        slider('Slide along', () => sk.u, (v) => sset({ u: v }), -1, 1, 0.01, 'design-u'), slider('Slide across', () => sk.v, (v) => sset({ v }), -1, 1, 0.01, 'design-v'),
+        slider('Scale along', () => sk.su, (v) => sset({ su: v }), 0.1, 6, 0.01, 'design-su'), slider('Scale across', () => sk.sv, (v) => sset({ sv: v }), 0.1, 6, 0.01, 'design-sv'),
+        slider('Turn', () => sk.rot, (v) => sset({ rot: v }), -180, 180, 1, 'design-rot'), check('Flip', sk.flip, (v) => sset({ flip: v }, true), 'design-flip'),
+        slider('Skin opacity', () => sk.opacity, (v) => sset({ opacity: v }), 0, 1, 0.01, 'design-skin-opacity'), seg('Blend', SKIN_BLENDS, sk.blend, (v) => sset({ blend: v }, true), 'design-blend')) : h('p', { class: 'hint' }, 'A picture, or a sheet of pictures in a grid. A plain picture is stretched over the part; set the columns and rows for a sprite sheet, and choose which cell shows or have them play.')));
+    setTimeout(refreshUv, 0);
+  } else host.append(h('p', { class: 'hint', testid: 'design-none' }, 'Nothing chosen. Tap a part on the stage, or choose one above.'));
+  const sheetIn = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a painted sheet', testid: 'design-sheet-file', onChange: (e) => { applyAtlas(e.target.files?.[0]); e.target.value = ''; } });
+  const any = Object.values(d).some((p) => p.skin);
+  host.append(h('section', { class: 'group', testid: 'design-sheet' }, h('h3', null, 'Whole figure'), sheetIn,
+    h('p', { class: 'hint' }, 'Colour the whole figure on one flat sheet: save a UV template (one cell for each part, with its outline in it), paint over it in any app, and bring it back. Every part takes its own cell and wears it as it moves.'),
+    h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'design-uv-export', onClick: exportUvTemplate }, 'Save a UV template'), h('button', { type: 'button', class: 'btn', testid: 'design-uv-import', onClick: () => sheetIn.click() }, 'Import painted sheet…'),
+      h('button', { type: 'button', class: 'btn', testid: 'design-skins-clear', disabled: !any, onClick: () => { for (const p of Object.values(designOf())) p.skin = null; for (const k of Object.keys(designOf())) if (isPlain(designOf()[k])) delete designOf()[k]; S.ver++; render(); save(); renderPanel(); } }, 'Remove all skins'))),
+    h('section', { class: 'group', testid: 'design-character' }, h('h3', null, 'Character file'),
+      h('p', { class: 'hint' }, 'The figure, its walk, proportions, look, attachments, design and pads, in one file, with the pictures they use. Import puts a saved character on the stage.'),
+      h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'design-char-export', onClick: exportCharacter }, 'Export this character…'), h('button', { type: 'button', class: 'btn', testid: 'design-char-import', onClick: () => document.querySelector('[data-testid="character-load"]')?.click() }, 'Import a character…'))));
+  return host;
+}
+/** The figure as a character file's content. */
+function packCurrentCharacter(name) {
+  const fig = figKey(); const urls = imageUrls(); const images = {};
+  for (const a of S.attach[fig] || []) if (a.img && urls[a.img]) images[a.img] = urls[a.img];
+  for (const p of Object.values(S.design[fig] || {})) if (p.skin?.img && urls[p.skin.img]) images[p.skin.img] = urls[p.skin.img];
+  return packCharacter({ name, figure: fig, p: S.p, r: S.r, s: S.s, motion: S.motion, attach: S.attach[fig] || [], design: S.design[fig] || {}, pads: BANKS[fig] || null, images });
+}
+function exportCharacter() {
+  const n = typeof prompt === 'function' ? prompt('Name this character', `${FIG_LABELS[figKey()]} character`) : `${FIG_LABELS[figKey()]} character`; const name = fileSafe(n); if (!name) return;
+  return deliver(new Blob([JSON.stringify(packCurrentCharacter(name), null, 1)], { type: 'application/json' }), `${name}.character.json`).then(() => setMessage(`Saved ${name}.character.json: the figure, its walk, look, attachments, design and pads.`));
+}
+/** Puts a character file's content on the stage as the main figure. */
+async function importCharacterObject(raw) {
+  const c = readCharacter(raw, FIGS, DEFAULTS, STYLE_DEFAULTS); if (!c.ok) { setMessage(c.error); return false; }
+  if (PADRUN) padFinish(true);
+  if (c.figure !== figKey()) setFigure(c.figure);
+  for (const [id, url] of Object.entries(c.images)) await registerImage(id, url);
+  Object.assign(S.p, c.p); Object.assign(S.s, c.s); S.r = c.r; S.motion = cleanMotion(c.motion);
+  S.attach[c.figure] = cleanAttach({ [c.figure]: c.attach })[c.figure]; const dz = cleanDesign({ [c.figure]: c.design }, FIGS); if (dz[c.figure]) S.design[c.figure] = dz[c.figure]; else delete S.design[c.figure];
+  if (c.pads) BANKS[c.figure] = cleanBank(c.pads); MOOD.x = 0.5; MOOD.y = 0.5; MOOD.base = null;
+  S.preset = 'Custom'; S.sel = null; S.attachSel = null; S.frame = 0; S.ver++; saveAttachImages(); buildStrip(); renderPanel(); render(); save();
+  setMessage(`Imported ${c.name}.`); return true;
+}
+async function importCharacterFile(e) {
+  const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+  try { await importCharacterObject(JSON.parse(await f.text())); } catch (err) { setMessage(`Could not read it: ${err.message}`); }
 }
 
 // ---------- the gait chart: which feet are down when ----------
@@ -1756,6 +1921,23 @@ function seekLive(f) { const n = cycleFrames(P()).frames.length; S.frame = Math.
  * The device's voice reads the text while the mouth plays. The voice sets the pace: its speed is chosen to fit the length of the speech,
  * the mouth starts when the voice does, and each time the voice reaches a new word the mouth jumps to where that word begins.
  */
+/**
+ * While there is speech, or a mouth shape is held, a close-up of the face from the front sits in the corner of the stage. In the side view (the one it opens in) the face is edge on and the
+ * mouth cannot be seen on the body, and the body is small in any view, so without this the mouth seems not to be working.
+ */
+let insetCanvas = null;
+function paintFaceInset(ctx, cw, ch) {
+  const id = S.speech || S.mouthPreview ? (S.mouthPreview || speechAt(S.speech, S.frame)) : null;
+  if (!id || S.p.rig !== 'human' || S.source === 'sampled' || S.stageOnly) return;
+  const side = Math.round(Math.max(96, Math.min(200, cw * 0.28, ch * 0.4))); const px = side * 2;
+  insetCanvas ||= document.createElement('canvas'); if (insetCanvas.width !== px) { insetCanvas.width = px; insetCanvas.height = px; }
+  const ic = insetCanvas.getContext('2d');
+  const st = { ...S.s, focus: 'head', camYaw: -90, camPitch: 0, headZoom: 5.2, showGround: false, showArcs: false, showFootprints: false, showOnion: false, showScene: false, showMouthLabel: false, showFootLabels: false, background: '#ffffff', style: S.s.style === 'stick' || S.s.style === 'silhouette' ? 'mannequin' : S.s.style };
+  try { drawScene(ic, { ...P(), scene: null }, st, px, px, S.frame, { mouth: S.mouthPreview, layers: { figure: true, guides: false } }); } catch { return; }
+  const x = 12; const y = ch - side - 12;
+  ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, side, side, 10) : ctx.rect(x, y, side, side); ctx.clip(); ctx.fillStyle = '#fff'; ctx.fillRect(x, y, side, side); ctx.drawImage(insetCanvas, x, y, side, side); ctx.restore();
+  ctx.save(); ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, side, side, 10) : ctx.rect(x, y, side, side); ctx.stroke(); ctx.restore();
+}
 function playWithVoice() {
   const sp = S.speech; if (!sp) return;
   pause(); setFrame(sp.start);
@@ -1948,7 +2130,7 @@ function saveAs() {
   S.fileName = name; saveSettings();
 }
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, images: usedImages() }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, images: usedImages() }, null, 1)], { type: 'application/json' });
   deliver(blob, `${S.fileName}.json`).then(() => { S.savedState = snapState(); S.everSaved = true; refreshSaveState(); setMessage(`Saved ${S.fileName}.json.`); });
 }
 async function loadSettings(e) {
@@ -2126,6 +2308,9 @@ function menuBar() {
       { label: 'Save as…', testid: 'file-save-as', onClick: saveAs },
       { label: 'Open…', testid: 'file-load', onClick: () => document.querySelector('[data-testid="settings-load"]')?.click() },
       { separator: true },
+      { label: 'Export this character…', testid: 'file-char-export', onClick: exportCharacter },
+      { label: 'Import a character…', testid: 'file-char-import', onClick: () => document.querySelector('[data-testid="character-load"]')?.click() },
+      { separator: true },
       { label: 'Export frames…', testid: 'file-export', onClick: () => goTab('Export') },
       { label: 'Contact sheet', testid: 'file-sheet', onClick: runSheet },
       { label: 'Key poses only', testid: 'file-keys', onClick: runKeyPoses },
@@ -2206,7 +2391,7 @@ function build() {
       h('label', { class: 'pillfield' }, h('small', null, 'Speed'), speedSel),
       h('label', { class: 'pillfield' }, h('small', null, 'Source'), h('select', { id: 'source', class: 'select', 'aria-label': 'What is on the stage', testid: 'source', onChange: (e) => setSource(e.target.value) },
         h('option', { value: 'walk', selected: S.source === 'walk' }, '3D walk'), h('option', { value: 'sampled', selected: S.source === 'sampled' }, 'Sampled drawings')))),
-    settingsFile);
+    settingsFile, h('input', { type: 'file', accept: '.json,application/json', class: 'sr', tabindex: '-1', 'aria-label': 'Load a character file', testid: 'character-load', onChange: importCharacterFile }));
   stage = h('canvas', { class: 'stage', testid: 'stage', 'aria-label': 'Walk preview. Tap a body part to select it. Drag to orbit.', role: 'img' });
   hud = h('div', { class: 'hud', testid: 'hud', 'aria-live': 'off' });
   const setView = (yaw, pitch) => { S.s.camYaw = yaw; S.s.camPitch = pitch; if (S.tab === 'View') renderPanel(); render(); save(); };
@@ -2592,7 +2777,7 @@ window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
   buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
-  setMoodPad, mood: () => MOOD, triggerPad, storePad, padBank, padRun: () => PADRUN, padMode: (m) => { PADMODE = m; },
+  setMoodPad, mood: () => MOOD, designOf: () => designOf(), patchPart, partKeys, packCurrentCharacter, importCharacterObject, exportUvTemplate, applyAtlas, triggerPad, storePad, padBank, padRun: () => PADRUN, padMode: (m) => { PADMODE = m; },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),
   frame: (i, part = null, over = {}) => renderFrame(P(), S.s, { ...S.x, ...over }, i, part),

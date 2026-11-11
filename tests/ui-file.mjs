@@ -463,6 +463,106 @@ check('clay draws the same every time it is drawn (the lumps do not move on thei
 const clayFrames = new Set(); for (let fr = 0; fr < 6; fr++) { await ev((f) => window.__walkBase.setFrame(f), fr); clayFrames.add(await stageShot()); }
 check('and with no errors from any of the three looks on any figure', clayFrames.size === 6 && errors.length === 0, [clayFrames.size, errors]);
 await ev(() => { const w = window.__walkBase; w.S.s.style = 'mannequin'; w.S.s.polySides = 6; w.S.s.blockSize = 7; w.setFigure('human'); w.setTab('Gait'); w.render(); });
+// ---- speech: the mouth can be seen in the side view, in a close-up in the corner of the stage
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.applyPreset('Normal'); w.S.s.style = 'mannequin'; w.S.s.focus = 'body'; w.S.s.camYaw = 0; w.S.s.camPitch = 0; w.clearSpeech(); w.setTab('Speech'); w.setFrame(6); w.render(); }); await wait(250);
+const sbox = await page.locator('[data-testid="stage"]').boundingBox(); const corner = { x: sbox.x + 14, y: sbox.y + sbox.height - 150, width: 130, height: 130 };
+const quiet = (await page.screenshot({ clip: corner })).toString('base64');
+await ev(() => { const w = window.__walkBase; w.setSpeechText('Hello there, how are you today?'); w.buildSpeechNow(); w.pause(); w.setFrame(6); w.render(); }); await wait(300);
+const talking = (await page.screenshot({ clip: corner })).toString('base64');
+check('in the side view, the face appears in a close-up in the corner of the stage while there is speech', quiet !== talking);
+await ev(() => { const w = window.__walkBase; w.setFrame(3); w.render(); }); await wait(150);
+const f3 = (await page.screenshot({ clip: corner })).toString('base64'); await ev(() => { const w = window.__walkBase; w.setFrame(9); w.render(); }); await wait(150);
+check('and the mouth in it changes from word to word', f3 !== (await page.screenshot({ clip: corner })).toString('base64'));
+await ev(() => { const w = window.__walkBase; w.clearSpeech(); w.setFrame(6); w.render(); }); await wait(250);
+check('and it goes when the speech is cleared', (await page.screenshot({ clip: corner })).toString('base64') === quiet && errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.setTab('Gait'); });
+// ---- shadows and line options
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.applyPreset('Normal'); w.S.s.style = 'mannequin'; w.S.s.camYaw = -25; w.S.s.shadowMode = 'off'; w.setTab('View'); w.setFrame(4); w.render(); }); await wait(250);
+check('View has Shadow and Line settings', (await q('opt-shadowMode-both').count()) === 1 && (await q('rng-shadowBlur').count()) === 1 && (await q('rng-lineBoil').count()) === 1 && (await q('opt-lineDash-dotted').count()) === 1);
+const shadowLooks = new Set([await stageShot()]);
+for (const m of ['ground', 'drop', 'both']) { await q(`opt-shadowMode-${m}`).click(); await wait(150); shadowLooks.add(await stageShot()); }
+check('Ground, Drop and Both each change the picture', shadowLooks.size === 4, shadowLooks.size);
+await q('opt-shadowMode-off').click(); await wait(150);
+const plainLine = await stageShot(); const lineLooks = new Set([plainLine]);
+for (const [k, v] of [['lineBoil', 4], ['lineDepth', 1], ['lineOffset', 6]]) { await ev(([k, v]) => { const w = window.__walkBase; w.S.s.style = 'outline'; w.S.s[k] = v; w.render(); }, [k, v]); await wait(120); lineLooks.add(await stageShot()); await ev((k) => { window.__walkBase.S.s[k] = 0; }, k); }
+for (const d of ['dashed', 'dotted']) { await ev((d) => { const w = window.__walkBase; w.S.s.lineDash = d; w.render(); }, d); await wait(120); lineLooks.add(await stageShot()); }
+check('boil, depth, offset and dashes each change the line', lineLooks.size === 6, lineLooks.size);
+await ev(() => { const w = window.__walkBase; w.S.s.lineDash = 'solid'; w.S.s.style = 'ink'; w.S.s.lineBoil = 3; w.S.s.boilRate = 2; w.setFrame(0); w.render(); }); await wait(120);
+const b0 = await stageShot(); await ev(() => { const w = window.__walkBase; w.setFrame(1); w.S.frame = 0; w.render(); }); await wait(80);
+check('the boil is the same on the same frame, so a frame always draws the same', (await stageShot()) === b0);
+await ev(() => { const w = window.__walkBase; w.setFrame(0); w.render(); }); await wait(80); const f0 = await stageShot(); await ev(() => { const w = window.__walkBase; w.S.p.exposure = 1; w.setFrame(2); w.render(); }); await wait(80);
+check('and a new wobble comes every two frames', (await stageShot()) !== f0 && errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.S.s.lineBoil = 0; w.S.s.style = 'mannequin'; w.S.s.camYaw = 0; w.render(); });
+// an attachment with a drop shadow
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.setTab('Attach'); w.setFrame(4); w.S.attach.human = []; w.selectPart({ part: 'spine.upper' }, { openTab: false }); w.addAttach('rect'); w.S.ver++; w.render(); }); await wait(300);
+check('the Attach tab has a Drop shadow section for the layer', (await q('attach-shadow-on').count()) === 1);
+const noSh = await stageShot(); await q('attach-shadow-on').check(); await wait(250);
+check('turning it on casts a shadow from that layer alone, and shows its controls', (await stageShot()) !== noSh && (await q('attach-shadow-x').count()) === 1 && (await ev(() => window.__walkBase.attachItem().shadow.on)) === true);
+await ev(() => { const e = document.querySelector('[data-testid="attach-shadow-x"]'); e.value = 30; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(150);
+check('the shadow can be moved, and is kept with the layer', (await ev(() => window.__walkBase.attachItem().shadow.x)) === 30 && (await ev(() => JSON.stringify(window.__walkBase.S.attach.human)).then((s) => s.includes('"shadow"'))));
+await ev(() => { const w = window.__walkBase; w.S.attach.human = []; w.S.attachSel = null; w.setTab('Gait'); w.render(); });
+// ---- the Design tab: a look for each part, skins, sprite sheets, a painted sheet for the whole figure, and character files
+const sheetFile = async (cols, rows) => { const b64 = await ev(([cols, rows]) => { const c = document.createElement('canvas'); c.width = cols * 64; c.height = rows * 64; const g = c.getContext('2d'); for (let i = 0; i < cols * rows; i++) { g.fillStyle = ['#e63946', '#2a9d8f', '#264653', '#8338ec', '#ffbe0b', '#06d6a0'][i % 6]; g.fillRect((i % cols) * 64, Math.floor(i / cols) * 64, 64, 64); } return c.toDataURL('image/png').split(',')[1]; }, [cols, rows]); return { name: 'sheet.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64') }; };
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.applyPreset('Normal'); w.S.design = {}; w.S.attach.human = []; w.S.s.style = 'mannequin'; w.S.s.shadowMode = 'off'; w.S.s.camYaw = -25; w.setTab('Design'); w.setFrame(4); w.render(); }); await wait(300);
+check('there is a Design tab', (await page.locator('.tab[data-tab="Design"]').count()) === 1);
+check('with nothing chosen it says so, and lists the parts to choose', (await q('design-none').count()) === 1 && (await page.locator('[data-testid^="design-part-"]').count()) >= 10);
+await ev(() => window.__walkBase.selectPart({ part: 'head', side: null }, { openTab: false })); await wait(250);
+check('choosing a part shows its own colour, line, shadow and skin', (await q('design-fill').count()) === 1 && (await q('design-linew').count()) === 1 && (await q('design-shadow-on').count()) === 1 && (await q('design-skin-add').count()) === 1);
+const dsn0 = await stageShot();
+await ev(() => { const e = document.querySelector('[data-testid="design-fill"]'); e.value = '#ff0000'; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
+check('a part can have a colour of its own', (await ev(() => window.__walkBase.designOf().head?.fill)) === '#ff0000' && (await stageShot()) !== dsn0);
+const dsn1 = await stageShot(); await q('design-fill-clear').click(); await wait(200);
+check('and go back to the stage colour', (await ev(() => window.__walkBase.designOf().head)) === undefined && (await stageShot()) !== dsn1);
+await q('design-visible').uncheck(); await wait(250);
+check('a part can be hidden, and is still there to bring back', (await ev(() => window.__walkBase.S.last.shapes.find((s) => s.part === 'head')?.hidden)) === true && (await q('design-part-head').count()) === 1);
+await q('design-visible').check(); await wait(200);
+const dsn2 = await stageShot(); await q('design-shadow-on').check(); await wait(250);
+check('a part can cast a drop shadow of its own', (await ev(() => window.__walkBase.designOf().head?.shadow?.on)) === true && (await q('design-shadow-x').count()) === 1 && (await stageShot()) !== dsn2);
+await q('design-shadow-on').uncheck(); await wait(150);
+const dsn3 = await stageShot();
+await page.locator('[data-testid="design-skin-file"]').setInputFiles(await sheetFile(2, 2)); await wait(600);
+check('a skin is a picture laid over the part', (await ev(() => window.__walkBase.designOf().head?.skin?.cols)) === 1 && (await stageShot()) !== dsn3);
+const uvPix = await ev(() => { const c = document.querySelector('[data-testid="design-uv"]'); const g = c.getContext('2d'); const p = g.getImageData(c.width / 2, c.height / 2, 1, 1).data; return [p[0], p[1], p[2]]; });
+check('with a picture of the part in it, on the UV preview', !(uvPix[0] === 233 && uvPix[1] === 233 && uvPix[2] === 238), uvPix);
+await q('design-cols-num').fill('2'); await q('design-cols-num').dispatchEvent('change'); await q('design-rows-num').fill('2'); await q('design-rows-num').dispatchEvent('change'); await wait(300);
+check('a sprite sheet has columns and rows, a cell to hold or to play', (await ev(() => window.__walkBase.designOf().head.skin.cols * window.__walkBase.designOf().head.skin.rows)) === 4 && (await q('design-cell').count()) === 1 && (await q('design-anim-loop').count()) === 1);
+const cellA = await stageShot(); await ev(() => { const e = document.querySelector('[data-testid="design-cell"]'); e.value = 1; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
+check('another cell shows another part of the sheet', (await stageShot()) !== cellA && (await ev(() => window.__walkBase.designOf().head.skin.cell)) === 1);
+await q('design-anim-loop').click(); await wait(200);
+await q('design-cellframes-num').fill('1'); await q('design-cellframes-num').dispatchEvent('change'); await wait(200);
+const frames = new Set(); for (const f of [0, 1, 2, 3]) { await ev((f) => { const w = window.__walkBase; w.setFrame(f); w.render(); }, f); await wait(80); frames.add(await ev(() => { const c = document.querySelector('[data-testid="stage"]'); const g = c.getContext('2d'); const sh = window.__walkBase.S.last.shapes.find((s) => s.part === 'head'); const xs = sh.pts.map((p) => p[0]); const ys = sh.pts.map((p) => p[1]); const mp = window.__walkBase.S.map; const k = mp.zw / mp.fcw; const d = g.getImageData(Math.round(mp.x0 + ((Math.min(...xs) + Math.max(...xs)) / 2) * k), Math.round(mp.y0 + ((Math.min(...ys) + Math.max(...ys)) / 2) * k), 1, 1).data; return [d[0], d[1], d[2]].join(); })); }
+check('played, the cells change from frame to frame: four colours on four frames', frames.size === 4, [...frames]);
+await q('design-fit-tile').click(); await wait(200); await ev(() => window.__walkBase.setFrame(4));
+check('a skin can be tiled over the part instead of stretched', (await ev(() => window.__walkBase.designOf().head.skin.fit)) === 'tile');
+await q('design-skin-remove').click(); await wait(200);
+check('and taken off again', (await ev(() => window.__walkBase.designOf().head)) === undefined);
+// the other side and the whole figure
+await ev(() => window.__walkBase.selectPart({ part: 'arm', side: 'R' }, { openTab: false })); await wait(200);
+await ev(() => { const e = document.querySelector('[data-testid="design-fill"]'); e.value = '#00aa55'; e.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(150);
+await q('design-copy-side').click(); await wait(200);
+check('a look can be copied to the same part on the other side', (await ev(() => window.__walkBase.designOf()['arm.L']?.fill)) === '#00aa55');
+await ev(() => { window.__walkBase.S.design = {}; window.__walkBase.S.ver++; window.__walkBase.render(); }); await wait(150);
+const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 8000 }), q('design-uv-export').click()]);
+check('a UV template can be saved, a PNG with a cell for every part', /^uv-template-human.*\.png$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+const plain = await stageShot(); await page.locator('[data-testid="design-sheet-file"]').setInputFiles(await sheetFile(4, 4)); await wait(800);
+const skins = await ev(() => Object.values(window.__walkBase.designOf()).filter((p) => p.skin)); const cellsUsed = new Set(skins.map((p) => p.skin.cell));
+check('a painted sheet puts every part in its own cell of it', skins.length >= 10 && cellsUsed.size === skins.length && skins.every((p) => p.skin.cols === skins[0].skin.cols && p.skin.rows === skins[0].skin.rows && p.skin.cols * p.skin.rows >= skins.length), [skins.length, cellsUsed.size]);
+check('and the figure is coloured by it', (await stageShot()) !== plain);
+await q('design-skins-clear').click(); await wait(200);
+check('every skin can be taken off at once', (await ev(() => Object.values(window.__walkBase.designOf()).filter((p) => p.skin).length)) === 0 && errors.length === 0, errors);
+// characters
+await ev(() => { const w = window.__walkBase; w.S.design = {}; w.applyPreset('March'); w.setParam('lean', 9); w.S.attach.human = []; w.selectPart({ part: 'spine.upper' }, { openTab: false }); w.addAttach('rect'); w.S.design.human = { head: { fill: '#ff0000', line: '', lineW: 1, opacity: 1, visible: true, shadow: { on: false, x: 6, y: 8, blur: 8, color: '#000000', opacity: 0.4 }, skin: null } }; w.S.s.eyeStyle = 'almond'; w.S.ver++; w.render(); }); await wait(200);
+const packed = JSON.parse(JSON.stringify(await ev(() => window.__walkBase.packCurrentCharacter('Test'))));
+check('a character packs the figure, walk, look, attachments and design', packed.format === 'walk-base-character' && packed.figure === 'human' && packed.p.lean === 9 && packed.s.eyeStyle === 'almond' && packed.attach.length === 1 && packed.design.head.fill === '#ff0000', Object.keys(packed));
+await ev(() => { const w = window.__walkBase; w.applyPreset('Normal'); w.S.attach.human = []; w.S.design = {}; w.S.s.eyeStyle = 'default'; w.setFigure('dog'); }); await wait(200);
+check('imported while another figure is on the stage, it brings its own figure back', (await ev((c) => window.__walkBase.importCharacterObject(c), packed)) === true && (await ev(() => window.__walkBase.figKey())) === 'human');
+const back = await ev(() => ({ lean: window.__walkBase.S.p.lean, att: window.__walkBase.S.attach.human.length, fill: window.__walkBase.S.design.human?.head?.fill, eye: window.__walkBase.S.s.eyeStyle, preset: window.__walkBase.S.preset }));
+check('with its walk, its attachment, its design and its look', back.lean === 9 && back.att === 1 && back.fill === '#ff0000' && back.eye === 'almond' && back.preset === 'Custom', back);
+check('a file that is not a character is refused with a reason, and changes nothing', (await ev(() => window.__walkBase.importCharacterObject({ format: 'nope' }))) === false && (await ev(() => window.__walkBase.S.p.lean)) === 9);
+await q('menu-file').click(); await wait(150);
+check('File has Export this character and Import a character', (await page.locator('[data-testid="file-char-export"]:visible').count()) === 1 && (await page.locator('[data-testid="file-char-import"]:visible').count()) === 1);
+await page.keyboard.press('Escape'); await wait(100);
+await ev(() => { const w = window.__walkBase; w.S.design = {}; w.S.attach.human = []; w.S.s.eyeStyle = 'default'; w.applyPreset('Normal'); w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

@@ -1,0 +1,104 @@
+// Character design: what each part of a figure looks like, on top of the look of the whole stage.
+// Every part (a head, a forearm, a tail) can have its own colour, line, opacity, drop shadow and a skin: a picture stretched or tiled over the part through a UV map,
+// optionally a sprite sheet whose cells play in turn, so a part can be coloured by painting a flat sheet and the colour follows the part as it moves.
+// Pure geometry and numbers here; draw.js paints the skins.
+import { newShadow, cleanShadow } from './shadow.js';
+
+export const FITS = ['stretch', 'tile'];
+export const ANIMS = ['none', 'loop', 'pingpong'];
+export const BLENDS = [['source-over', 'Normal'], ['multiply', 'Multiply'], ['screen', 'Screen'], ['overlay', 'Overlay']];
+const clamp = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const hex6 = (v, d = '') => (/^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : d);
+
+/** The key a part is stored under: its name, and which side it is on. */
+export const partKey = (part, side) => (side ? `${part}.${side}` : String(part));
+
+export const newSkin = (img = '') => ({ img, cols: 1, rows: 1, cell: 0, fit: 'stretch', u: 0, v: 0, su: 1, sv: 1, rot: 0, flip: false, opacity: 1, blend: 'source-over', anim: 'none', cellFrames: 2 });
+export const newPart = () => ({ fill: '', line: '', lineW: 1, opacity: 1, visible: true, shadow: newShadow(), skin: null });
+
+export function cleanSkin(raw) {
+  if (!raw || typeof raw !== 'object' || typeof raw.img !== 'string' || !raw.img) return null;
+  const cols = Math.round(clamp(raw.cols, 1, 16, 1)); const rows = Math.round(clamp(raw.rows, 1, 16, 1));
+  return {
+    img: raw.img.slice(0, 40), cols, rows, cell: Math.round(clamp(raw.cell, 0, cols * rows - 1, 0)), fit: FITS.includes(raw.fit) ? raw.fit : 'stretch',
+    u: clamp(raw.u, -2, 2, 0), v: clamp(raw.v, -2, 2, 0), su: clamp(raw.su, 0.05, 10, 1), sv: clamp(raw.sv, 0.05, 10, 1), rot: clamp(raw.rot, -360, 360, 0), flip: Boolean(raw.flip),
+    opacity: clamp(raw.opacity, 0, 1, 1), blend: BLENDS.some(([b]) => b === raw.blend) ? raw.blend : 'source-over', anim: ANIMS.includes(raw.anim) ? raw.anim : 'none', cellFrames: Math.round(clamp(raw.cellFrames, 1, 48, 2)),
+  };
+}
+export function cleanPart(raw) {
+  const p = newPart(); if (!raw || typeof raw !== 'object') return p;
+  return { fill: hex6(raw.fill), line: hex6(raw.line), lineW: clamp(raw.lineW, 0, 5, 1), opacity: clamp(raw.opacity, 0, 1, 1), visible: raw.visible !== false, shadow: cleanShadow(raw.shadow), skin: cleanSkin(raw.skin) };
+}
+/** A part that says nothing: the stage's own look applies, so there is no need to keep it. */
+export const isPlain = (p) => !p || (!p.fill && !p.line && p.lineW === 1 && p.opacity === 1 && p.visible && !p.shadow?.on && !p.skin);
+/** { figure: { key: part } }, cleaned and with the plain parts left out. */
+export function cleanDesign(raw, figs) {
+  const out = {}; if (!raw || typeof raw !== 'object') return out;
+  for (const f of figs) {
+    const src = raw[f]; if (!src || typeof src !== 'object') continue; const one = {};
+    for (const [k, v] of Object.entries(src).slice(0, 80)) { const p = cleanPart(v); if (!isPlain(p)) one[String(k).slice(0, 40)] = p; }
+    if (Object.keys(one).length) out[f] = one;
+  }
+  return out;
+}
+
+/** Which cell of a sprite sheet is showing at a frame: the one chosen, or each in turn, `cellFrames` frames to a cell. */
+export function cellFor(skin, frame) {
+  const n = Math.max(1, skin.cols * skin.rows); if (n === 1) return 0;
+  if (!skin.anim || skin.anim === 'none') return Math.min(n - 1, Math.max(0, skin.cell));
+  const i = Math.floor(Math.max(0, frame) / Math.max(1, skin.cellFrames));
+  if (skin.anim === 'loop') return i % n;
+  const m = i % (2 * n - 2 || 1); return m < n ? m : 2 * n - 2 - m; // pingpong: 0 1 2 3 2 1 0 1 ...
+}
+
+/**
+ * The frame of a part on the screen, which its UV map lies on: a box whose long way (u) runs from the joint it swings from toward the middle of the part, and whose short way (v) is across it.
+ * pts: the outline [[x, y], ...]; pivot: { x, y } the joint, or null. Returns { cx, cy, ax, ay, L, W }: the centre, the unit direction of u, and the sizes.
+ */
+export function shapeFrame(pts, pivot = null) {
+  let cx = 0; let cy = 0; for (const [x, y] of pts) { cx += x; cy += y; } cx /= pts.length; cy /= pts.length;
+  let ax; let ay;
+  if (pivot && Math.hypot(cx - pivot.x, cy - pivot.y) > 1.5) { ax = cx - pivot.x; ay = cy - pivot.y; }
+  else { let fd = -1; for (const [x, y] of pts) { const d = (x - cx) ** 2 + (y - cy) ** 2; if (d > fd) { fd = d; ax = x - cx; ay = y - cy; } } if (ax < 0 || (ax === 0 && ay < 0)) { ax = -ax; ay = -ay; } }
+  const l = Math.hypot(ax, ay) || 1; ax /= l; ay /= l;
+  let u0 = Infinity; let u1 = -Infinity; let v0 = Infinity; let v1 = -Infinity;
+  for (const [x, y] of pts) { const u = (x - cx) * ax + (y - cy) * ay; const v = -(x - cx) * ay + (y - cy) * ax; if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v; }
+  // centre the box on the extents, not the average of the points
+  const mu = (u0 + u1) / 2; const mv = (v0 + v1) / 2;
+  return { cx: cx + ax * mu - ay * mv, cy: cy + ay * mu + ax * mv, ax, ay, L: Math.max(1e-6, u1 - u0), W: Math.max(1e-6, v1 - v0) };
+}
+/** A point of the screen as a point of the part's UV box (0 to 1 each way across it). */
+export const toUV = (fr, x, y) => [((x - fr.cx) * fr.ax + (y - fr.cy) * fr.ay) / fr.L + 0.5, (-(x - fr.cx) * fr.ay + (y - fr.cy) * fr.ax) / fr.W + 0.5];
+/** A point of the UV box as a point of the screen. */
+export const fromUV = (fr, u, v) => [fr.cx + fr.ax * (u - 0.5) * fr.L - fr.ay * (v - 0.5) * fr.W, fr.cy + fr.ay * (u - 0.5) * fr.L + fr.ax * (v - 0.5) * fr.W];
+
+/** Where a point of a cell of the picture (0 to 1 each way) falls in the UV box, with the skin's offset, scale, turn and flip. */
+export function cellToUV(skin, s, t) {
+  const r = (skin.rot * Math.PI) / 180; const c = Math.cos(r); const si = Math.sin(r);
+  const x = (skin.flip ? 0.5 - s : s - 0.5) * skin.su; const y = (t - 0.5) * skin.sv;
+  return [0.5 + skin.u + x * c - y * si, 0.5 + skin.v + x * si + y * c];
+}
+/** The other way: where in the cell a point of the UV box looks. */
+export function uvToCell(skin, u, v) {
+  const r = (skin.rot * Math.PI) / 180; const c = Math.cos(r); const si = Math.sin(r);
+  const dx = u - 0.5 - skin.u; const dy = v - 0.5 - skin.v; const x = (dx * c + dy * si) / skin.su; const y = (-dx * si + dy * c) / skin.sv;
+  return [skin.flip ? 0.5 - x : 0.5 + x, 0.5 + y];
+}
+/**
+ * The transform [a, b, c, d, e, f] that takes pixels of a cell (cw by ch) to the screen, so the cell lies over the part as the skin says.
+ * It is the composition of cellToUV and fromUV, written out as a matrix.
+ */
+export function skinMatrix(fr, skin, cw, ch) {
+  const p0 = (() => { const [u, v] = cellToUV(skin, 0, 0); return fromUV(fr, u, v); })();
+  const px = (() => { const [u, v] = cellToUV(skin, 1, 0); return fromUV(fr, u, v); })();
+  const py = (() => { const [u, v] = cellToUV(skin, 0, 1); return fromUV(fr, u, v); })();
+  return [(px[0] - p0[0]) / cw, (px[1] - p0[1]) / cw, (py[0] - p0[0]) / ch, (py[1] - p0[1]) / ch, p0[0], p0[1]];
+}
+
+/** The cells of a UV sheet for a list of parts: a grid, one cell for each. */
+export function atlasLayout(keys) {
+  const n = Math.max(1, keys.length); const cols = Math.ceil(Math.sqrt(n)); const rows = Math.ceil(n / cols);
+  return { cols, rows, cells: Object.fromEntries(keys.map((k, i) => [k, i])) };
+}
+/** A skin that uses one cell of a sheet, for a part. */
+export const atlasSkin = (img, layout, key) => ({ ...newSkin(img), cols: layout.cols, rows: layout.rows, cell: layout.cells[key] ?? 0, fit: 'stretch' });

@@ -470,3 +470,6 @@ select, select option, select optgroup { background-color: var(--panel-2); color
 .seg.seg-3 { grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); } /* as many even columns as fit the names */
 .seg.seg-grid .segbtn { min-width: 0; padding-left: 4px; padding-right: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .moodside { grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }
+
+/* the design tab */
+.uvprev { display: block; width: 100%; max-width: 280px; height: auto; aspect-ratio: 1; border: 1px solid var(--line); border-radius: var(--r); margin: 4px 0; background: var(--ctl); }

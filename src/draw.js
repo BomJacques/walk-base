@@ -19,6 +19,8 @@ import { propParts, faceLight } from './scene.js';
 import { paintEyes, paintBrows, mouthOptions, EYE_BASE } from './face.js';
 import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
 import { clayOutline } from './clay.js';
+import { partKey, shapeFrame, skinMatrix, cellFor } from './design.js';
+import { hasGround, hasDrop, stageDrop, castShadow, paintGroundShadow, groundStrength } from './shadow.js';
 import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
 
@@ -30,6 +32,14 @@ export const STYLE_DEFAULTS = Object.freeze({
   moebiusShade: 0.5,         // how far the shadow reaches round each form (0 none, 1 nearly all)
   moebiusStipple: 0.4,       // dots along the edge of the shadow
   moebiusPaper: true,        // the stage is the colour of paper
+  shadowMode: 'off',         // off | ground (a soft oval on the floor) | drop (the drawing cast down and to the side) | both
+  shadowColor: '#000000', shadowOpacity: 0.35, shadowBlur: 14, shadowX: 14, shadowY: 18, shadowSize: 1,
+  lineBoil: 0,               // the outline wobbles, a new wobble every few frames, as a hand-drawn line does (0 is still)
+  boilRate: 2,               // frames between one wobble and the next
+  lineDash: 'solid',         // solid | dashed | dotted
+  lineJoin: 'round',         // round | miter | bevel: the corners of the line
+  lineDepth: 0,              // 0 is every line the same weight; 1 makes the far side's lines half as heavy
+  lineOffset: 0,             // the colour sits a little off its outline, as in a badly printed page (outlined looks only)
   blockSize: 7,              // the Blocks look: the side of each block, in pixels at the 1080 line frame
   polySides: 6,              // the Lowpoly look: how many flat sides each limb has
   lineWidth: 3,
@@ -380,6 +390,29 @@ function hatchShape(ctx, pts, st, cam, key) {
   }
   ctx.restore();
 }
+const cellCache = new Map();
+/** One cell of a sprite sheet as a small canvas of its own, kept so it is cut out once. */
+function cellCanvas(img, id, cols, rows, idx) {
+  const key = `${id}|${cols}x${rows}|${idx}`; const hit = cellCache.get(key); if (hit && hit.src === img) return hit.cv;
+  const cw = Math.max(1, Math.floor(img.naturalWidth / cols)); const ch = Math.max(1, Math.floor(img.naturalHeight / rows));
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  cv.getContext('2d').drawImage(img, (idx % cols) * cw, Math.floor(idx / cols) * ch, cw, ch, 0, 0, cw, ch);
+  cellCache.set(key, { src: img, cv }); if (cellCache.size > 240) cellCache.delete(cellCache.keys().next().value);
+  return cv;
+}
+/** A picture laid over a part through its UV map, clipped to the part. The cell it shows follows the frame (a sprite sheet plays), and the picture turns with the part. */
+function paintSkin(ctx, sh, skin, frame, pivot) {
+  const inf = imageInfo(skin.img); if (!inf?.img || !inf.img.naturalWidth || sh.pts.length < 3) return;
+  const cell = cellCanvas(inf.img, skin.img, skin.cols, skin.rows, cellFor(skin, frame));
+  const M = skinMatrix(shapeFrame(sh.pts, pivot), skin, cell.width, cell.height);
+  ctx.save(); tracePts(ctx, sh.pts); ctx.clip(); ctx.globalAlpha *= skin.opacity; ctx.globalCompositeOperation = skin.blend || 'source-over';
+  if (skin.fit === 'tile' && typeof DOMMatrix !== 'undefined') { const pat = ctx.createPattern(cell, 'repeat'); pat.setTransform(new DOMMatrix(M)); ctx.fillStyle = pat; const b = boundsOf(sh.pts); ctx.fillRect(b.x0 - 2, b.y0 - 2, b.x1 - b.x0 + 4, b.y1 - b.y0 + 4); }
+  else { ctx.transform(M[0], M[1], M[2], M[3], M[4], M[5]); ctx.imageSmoothingQuality = 'high'; ctx.drawImage(cell, 0, 0); }
+  ctx.restore();
+}
+/** The dash pattern for the line style, for a line this wide. */
+const dashOf = (st, w) => (st.lineDash === 'dashed' ? [w * 4, w * 3] : st.lineDash === 'dotted' ? [0.01, w * 2.4] : []);
+const depthK = (st, sh) => (sh.role === 'far' ? 1 - 0.55 * (st.lineDepth || 0) : 1);
 /** The drawing styles that show a face (eyes, a mouth) on the head. */
 const faceStyle = (st) => st.style === 'mannequin' || st.style === 'outline' || st.style === 'comic' || st.style === 'ink' || st.style === 'pencil' || st.style === 'clay' || st.style === 'lowpoly';
 /** The styles drawn as one outline round the whole figure, and how thick that line is against the plain line width. */
@@ -467,6 +500,7 @@ function dotShade(ctx, pts, st, cam, color) {
 }
 function paintShape(ctx, sh, cam, st, ghost) {
   if (sh.pts.length < 3) return;
+  if (sh.lineColor) st = { ...st, lineColor: sh.lineColor };
   const far = sh.role === 'far';
   ctx.beginPath();
   sh.pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
@@ -497,8 +531,8 @@ function paintShape(ctx, sh, cam, st, ghost) {
     ctx.fill();
   }
   ctx.strokeStyle = ghost || (far && !sh.fill ? st.farTint : st.lineColor);
-  ctx.lineWidth = cam.lw * (sh.lw || 1);
-  ctx.stroke();
+  ctx.lineWidth = cam.lw * (sh.lw || 1) * (sh.lwK ?? 1) * depthK(st, sh); ctx.lineJoin = st.lineJoin || 'round'; if (st.lineDash && st.lineDash !== 'solid') { ctx.lineCap = 'round'; ctx.setLineDash(dashOf(st, ctx.lineWidth)); }
+  ctx.stroke(); ctx.setLineDash([]);
 }
 
 const DEPTH_OFF = { back: -1000, behind: -0.0006, front: 0.0006, top: 1000 };
@@ -535,12 +569,18 @@ function sceneDrawables(ctx, params, st, cam, env) {
     const cA = actorCam(cam, a);
     // each figure can have its own colours; one with none set uses the ones in the View tab
     const st2 = a.fill || a.line || a.tint ? { ...st, ...(a.fill ? { fillColor: a.fill, hoseBody: a.fill, hoseShorts: a.fill } : {}), ...(a.line ? { lineColor: a.line } : {}), ...(a.tint ? { farTint: a.tint } : {}) } : st;
-    out.push({ d: cA.p([pzA.pelvisX, 0, 0]).d, paint: () => { const r = drawFigureShapes(ctx, pzA, cA, st2, {}); hits.push({ id: a.id, shapes: r.shapes || [] }); } });
+    out.push({ d: cA.p([pzA.pelvisX, 0, 0]).d, paint: () => {
+      if (hasGround(st) && !a.noShadow) paintGroundShadow(ctx, cA.p, st, cam.k, [pzA.pelvisX + (dogA ? (pzA.pelvis[0] + pzA.j3[0]) / 2 : 0.05), 0, 0], dogA ? Math.abs(pzA.j3[0] - pzA.pelvis[0]) / 2 + 0.22 : 0.27, dogA ? 0.13 : 0.15, 1);
+      const r = hasDrop(st) && !a.noShadow ? castShadow(ctx, stageDrop(st), cam.k, (c) => drawFigureShapes(c, pzA, cA, st2, {})) : drawFigureShapes(ctx, pzA, cA, st2, {});
+      hits.push({ id: a.id, shapes: r.shapes || [] });
+    } });
   }
   for (const q0 of sc.props || []) {
     if (!q0.visible) continue;
     const q = movedProp(q0, env.frame ?? 0, params.fps || 24); // dropped or pushed over: where it has got to by this frame
-    out.push({ d: cam.p([q.x, 0, q.z]).d, paint: () => { hits.push({ id: q.id, shapes: paintProp(ctx, q, cam, st).map((pts) => ({ pts, part: 'prop', side: null })) }); } });
+    out.push({ d: cam.p([q.x, 0, q.z]).d, paint: () => {
+      if (hasGround(st) && !q.noShadow && q.kind !== 'image') paintGroundShadow(ctx, cam.p, st, cam.k, [q.x, q.y > 0 ? 0 : q.y, q.z], Math.max(0.08, q.w * 0.62), Math.max(0.06, (q.kind === 'box' ? q.d : q.w) * 0.55), 1 / (1 + 3.5 * Math.max(0, q.y)));
+      hits.push({ id: q.id, shapes: paintProp(ctx, q, cam, st).map((pts) => ({ pts, part: 'prop', side: null })) }); } });
   }
   void pz;
   return out.sort((a, b) => a.d - b.d);
@@ -705,14 +745,25 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
   const built = pz.legs ? buildDogShapes(pz, cam, st) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam, st);
   const { face } = built; let shapes = built.shapes;
   if (st.style === 'clay' && !ghost) shapes = shapes.map((sh) => (sh.pts.length < 4 ? sh : { ...sh, pts: clayOutline(sh.pts, `${sh.part}${sh.side}`, cam.k, 1) })); // rounded, lumpy edges that stay with the shape
+  if (opts.design && !ghost) { // each part's own colour, line and skin
+    shapes = shapes.map((sh) => { const dz = sh.attach ? null : opts.design[partKey(sh.part, sh.side)]; if (!dz) return sh; return { ...sh, dz, ...(dz.fill ? { fill: dz.fill } : {}), ...(dz.line ? { lineColor: dz.line } : {}), lwK: dz.lineW, hidden: dz.visible === false }; });
+  }
+  const frames = opts.wantFrames ? {} : null;
+  if (st.lineBoil > 0 && !ghost) { // a new wobble every few frames: the outline, and the colour with it, never quite where it was
+    const step = Math.floor((opts.skinFrame ?? 0) / Math.max(1, Math.round(st.boilRate || 1))); const lump = Math.min(1, st.lineBoil / 5);
+    shapes = shapes.map((sh) => (sh.pts.length < 4 || sh.facets ? sh : { ...sh, pts: clayOutline(sh.pts, `${sh.part}${sh.side}~${step}`, cam.k, lump) }));
+  }
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
   if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (DEPTH_OFF[it.depth] ?? 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);
   if (OUTLINED[st.style] && !ghost) {
     // First pass: every limb and the body, stroked twice as thick. The fills that follow leave only the outer edge, so arms, legs and body read as one outline with no lines crossing inside.
-    ctx.save(); ctx.lineWidth = cam.lw * OUTLINED[st.style]; ctx.lineJoin = 'round'; const rough = st.style === 'ink';
+    ctx.save(); ctx.lineWidth = cam.lw * OUTLINED[st.style]; ctx.lineJoin = st.lineJoin || 'round'; const rough = st.style === 'ink'; const dashed = st.lineDash && st.lineDash !== 'solid'; if (dashed) ctx.lineCap = 'round';
     for (const sh of shapes) {
       ctx.strokeStyle = sh.role === 'far' && !sh.fill ? mixHex(st.lineColor, st.farTint, 0.55) : st.lineColor;
+      if (!rough) { ctx.lineWidth = cam.lw * OUTLINED[st.style] * depthK(st, sh); if (dashed) ctx.setLineDash(dashOf(st, ctx.lineWidth)); }
+      if (sh.hidden) continue;
+      if (sh.lineColor) ctx.strokeStyle = sh.lineColor; if (sh.lwK != null && !rough) ctx.lineWidth *= sh.lwK;
       if (sh.attach || sh.pts.length < 3 || (!ghost && coveredByPicture(sh, st, opts.attach)) || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
       if (rough) { // a brush line: two passes that do not quite agree, so the line swells and thins along its length
         const key = `${sh.part}${sh.side}`; ctx.lineWidth = cam.lw * 2.8; tracePts(ctx, roughPts(sh.pts, cam.lw * 0.5, `${key}a`)); ctx.stroke(); ctx.lineWidth = cam.lw * 1.5; tracePts(ctx, roughPts(sh.pts, cam.lw * 0.9, `${key}b`)); ctx.stroke(); continue;
@@ -725,7 +776,15 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam); continue; }
     if (!ghost && coveredByPicture(sh, st, opts.attach)) continue;
-    paintShape(ctx, sh, cam, st, ghost);
+    if (frames && sh.part && sh.pts.length >= 3) { const k = partKey(sh.part, sh.side); (frames[k] ||= []).push({ pts: sh.pts, fr: shapeFrame(sh.pts, pivotOf(pz, cam, sh.part, sh.side)) }); }
+    if (sh.hidden) continue;
+    const paintBody = (c) => {
+      c.save(); if (sh.dz && sh.dz.opacity < 1) c.globalAlpha *= sh.dz.opacity;
+      if (st.lineOffset && !ghost && OUTLINED[st.style]) { c.save(); c.translate(st.lineOffset * cam.k, st.lineOffset * cam.k * 0.7); paintShape(c, sh, cam, st, ghost); c.restore(); } else paintShape(c, sh, cam, st, ghost);
+      if (sh.dz?.skin && !ghost) paintSkin(c, sh, sh.dz.skin, opts.skinFrame ?? 0, pivotOf(pz, cam, sh.part, sh.side));
+      c.restore();
+    };
+    if (sh.dz?.shadow?.on && !ghost) castShadow(ctx, sh.dz.shadow, cam.k, paintBody); else paintBody(ctx);
     if (sh.face && !ghost && faceStyle(st)) paintHoseFace(ctx, pz, cam, st, opts.mouth);
     const faceOn = sh.part === 'head' && !hose && !ghost && faceStyle(st);
     if (faceOn && (opts.mouth || st.mouthShow === 'always')) paintHeadMouth(ctx, pz, cam, st, opts.mouth || 'rest');
@@ -743,7 +802,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     }
   }
   ctx.restore();
-  return { shapes, placed };
+  return { shapes, placed, frames };
 }
 
 /** Which part is under a canvas point, front to back. Returns { part, side } or null. */
@@ -756,7 +815,7 @@ export function pickPart(shapes, x, y) {
     }
     return c;
   };
-  for (let i = shapes.length - 1; i >= 0; i--) if (inside(shapes[i].pts)) return { part: shapes[i].part, side: shapes[i].side };
+  for (let i = shapes.length - 1; i >= 0; i--) if (!shapes[i].hidden && inside(shapes[i].pts)) return { part: shapes[i].part, side: shapes[i].side };
   return null;
 }
 
@@ -931,7 +990,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
   }
 
-  let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null; const sceneHits = [];
+  let figFrames = null; let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null; const sceneHits = [];
   const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz, hits: sceneHits, frame: perf ? t0 : frame }) : [];
   const dMain = camF.p([pz.pelvisX, 0, 0]).d;
   if (layers.figure) {
@@ -942,8 +1001,14 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       for (let k = st.onionBefore; k >= 1; k--) drawFigureShapes(ctx, ghost(-k), camF, ghostStyle, { tint: st.onionBeforeTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
       for (let k = st.onionAfter; k >= 1; k--) drawFigureShapes(ctx, ghost(k), camF, ghostStyle, { tint: st.onionAfterTint, alpha: st.onionOpacity * Math.pow(0.7, k - 1) });
     }
-    const fig = drawFigureShapes(ctx, pz, camF, st, { parts: opts.parts, attach: attachNow, mouth: mouthId });
-    shapes = fig.shapes; placedAttach = fig.placed || [];
+    if (hasGround(st) && !headView && !opts.parts) { // the oval on the floor, fainter as the feet leave it
+      const gy = gyf(pz.pelvisX); const feet = pz.legs ? Object.values(pz.legs).map((l) => l.paw?.[1] ?? 0) : [pz.sides.R.ankle[1], pz.sides.L.ankle[1]]; const lift = Math.max(0, Math.min(...feet) - (pz.legs ? 0.06 : 0.1));
+      const cx = pz.legs ? pz.pelvisX + (pz.pelvis[0] + pz.j3[0]) / 2 : pz.pelvisX + 0.05; const rx = pz.legs ? Math.abs(pz.j3[0] - pz.pelvis[0]) / 2 + 0.22 : 0.27; const rz = pz.legs ? 0.13 : 0.15;
+      paintGroundShadow(ctx, camF.p, st, cam.k, [cx, gy, 0], rx, rz, groundStrength(lift));
+    }
+    const drawMain = (c) => drawFigureShapes(c, pz, camF, st, { parts: opts.parts, attach: attachNow, mouth: mouthId, skinFrame: perf ? t0 : frame, design: params.design, wantFrames: opts.wantFrames });
+    const fig = hasDrop(st) && !opts.parts ? castShadow(ctx, stageDrop(st), cam.k, drawMain) : drawMain(ctx);
+    shapes = fig.shapes; placedAttach = fig.placed || []; figFrames = fig.frames || null;
     for (const it of sceneItems) if (it.d >= dMain) it.paint();
     const sel = opts.selection;
     if (sel && st.style !== 'stick') {
@@ -1044,5 +1109,5 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
     }
     ctx.restore();
   }
-  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam: camF, camWorld: cam, pz, attach: placedAttach, handles, arcDots, fixHandle, sceneHits };
+  return { key, drawing: ph.drawing, drawings: ph.drawings, u: ph.u, shapes, cam: camF, camWorld: cam, pz, attach: placedAttach, handles, arcDots, fixHandle, sceneHits, frames: figFrames };
 }

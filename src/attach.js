@@ -5,6 +5,7 @@
 // Pure logic plus canvas painting; no DOM.
 import { add, mul, sub, len, hoseLimbs } from './rig3.js';
 import { STRIP_DEFAULTS } from './stripdefs.js';
+import { newShadow, cleanShadow, castShadow } from './shadow.js';
 
 const TAU = Math.PI * 2;
 const rad = (d) => (d * Math.PI) / 180;
@@ -122,7 +123,7 @@ export function newItem(kind, target, over = {}) {
     id: freshId(), name: kind === 'image' ? 'Picture' : (KINDS.find((k) => k[0] === kind)?.[1] ?? 'Shape'), kind,
     part: target.part, seg: target.seg ?? null, side: target.side ?? null,
     anchor: { mode: 'boundary', t: 0.12, off: 0, x: 0, y: 0 }, x: 0, y: -0.04, rot: 0, scale: 1, w: 0.26, h: 0.18,
-    fill: '#f2b84b', stroke: '#26231f', sw: 2, opacity: 0.92, depth: 'front', flip: false, bend: false, visible: true, img: null,
+    fill: '#f2b84b', stroke: '#26231f', sw: 2, opacity: 0.92, depth: 'front', flip: false, bend: false, visible: true, img: null, shadow: newShadow(),
     ...(kind === 'strip' ? { w: 0.2, h: 0.55, fill: '#b23a48', depth: 'behind', phys: { ...STRIP_DEFAULTS } } : {}),
     ...over,
   };
@@ -315,6 +316,10 @@ const hexA = (hex, a) => { const n = parseInt(String(hex).slice(1), 16); return 
 
 /** Paints an item. `ghost` is a tint for onion skin ghosts. */
 export function paintItem(ctx, it, f, cam, ghost = null) {
+  if (it.shadow?.on && !ghost) { castShadow(ctx, it.shadow, cam.k ?? 1, (c) => paintItemBody(c, it, f, cam, ghost)); return; } // a drop shadow of its own
+  paintItemBody(ctx, it, f, cam, ghost);
+}
+function paintItemBody(ctx, it, f, cam, ghost = null) {
   if (it.kind === 'strip') { paintStrip(ctx, it, f, cam, ghost); return; }
   const pl = itemPlace(it, f, cam);
   const inf = it.kind === 'image' ? imageInfo(it.img) : null;
