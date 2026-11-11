@@ -14,7 +14,31 @@ const hex6 = (v, d = '') => (/^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : d);
 export const partKey = (part, side) => (side ? `${part}.${side}` : String(part));
 
 export const newSkin = (img = '') => ({ img, cols: 1, rows: 1, cell: 0, fit: 'stretch', u: 0, v: 0, su: 1, sv: 1, rot: 0, flip: false, opacity: 1, blend: 'source-over', anim: 'none', cellFrames: 2 });
-export const newPart = () => ({ fill: '', line: '', lineW: 1, opacity: 1, visible: true, shadow: newShadow(), skin: null });
+export const newPart = () => ({ fill: '', line: '', lineW: 1, opacity: 1, visible: true, shadow: newShadow(), skin: null, ink: null });
+
+/**
+ * Drawing on a part: pen strokes kept in the part's UV box (u along the part, v across it), so the drawing turns and moves with the part.
+ * ink: { replace, strokes: [{ c: colour, w: width as a fraction of the part's size, a: opacity, fill: a closed filled shape, pts: [[u, v], ...] }] }
+ * With replace, the drawing stands in for the part's own shape.
+ */
+export const MAX_STROKES = 300; export const MAX_STROKE_PTS = 500;
+const r3 = (v) => Math.round(v * 1000) / 1000;
+export function cleanStroke(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.pts)) return null;
+  const pts = []; for (const q of raw.pts.slice(0, MAX_STROKE_PTS)) { if (Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])) pts.push([r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5))]); }
+  if (!pts.length) return null;
+  return { c: hex6(raw.c, '#000000'), w: r3(clamp(raw.w, 0.002, 0.6, 0.03)), a: clamp(raw.a, 0.02, 1, 1), fill: Boolean(raw.fill), pts };
+}
+export function cleanInk(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.strokes)) return null;
+  const strokes = raw.strokes.slice(0, MAX_STROKES).map(cleanStroke).filter(Boolean); if (!strokes.length) return null;
+  return { replace: Boolean(raw.replace), strokes };
+}
+/** Thins a stroke that was just drawn: points closer together than `gap` (in the same units as the points) are dropped, the last one is always kept. */
+export function thinStroke(pts, gap) {
+  if (pts.length < 3) return pts.slice();
+  const out = [pts[0]]; for (let i = 1; i < pts.length - 1; i++) { const l = out[out.length - 1]; if (Math.hypot(pts[i][0] - l[0], pts[i][1] - l[1]) >= gap) out.push(pts[i]); } out.push(pts[pts.length - 1]); return out;
+}
 
 export function cleanSkin(raw) {
   if (!raw || typeof raw !== 'object' || typeof raw.img !== 'string' || !raw.img) return null;
@@ -27,10 +51,10 @@ export function cleanSkin(raw) {
 }
 export function cleanPart(raw) {
   const p = newPart(); if (!raw || typeof raw !== 'object') return p;
-  return { fill: hex6(raw.fill), line: hex6(raw.line), lineW: clamp(raw.lineW, 0, 5, 1), opacity: clamp(raw.opacity, 0, 1, 1), visible: raw.visible !== false, shadow: cleanShadow(raw.shadow), skin: cleanSkin(raw.skin) };
+  return { fill: hex6(raw.fill), line: hex6(raw.line), lineW: clamp(raw.lineW, 0, 5, 1), opacity: clamp(raw.opacity, 0, 1, 1), visible: raw.visible !== false, shadow: cleanShadow(raw.shadow), skin: cleanSkin(raw.skin), ink: cleanInk(raw.ink) };
 }
 /** A part that says nothing: the stage's own look applies, so there is no need to keep it. */
-export const isPlain = (p) => !p || (!p.fill && !p.line && p.lineW === 1 && p.opacity === 1 && p.visible && !p.shadow?.on && !p.skin);
+export const isPlain = (p) => !p || (!p.fill && !p.line && p.lineW === 1 && p.opacity === 1 && p.visible && !p.shadow?.on && !p.skin && !p.ink);
 /** { figure: { key: part } }, cleaned and with the plain parts left out. */
 export function cleanDesign(raw, figs) {
   const out = {}; if (!raw || typeof raw !== 'object') return out;

@@ -224,3 +224,5 @@ PNG frames in a ZIP, as one file per timeline frame or one per drawing plus a ti
 | `PARAMETERS.md` | Every adjustable setting, generated |
 | `ROADMAP.md` | What is done, the next phases (attachments, arcs, the interface) and the physics plan |
 | `tests/` | Unit, browser and decode checks |
+
+**Draw tab.** Draw a part on its own (choose it in the list) or the whole figure at once, with a pen, a fill-shape tool and an eraser. A line that crosses from one part to another is split between them. Each stroke sticks to its part and moves with it, so you can redraw a head, a leg or the whole character and then play the walk. "Use my drawing instead of the part" hides the stock shape and keeps only your drawing.

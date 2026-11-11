@@ -166,6 +166,9 @@ body.sampled .viewbar .cam { display: none; }
 .pchip { min-height: var(--h); min-width: var(--h); padding: 0 11px; border: 1px solid var(--line); border-radius: var(--r); background: var(--ctl); cursor: pointer; font-weight: 500; }
 .pchip:hover { background: var(--ctl-hover); }
 .pchip[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 650; }
+.swatches { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.swatch { width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+.swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .chan { margin: 8px 0; padding: 6px 8px 6px 10px; border: 1px solid var(--line); border-left-width: 3px; border-radius: var(--r); background: var(--panel-2); }
 .chan.edited { border-left-color: var(--accent); }

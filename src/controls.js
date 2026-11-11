@@ -10,7 +10,7 @@ const c = (scope, id, tab, group, label, help) => ({ scope, id, tab, group, labe
 
 /** What a tab is called on its button. Gait is the one tab for the walk, the body and the scene, and the person using it calls it Body. */
 export const TAB_LABELS = { Gait: 'Body' };
-export const TABS = ['Gait', 'Parts', 'Attach', 'Design', 'Auto', 'Speech', 'View', 'Sampler', 'Export'];
+export const TABS = ['Gait', 'Parts', 'Attach', 'Design', 'Draw', 'Auto', 'Speech', 'View', 'Sampler', 'Export'];
 
 const RAW_CONTROLS = [
   // Gait

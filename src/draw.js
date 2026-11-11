@@ -19,7 +19,7 @@ import { propParts, faceLight } from './scene.js';
 import { paintEyes, paintBrows, mouthOptions, EYE_BASE } from './face.js';
 import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
 import { clayOutline } from './clay.js';
-import { partKey, shapeFrame, skinMatrix, cellFor } from './design.js';
+import { partKey, shapeFrame, skinMatrix, cellFor, fromUV } from './design.js';
 import { hasGround, hasDrop, stageDrop, castShadow, paintGroundShadow, groundStrength } from './shadow.js';
 import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
@@ -410,6 +410,21 @@ function paintSkin(ctx, sh, skin, frame, pivot) {
   else { ctx.transform(M[0], M[1], M[2], M[3], M[4], M[5]); ctx.imageSmoothingQuality = 'high'; ctx.drawImage(cell, 0, 0); }
   ctx.restore();
 }
+/** The strokes drawn on a part, laid on it through its UV box so they turn and move with it. A stroke's width is a share of the part's size. */
+function paintInk(ctx, sh, ink, pivot) {
+  if (!ink?.strokes?.length || sh.pts.length < 3) return;
+  const fr = shapeFrame(sh.pts, pivot); const size = (fr.L + fr.W) / 2;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const s of ink.strokes) {
+    const P = s.pts.map(([u, v]) => fromUV(fr, u, v)); ctx.globalAlpha = s.a; ctx.beginPath();
+    if (P.length === 1) { ctx.arc(P[0][0], P[0][1], Math.max(0.6, (s.w * size) / 2), 0, TAU); ctx.fillStyle = s.c; ctx.fill(); continue; }
+    ctx.moveTo(P[0][0], P[0][1]);
+    for (let i = 1; i < P.length - 1; i++) ctx.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2); // smoothed through the midpoints
+    ctx.lineTo(P[P.length - 1][0], P[P.length - 1][1]);
+    if (s.fill) { ctx.closePath(); ctx.fillStyle = s.c; ctx.fill(); } else { ctx.strokeStyle = s.c; ctx.lineWidth = Math.max(0.6, s.w * size); ctx.stroke(); }
+  }
+  ctx.restore();
+}
 /** The dash pattern for the line style, for a line this wide. */
 const dashOf = (st, w) => (st.lineDash === 'dashed' ? [w * 4, w * 3] : st.lineDash === 'dotted' ? [0.01, w * 2.4] : []);
 const depthK = (st, sh) => (sh.role === 'far' ? 1 - 0.55 * (st.lineDepth || 0) : 1);
@@ -762,7 +777,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     for (const sh of shapes) {
       ctx.strokeStyle = sh.role === 'far' && !sh.fill ? mixHex(st.lineColor, st.farTint, 0.55) : st.lineColor;
       if (!rough) { ctx.lineWidth = cam.lw * OUTLINED[st.style] * depthK(st, sh); if (dashed) ctx.setLineDash(dashOf(st, ctx.lineWidth)); }
-      if (sh.hidden) continue;
+      if (sh.hidden || sh.dz?.ink?.replace) continue;
       if (sh.lineColor) ctx.strokeStyle = sh.lineColor; if (sh.lwK != null && !rough) ctx.lineWidth *= sh.lwK;
       if (sh.attach || sh.pts.length < 3 || (!ghost && coveredByPicture(sh, st, opts.attach)) || (sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
       if (rough) { // a brush line: two passes that do not quite agree, so the line swells and thins along its length
@@ -780,8 +795,9 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     if (sh.hidden) continue;
     const paintBody = (c) => {
       c.save(); if (sh.dz && sh.dz.opacity < 1) c.globalAlpha *= sh.dz.opacity;
-      if (st.lineOffset && !ghost && OUTLINED[st.style]) { c.save(); c.translate(st.lineOffset * cam.k, st.lineOffset * cam.k * 0.7); paintShape(c, sh, cam, st, ghost); c.restore(); } else paintShape(c, sh, cam, st, ghost);
+      if (sh.dz?.ink?.replace && !ghost) { /* the drawing stands in for the part */ } else if (st.lineOffset && !ghost && OUTLINED[st.style]) { c.save(); c.translate(st.lineOffset * cam.k, st.lineOffset * cam.k * 0.7); paintShape(c, sh, cam, st, ghost); c.restore(); } else paintShape(c, sh, cam, st, ghost);
       if (sh.dz?.skin && !ghost) paintSkin(c, sh, sh.dz.skin, opts.skinFrame ?? 0, pivotOf(pz, cam, sh.part, sh.side));
+      if (sh.dz?.ink && !ghost) paintInk(c, sh, sh.dz.ink, pivotOf(pz, cam, sh.part, sh.side));
       c.restore();
     };
     if (sh.dz?.shadow?.on && !ghost) castShadow(ctx, sh.dz.shadow, cam.k, paintBody); else paintBody(ctx);

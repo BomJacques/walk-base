@@ -61,3 +61,16 @@ test('a sheet of UV cells has one cell for each part, in a grid', () => {
   assert.equal(l.cols * l.rows >= keys.length, true); assert.equal(l.cols, 3); assert.equal(l.rows, 2); assert.deepEqual(keys.map((k) => l.cells[k]), [0, 1, 2, 3, 4]);
   const sk = atlasSkin('img1', l, 'arm.L'); assert.equal(sk.cols, 3); assert.equal(sk.rows, 2); assert.equal(sk.cell, 3); assert.equal(sk.fit, 'stretch'); assert.deepEqual(atlasLayout([]), { cols: 1, rows: 1, cells: {} });
 });
+
+test('ink: strokes are cleaned, capped and thinned; a part with ink is not plain', async () => {
+  const { cleanInk, cleanPart, isPlain, thinStroke, MAX_STROKES, MAX_STROKE_PTS } = await import('../src/design.js');
+  assert.equal(cleanInk(null), null); assert.equal(cleanInk({ strokes: [] }), null); assert.equal(cleanInk({ strokes: [{ pts: 'x' }, { pts: [] }] }), null);
+  const k = cleanInk({ replace: 1, strokes: [{ c: 'red', w: 99, a: 5, pts: [[0.12345, 0.5], [NaN, 1], [9, -9]] }] });
+  assert.equal(k.replace, true); assert.equal(k.strokes.length, 1); assert.deepEqual(k.strokes[0].pts, [[0.123, 0.5], [4, -3]]); assert.equal(k.strokes[0].c, '#000000'); assert.equal(k.strokes[0].w, 0.6); assert.equal(k.strokes[0].a, 1);
+  const many = cleanInk({ strokes: Array.from({ length: MAX_STROKES + 20 }, () => ({ pts: Array.from({ length: MAX_STROKE_PTS + 50 }, (_, i) => [i / 1000, 0.5]) })) });
+  assert.equal(many.strokes.length, MAX_STROKES); assert.equal(many.strokes[0].pts.length, MAX_STROKE_PTS);
+  const p = cleanPart({ ink: { strokes: [{ c: '#ff0000', pts: [[0.5, 0.5]] }] } }); assert.equal(isPlain(p), false); assert.equal(isPlain(cleanPart({})), true);
+  assert.equal(p.ink.strokes[0].c, '#ff0000');
+  const line = Array.from({ length: 100 }, (_, i) => [i / 100, 0]); const th = thinStroke(line, 0.05); assert.ok(th.length < 25 && th.length > 10); assert.deepEqual(th[th.length - 1], line[99]); assert.deepEqual(th[0], line[0]);
+  assert.deepEqual(thinStroke([[0, 0], [0, 0.001]], 1), [[0, 0], [0, 0.001]]);
+});
