@@ -446,6 +446,23 @@ for (const st of ['clay', 'lowpoly', 'blocks']) { await q(`opt-style-${st}`).cli
 check('Clay, Lowpoly and Blocks are looks of their own, on every kind of figure, with no errors', lookShots.size === 4 && errors.length === 0, [lookShots.size, errors]);
 await ev(() => { const w = window.__walkBase; w.S.s.style = 'mannequin'; w.render(); });
 await ev(() => window.__walkBase.setTab('Gait'));
+// ---- block size, facets, and the clay edge
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.applyPreset('Normal'); w.S.s.style = 'blocks'; w.S.s.camYaw = -25; w.setTab('View'); w.setFrame(4); w.render(); }); await wait(250);
+check('View has Block size and Facets round each limb', (await q('rng-blockSize').count()) === 1 && (await q('rng-polySides').count()) === 1);
+const sizes = new Set([await stageShot()]);
+for (const v of [4, 14, 30]) { await ev((v) => { const e = document.querySelector('[data-testid="rng-blockSize"]'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, v); await wait(150); sizes.add(await stageShot()); }
+check('each Block size gives a different drawing, from fine pixels to big voxels', sizes.size === 4 && (await ev(() => window.__walkBase.S.s.blockSize)) === 30, sizes.size);
+await ev(() => { const w = window.__walkBase; w.S.s.blockSize = 7; w.S.s.style = 'lowpoly'; w.render(); }); await wait(150);
+const sides = new Set([await stageShot()]);
+for (const v of [4, 8, 12]) { await ev((v) => { const e = document.querySelector('[data-testid="rng-polySides"]'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, v); await wait(150); sides.add(await stageShot()); }
+check('each number of facets gives a different solid', sides.size === 4, sides.size);
+for (const fig of ['hose', 'hosehorse', 'hosebird', 'dog', 'bird', 'human']) { await ev((f) => { const w = window.__walkBase; w.setFigure(f); for (let fr = 0; fr < 8; fr++) w.setFrame(fr); w.S.s.camYaw = 40; w.render(); w.S.s.camYaw = -25; w.render(); }, fig); }
+await ev(() => { const w = window.__walkBase; w.S.s.style = 'clay'; w.S.s.camYaw = -25; w.setFrame(4); w.render(); }); await wait(150);
+const clayA = await stageShot(); await ev(() => { const w = window.__walkBase; w.setFrame(4); w.render(); }); await wait(100);
+check('clay draws the same every time it is drawn (the lumps do not move on their own)', (await stageShot()) === clayA);
+const clayFrames = new Set(); for (let fr = 0; fr < 6; fr++) { await ev((f) => window.__walkBase.setFrame(f), fr); clayFrames.add(await stageShot()); }
+check('and with no errors from any of the three looks on any figure', clayFrames.size === 6 && errors.length === 0, [clayFrames.size, errors]);
+await ev(() => { const w = window.__walkBase; w.S.s.style = 'mannequin'; w.S.s.polySides = 6; w.S.s.blockSize = 7; w.setFigure('human'); w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

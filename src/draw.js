@@ -17,6 +17,8 @@ import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
 import { propParts, faceLight } from './scene.js';
 import { paintEyes, paintBrows, mouthOptions, EYE_BASE } from './face.js';
+import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
+import { clayOutline } from './clay.js';
 import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
 
@@ -28,6 +30,8 @@ export const STYLE_DEFAULTS = Object.freeze({
   moebiusShade: 0.5,         // how far the shadow reaches round each form (0 none, 1 nearly all)
   moebiusStipple: 0.4,       // dots along the edge of the shadow
   moebiusPaper: true,        // the stage is the colour of paper
+  blockSize: 7,              // the Blocks look: the side of each block, in pixels at the 1080 line frame
+  polySides: 6,              // the Lowpoly look: how many flat sides each limb has
   lineWidth: 3,
   lineColor: '#26231f',
   fillColor: '#f6f1e7',
@@ -107,11 +111,12 @@ export function makeCam(st, w, h, target, yawOffset = 0, zoomMul = 1, centered =
 function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
   const shapes = [];
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
-  const sc = cam.scale;
+  const sc = cam.scale; const lp = st.style === 'lowpoly'; const NS = Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)));
   const pr = pz.params?.proportions || {}; const gk = pr.limbGirth ?? 1; const tk = pr.torsoGirth ?? 1; // drawn thickness of the limbs and of the body
   const capsule = (a, b, ra, rb, part, side, role, k = 1) => {
     const A = S(a); const B = S(b);
-    shapes.push({ pts: hull([...circlePts(A, ra * k * sc), ...circlePts(B, rb * k * sc)]), depth: (A.d + B.d) / 2, part, side, role });
+    const sh = { pts: hull([...circlePts(A, ra * k * sc), ...circlePts(B, rb * k * sc)]), depth: (A.d + B.d) / 2, part, side, role }; shapes.push(sh);
+    if (lp) withFacets(sh, capsuleFacets(S, sc, a, b, ra * k, rb * k, NS)); // a real prism of flat sides, turning with the camera
   };
   const section = (C, M, rf, rl, n = 12) => Array.from({ length: n }, (_, i) => {
     const t = (i / n) * TAU;
@@ -119,7 +124,8 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
   });
   const tube = (C0, C1, M0, M1, r0, r1, part) => {
     const a = section(C0, M0, r0[0] * tk, r0[1] * tk); const b = section(C1, M1, r1[0] * tk, r1[1] * tk);
-    shapes.push({ pts: hull([...a, ...b].map((q) => [q.x, q.y])), depth: (S(C0).d + S(C1).d) / 2, part, side: null, role: 'body' });
+    const sh = { pts: hull([...a, ...b].map((q) => [q.x, q.y])), depth: (S(C0).d + S(C1).d) / 2, part, side: null, role: 'body' }; shapes.push(sh);
+    if (lp) { const wr = (C, M, rf, rl) => Array.from({ length: NS }, (_, i) => { const t = (i / NS) * TAU; return add(C, apply(M, [rf * Math.cos(t), 0, rl * Math.sin(t)])); }); withFacets(sh, slabFacets(S, sc, wr(C0, M0, r0[0] * tk, r0[1] * tk), wr(C1, M1, r1[0] * tk, r1[1] * tk))); }
   };
   const hw = pz.hw;
 
@@ -145,6 +151,7 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
   }
   const hc = S(pz.headC);
   shapes.push({ pts: hull(headPts), depth: hc.d, part: 'head', side: null, role: 'body' });
+  if (lp) withFacets(shapes[shapes.length - 1], ellipsoidFacets(S, sc, pz.headC, (q) => apply(pz.Rh, mul(q, hr)), [0.95, 1.08, 0.85], NS));
   // Facing marks: a nose and eyes, drawn only when turned toward the camera.
   const nose = S(add(pz.headC, apply(pz.Rh, [hr * 1.12, -hr * 0.05, 0])));
   const noseBase = S(add(pz.headC, apply(pz.Rh, [hr * 0.9, -hr * 0.05, 0])));
@@ -236,6 +243,7 @@ function buildHoseShapes(pz, cam, st) {
     let P = pts3.map(S); if (wob != null) { const o = typeof wob === 'number' ? { k: wob } : wob; P = wobble(P, wobA + (o.plus || 0), (pz.u || 0) * wobR + o.k, o.free); }
     const poly = tubePoly(P, radii.map((r) => r * sc));
     add1(poly, P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
+    if (st.style === 'lowpoly') withFacets(shapes[shapes.length - 1], chainFacets(S, sc, pts3, radii, Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)))), false);
   };
   const blob = (center, R, rad, n = 10, m = 24) => { // an ellipsoid's outline
     const out = [];
@@ -258,6 +266,7 @@ function buildHoseShapes(pz, cam, st) {
   // head and ears
   const hr = pz.headR; const hc = S(pz.headC);
   shapes.push({ pts: blob(pz.headC, pz.Rh, [0.95 * hr, 1.08 * hr, 0.85 * hr], 12, 32), depth: hc.d, part: 'head', side: null, role: 'body', fill: st.hoseBody, lw: 1.6, face: true });
+  if (st.style === 'lowpoly') withFacets(shapes[shapes.length - 1], ellipsoidFacets(S, sc, pz.headC, (q) => apply(pz.Rh, q), [0.95 * hr, 1.08 * hr, 0.85 * hr], Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)))));
   if (st.hoseEars === 'round') {
     for (const sg of [1, -1]) {
       const C = S(add(pz.headC, apply(pz.Rh, [-0.05 * hr, 1.0 * hr, sg * 0.7 * hr])));
@@ -374,11 +383,24 @@ function hatchShape(ctx, pts, st, cam, key) {
 /** The drawing styles that show a face (eyes, a mouth) on the head. */
 const faceStyle = (st) => st.style === 'mannequin' || st.style === 'outline' || st.style === 'comic' || st.style === 'ink' || st.style === 'pencil' || st.style === 'clay' || st.style === 'lowpoly';
 /** The styles drawn as one outline round the whole figure, and how thick that line is against the plain line width. */
-const OUTLINED = { outline: 2.2, moebius: 1.7, comic: 3.6, ink: 2.4, clay: 1.5 };
+const OUTLINED = { outline: 2.2, moebius: 1.7, comic: 3.6, ink: 2.4, clay: 1.8 };
 /** The colour a shape is filled with, as a plain hex, whatever the style does to it afterwards. */
 const baseHex = (sh, st) => (typeof sh.fill === 'string' && sh.fill[0] === '#' ? sh.fill.slice(0, 7) : sh.role === 'far' ? mixHex(st.fillColor, st.farTint, 0.4) : st.fillColor);
 const boundsOf = (pts) => { let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; let cx = 0; let cy = 0; for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; cx += x; cy += y; } return { x0, y0, x1, y1, cx: cx / pts.length, cy: cy / pts.length, R: Math.hypot(x1 - x0, y1 - y0) / 2 }; };
 const lightDir = (st) => { const a = ((st.moebiusLight ?? -135) * Math.PI) / 180; return [Math.cos(a), Math.sin(a)]; }; // toward the light, on the screen
+/** Low-poly as a solid: each facet is lit by the way it really faces, in 3D, so the faces turn light and dark as the figure and the camera turn. */
+function paintFacets(ctx, sh, cam, st) {
+  const [lx, ly] = lightDir(st); const L = [lx, ly, 0.8]; const ll = Math.hypot(...L); const base = baseHex(sh, st);
+  ctx.save(); ctx.lineJoin = 'bevel';
+  for (const f of sh.facets) {
+    const d = (f.n[0] * L[0] + f.n[1] * L[1] + f.n[2] * L[2]) / ll;
+    const col = d >= 0 ? mixHex(base, '#ffffff', Math.min(0.6, 0.62 * d)) : mixHex(base, st.lineColor, Math.min(0.55, 0.5 * -d));
+    tracePts(ctx, f.pts); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.5, cam.lw * 0.3); ctx.stroke(); // its own colour on the seam, so no hairline gaps
+    ctx.strokeStyle = hexA(mixHex(col, st.lineColor, 0.45), 0.65); ctx.lineWidth = Math.max(0.6, cam.lw * 0.4); ctx.stroke(); // and the crease between facets, a shade darker
+  }
+  if (sh.facetOutline !== false) { ctx.strokeStyle = sh.role === 'far' ? mixHex(st.lineColor, st.farTint, 0.55) : st.lineColor; ctx.lineWidth = Math.max(0.8, cam.lw * 0.75); tracePts(ctx, sh.pts); ctx.stroke(); }
+  ctx.restore();
+}
 /**
  * Clay: every form is rounded. It is lit from one side, falling smoothly into shade on the other, with a soft highlight, and thin contour lines follow the form inward
  * like the lines of a map, so the roundness reads even in a still.
@@ -413,7 +435,7 @@ function paintLowPoly(ctx, sh, cam, st) {
 }
 /** Blocks: the form is built of square blocks on a grid fixed to the page, like voxels seen from the side or pixel art, with the blocks on the shaded edge darker and the lit edge lighter. */
 function paintBlocks(ctx, sh, cam, st) {
-  const b = boundsOf(sh.pts); const [lx, ly] = lightDir(st); const base = baseHex(sh, st); const s = Math.max(3, Math.round(7 * cam.k)); const pts = sh.pts; const n = pts.length;
+  const b = boundsOf(sh.pts); const [lx, ly] = lightDir(st); const base = baseHex(sh, st); const s = Math.max(2, Math.round((st.blockSize ?? 7) * cam.k)); const pts = sh.pts; const n = pts.length;
   const inside = (x, y) => { let c = false; for (let i = 0, j = n - 1; i < n; j = i++) { const [xi, yi] = pts[i]; const [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
   const gx0 = Math.floor(b.x0 / s) * s; const gy0 = Math.floor(b.y0 / s) * s; const lit = mixHex(base, '#ffffff', 0.38); const dark = mixHex(base, st.lineColor, 0.45); const edge = hexA(st.lineColor, 0.28);
   let drew = false;
@@ -457,7 +479,7 @@ function paintShape(ctx, sh, cam, st, ghost) {
   }
   if ((st.style === 'outline' || st.style === 'ink') && !ghost) { ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill(); return; }
   if (st.style === 'clay' && !ghost) { paintClay(ctx, sh, cam, st); return; }
-  if (st.style === 'lowpoly' && !ghost) { paintLowPoly(ctx, sh, cam, st); return; }
+  if (st.style === 'lowpoly' && !ghost) { if (sh.facets) paintFacets(ctx, sh, cam, st); else paintLowPoly(ctx, sh, cam, st); return; }
   if (st.style === 'blocks' && !ghost) { paintBlocks(ctx, sh, cam, st); return; }
   if (st.style === 'comic' && !ghost) { // flat colour inside a heavy line, with printed dots for the shadow
     const flat = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.45) : hexA(st.fillColor, 1)); ctx.fillStyle = flat; ctx.fill();
@@ -682,6 +704,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
   const hose = !pz.legs && pz.params?.model === 'hose';
   const built = pz.legs ? buildDogShapes(pz, cam, st) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam, st);
   const { face } = built; let shapes = built.shapes;
+  if (st.style === 'clay' && !ghost) shapes = shapes.map((sh) => (sh.pts.length < 4 ? sh : { ...sh, pts: clayOutline(sh.pts, `${sh.part}${sh.side}`, cam.k, 1) })); // rounded, lumpy edges that stay with the shape
   // Attachments take their part's depth, a hair in front of it or behind it, so they sort with the body and with each other.
   const placed = opts.attach?.length && !ghost ? placeItems(opts.attach, pz, cam) : [];
   if (placed.length) shapes = [...shapes, ...placed.map(({ it, f }) => ({ attach: it, frame: f, depth: f.depth + (DEPTH_OFF[it.depth] ?? 0.0006), part: null, side: it.side, role: f.role, pts: [] }))].sort((a, b) => a.depth - b.depth);

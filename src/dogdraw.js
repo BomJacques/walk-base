@@ -4,6 +4,7 @@ import { hull, circlePts, TAU } from './geom.js';
 import { pawGait, poseDog, legsOf, bonesOf, DOGB } from './dog3.js';
 import { speciesOf, kindOf } from './dogdefaults.js';
 import { hosePath, tubePoly, wobble, taperRadii } from './hoseshape.js';
+import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
 
 const mixHex = (a, b, t) => { const pa = parseInt(a.slice(1), 16); const pb = parseInt(b.slice(1), 16); const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t); return '#' + [16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join(''); };
 /**
@@ -22,6 +23,7 @@ function buildHoseAnimal(pz, cam, st) {
   const tube = (pts3, radii, part, side, role, color, bias = 0, wob = null, depth = null) => {
     let P = pts3.map(S); if (wob) P = wobble(P, wobA * (wob.gain ?? 1), (pz.u || 0) * wobR + wob.k, wob.free);
     add1(tubePoly(P, radii.map((r) => r * sc)), depth ?? P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
+    if (st.style === 'lowpoly') withFacets(shapes[shapes.length - 1], chainFacets(S, sc, pts3, radii, Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)))), false);
   };
   const BO = K.body;
   tube(hosePath([pz.pelvis, pz.j1, pz.j2, pz.j3], 1, 10), Array.from({ length: 10 }, (_, i) => BO * (0.14 + 0.055 * belly * Math.sin(Math.PI * (0.12 + 0.76 * (i / 9))))), 'dog.spine2', null, 'body', body);
@@ -63,21 +65,23 @@ function buildHoseAnimal(pz, cam, st) {
 
 export function buildDogShapes(pz, cam, st = {}) {
   if (speciesOf(pz.params).hose) return buildHoseAnimal(pz, cam, st);
-  const shapes = [];
+  const shapes = []; const lp = st.style === 'lowpoly'; const NS = Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)));
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
   const sc = cam.scale;
   const hs = (pz.params.proportions?.dHead ?? 1) * (bonesOf(pz.params).skull / DOGB.skull); // head drawn in proportion to this species' skull
   const sp = speciesOf(pz.params); const K = sp.look; const bird = kindOf(pz.params.dogSpecies) === 'bird'; const cera = pz.params.dogSpecies === 'ceratopsian';
   const capsule = (a, b, ra, rb, part, side, role) => {
     const A = S(a); const B = S(b);
-    shapes.push({ pts: hull([...circlePts(A, ra * sc), ...circlePts(B, rb * sc)]), depth: (A.d + B.d) / 2, part, side, role });
+    const sh = { pts: hull([...circlePts(A, ra * sc), ...circlePts(B, rb * sc)]), depth: (A.d + B.d) / 2, part, side, role }; shapes.push(sh);
+    if (lp) withFacets(sh, capsuleFacets(S, sc, a, b, ra, rb, NS));
   };
   // An elliptical tube along a local x axis: its cross-section lies in the local y-z plane.
   const tube = (C0, C1, M0, M1, r0, r1, part) => {
     const ring = (C, M, ry, rz) => Array.from({ length: 12 }, (_, i) => { const t = (i / 12) * TAU; const q = S(add(C, apply(M, [0, ry * Math.cos(t), rz * Math.sin(t)]))); return [q.x, q.y]; });
-    shapes.push({ pts: hull([...ring(C0, M0, ...r0), ...ring(C1, M1, ...r1)]), depth: (S(C0).d + S(C1).d) / 2, part, side: null, role: 'body' });
+    const sh = { pts: hull([...ring(C0, M0, ...r0), ...ring(C1, M1, ...r1)]), depth: (S(C0).d + S(C1).d) / 2, part, side: null, role: 'body' }; shapes.push(sh);
+    if (lp) { const wr = (C, M, ry, rz) => Array.from({ length: NS }, (_, i) => { const t = (i / NS) * TAU; return add(C, apply(M, [0, ry * Math.cos(t), rz * Math.sin(t)])); }); withFacets(sh, slabFacets(S, sc, wr(C0, M0, ...r0), wr(C1, M1, ...r1))); }
   };
-  const roundBody = (C, r, part) => { const A = S(C); shapes.push({ pts: circlePts(A, r * sc, 16), depth: A.d, part, side: null, role: 'body' }); };
+  const roundBody = (C, r, part) => { const A = S(C); const sh = { pts: circlePts(A, r * sc, 16), depth: A.d, part, side: null, role: 'body' }; shapes.push(sh); if (lp) withFacets(sh, ellipsoidFacets(S, sc, C, (q) => q, [r, r, r], NS)); };
 
   const BO = K.body; const NK = K.neck;
   roundBody(pz.pelvis, 0.16 * BO, 'dog.pelvis');
