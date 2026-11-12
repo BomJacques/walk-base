@@ -9,20 +9,20 @@ import { motionAt } from '../src/automation.js';
 const params = { ...DEFAULTS, proportions: {} };
 const d = bodyDims(params, {});
 const standing = () => bodyFromRig(params, {}, 0, { stand: true });
-const lift = (b, dy, dx = 0) => { for (let i = 0; i < 11; i++) { b.y[i] += dy; b.oy[i] += dy; b.x[i] += dx; b.ox[i] += dx; } };
-const bones = (b) => [[PT.P, PT.S, d.Lt], [PT.S, PT.ER, d.ua], [PT.ER, PT.HR, d.fa], [PT.P, PT.KR, d.l1], [PT.KR, PT.AR, d.l2]].map(([i, j, L]) => Math.abs(Math.hypot(b.x[j] - b.x[i], b.y[j] - b.y[i]) - L));
+const lift = (b, dy, dx = 0) => { for (let i = 0; i < 12; i++) { b.y[i] += dy; b.oy[i] += dy; b.x[i] += dx; b.ox[i] += dx; } };
+const bones = (b) => [[PT.P, PT.M, d.L1], [PT.M, PT.S, d.L2], [PT.S, PT.ER, d.ua], [PT.ER, PT.HR, d.fa], [PT.P, PT.KR, d.l1], [PT.KR, PT.AR, d.l2]].map(([i, j, L]) => Math.abs(Math.hypot(b.x[j] - b.x[i], b.y[j] - b.y[i]) - L));
 const hangingBody = (hold, swing = 0) => {
   const a = { P: [0, 0], phi: 0, psi: 0, arm: { R: [3.0, 0.05], L: [3.0, 0.05] }, leg: { R: [0.05, 0.1], L: [-0.05, 0.1] } };
   const q = bodyFromAngles(d, a); a.P = [hold.x - q[PT.HR][0], hold.y - q[PT.HR][1]];
   const b = createBody(d, a); grip(b, 'R', 0); grip(b, 'L', 0);
-  for (let i = 0; i < 11; i++) { const dx = b.x[i] - hold.x; const dy = b.y[i] - hold.y; b.x[i] = hold.x + dx * Math.cos(swing) + dy * Math.sin(swing); b.y[i] = hold.y - dx * Math.sin(swing) + dy * Math.cos(swing); b.ox[i] = b.x[i]; b.oy[i] = b.y[i]; }
+  for (let i = 0; i < 12; i++) { const dx = b.x[i] - hold.x; const dy = b.y[i] - hold.y; b.x[i] = hold.x + dx * Math.cos(swing) + dy * Math.sin(swing); b.y[i] = hold.y - dx * Math.sin(swing) + dy * Math.cos(swing); b.ox[i] = b.x[i]; b.oy[i] = b.y[i]; }
   return b;
 };
 
 test('the rig puts the figure where the body is: angles and channels round-trip', () => {
   const b = standing();
   const a = anglesNow(b); const pts = bodyFromAngles(d, a);
-  for (let i = 0; i < 11; i++) assert.ok(Math.hypot(pts[i][0] - b.x[i], pts[i][1] - b.y[i]) < 1e-9, `point ${i}`);
+  for (let i = 0; i < 12; i++) assert.ok(Math.hypot(pts[i][0] - b.x[i], pts[i][1] - b.y[i]) < 1e-9, `point ${i}`);
   const nz = neutralPose(params, {}, 0); const ch = bodyChannels(b, nz);
   assert.deepEqual(Object.keys(ch).sort(), [...PHYS_CHANNELS].sort());
   const motion = {}; for (const id of PHYS_CHANNELS) motion[id] = { amount: 0, offset: ch[id] };
@@ -154,4 +154,29 @@ test('boxes are ground: a body falls onto a box and stands on it', () => {
 test('the figure is simulated at its own proportions: longer legs, longer reach', () => {
   const tall = { ...params, proportions: { leg: 1.5 } }; const dt = bodyDims(tall, {});
   assert.ok(dt.l1 + dt.l2 > (d.l1 + d.l2) * 1.4 && Math.abs(dt.ua - d.ua) < 1e-6);
+});
+
+test('a rag doll folds at the spine and crumples; a firm body does not', () => {
+  const run = (strength, limbs) => { const b = standing(); lift(b, 1.5); let bend = 0; for (let f = 0; f < 90; f++) { stepBody(b, { gravity: 1, strength, limbs, balance: 0.8 }, 1); const a = anglesNow(b); bend = Math.max(bend, Math.abs(a.phi2 - a.phi)); } return { bend, head: b.y[PT.H], hips: b.y[PT.P] }; };
+  const doll = run(0, 0); const firm = run(0.8, 0.5);
+  assert.ok(doll.bend > 0.25, `the back bends: ${doll.bend.toFixed(2)}`);
+  assert.ok(firm.bend < 0.15, `a firm body keeps its back: ${firm.bend.toFixed(2)}`);
+  assert.ok(doll.head < 0.6 && doll.hips < 0.6, `it ends in a heap: head ${doll.head.toFixed(2)}, hips ${doll.hips.toFixed(2)}`);
+});
+
+test('the spine never bends past its limit, even in a rag doll', () => {
+  const b = standing(); lift(b, 2); let worst = 0;
+  for (let f = 0; f < 120; f++) { stepBody(b, { gravity: 1, strength: 0, limbs: 0 }, 1); const a = anglesNow(b); worst = Math.max(worst, Math.abs(a.phi2 - a.phi)); }
+  assert.ok(worst < 1.4, `bend ${worst.toFixed(2)}`);
+});
+
+test('loose arms and head lag behind a body that is thrown up; firm ones keep up', () => {
+  const lag = (limbs) => { const b = standing(); setVelocity(b, 0, 6, 24); let worst = 0; for (let f = 0; f < 8; f++) { stepBody(b, { gravity: 1, strength: 0.8, limbs, balance: 0 }, 1); const a = anglesNow(b); worst = Math.max(worst, Math.abs(a.arm.R[0] - b.target.arm.R[0]) + Math.abs(a.psi - a.phi2 - (b.target.psi - b.target.phi2))); } return worst; };
+  assert.ok(lag(0) > lag(1) * 1.2, `loose ${lag(0).toFixed(3)} vs firm ${lag(1).toFixed(3)}`);
+});
+
+test('a rag doll thrown through the air keeps its momentum while it flops', () => {
+  const b = standing(); lift(b, 2); setVelocity(b, 2, 0, 24); const c0 = centreOfMass(b);
+  stepBody(b, { gravity: 0, drag: 0, strength: 0, limbs: 0 }, 36); const c1 = centreOfMass(b);
+  assert.ok(Math.abs(c1[0] - c0[0] - 3) < 0.05 && Math.abs(c1[1] - c0[1]) < 0.05, `${c1[0] - c0[0]}, ${c1[1] - c0[1]}`);
 });

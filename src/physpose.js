@@ -25,7 +25,7 @@ export function bodyDims(params, motion = {}) {
   const z = pose3(p, motion, 0); const R = z.sides.R;
   const total = 0.1 + TORSO.lower * tl * sc('waist') + TORSO.mid * tl + TORSO.upper * tl * sc('chest');
   return {
-    Lt: total - BODY.shoulderDrop, drop: BODY.shoulderDrop, Lh: len3(z.neckTop, z.neckBase) + z.headR,
+    L1: 0.1 + TORSO.lower * tl * sc('waist'), L2: TORSO.mid * tl + TORSO.upper * tl * sc('chest') - BODY.shoulderDrop, Lt: total - BODY.shoulderDrop, drop: BODY.shoulderDrop, Lh: len3(z.neckTop, z.neckBase) + z.headR,
     ua: len3(R.elbow, R.shoulder), fa: len3(R.wrist, R.elbow) + len3(R.hand, R.wrist), l1: len3(R.knee, R.hip), l2: len3(R.ankle, R.knee),
   };
 }
@@ -33,7 +33,7 @@ export function bodyDims(params, motion = {}) {
 /** The body's joint angles in a pose (side view). */
 export function anglesFromPose(z, dims) {
   const pts = [];
-  pts[PT.P] = [z.pelvis[0], z.pelvis[1]];
+  pts[PT.P] = [z.pelvis[0], z.pelvis[1]]; pts[PT.M] = [z.j1[0], z.j1[1]];
   const sh = [(z.sides.R.shoulder[0] + z.sides.L.shoulder[0]) / 2, (z.sides.R.shoulder[1] + z.sides.L.shoulder[1]) / 2];
   pts[PT.S] = sh; pts[PT.H] = [z.headC[0], z.headC[1]];
   for (const s of SIDES) { const sd = z.sides[s]; pts[ELBOW[s]] = [sd.elbow[0], sd.elbow[1]]; pts[HAND[s]] = [sd.hand[0], sd.hand[1]]; pts[KNEE[s]] = [sd.knee[0], sd.knee[1]]; pts[ANKLE[s]] = [sd.ankle[0], sd.ankle[1]]; }
@@ -82,7 +82,7 @@ export function bodyChannels(b, nz) {
   const a = anglesNow(b); const out = {};
   for (const id of PHYS_CHANNELS) out[id] = 0;
   out['pelvis.x'] = a.P[0] - nz.pelvis[0]; out['pelvis.y'] = a.P[1] - nz.pelvis[1];
-  out['pelvis.pitch'] = a.phi; out['neck.pitch'] = a.psi - a.phi;
+  out['pelvis.pitch'] = a.phi; out['spine2.pitch'] = a.phi2 - a.phi; out['neck.pitch'] = a.psi - a.phi2;
   for (const s of SIDES) {
     out[`arm.pitch.${s}`] = a.arm[s][0]; out[`elbow.flex.${s}`] = a.arm[s][1];
     const A = [b.x[ANKLE[s]], b.y[ANKLE[s]]]; const base = nz.sides[s].ankle;

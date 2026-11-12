@@ -39,9 +39,11 @@ const drag = async (from, to, steps = 18, wait = 30) => { await page.mouse.move(
 
 // ---- the tab and the switch
 check('there is a Physics tab, separate from Auto', (await page.locator('[data-testid="tab-Physics"]').count()) === 1 && (await page.locator('[data-testid="tab-Auto"]').count()) === 1);
-check('physics starts off, and the figure is its own body only when it is on', !(await ev(() => window.__walkBase.physActive())));
+check('physics starts off', !(await ev(() => window.__walkBase.physActive())));
 await q('phys-on').check(); await page.waitForTimeout(500);
-check('turning it on gives the figure a body, standing on the ground', await ev(() => { const s = window.__walkBase.physState(); return s.body && Math.abs(s.body.y[9] - 0.075) < 0.01 && s.body.y[0] > 1; }));
+check('turning it on leaves the walk alone: nothing is taken over until the figure is touched', await ev(async () => { const w = window.__walkBase; const a = []; for (const f of [0, 6, 12]) { w.setFrame(f); await new Promise((r) => setTimeout(r, 40)); a.push(w.S.last.pz.sides.R.ankle[0]); } w.setFrame(0); return !w.S.physLive && !w.physState().engaged && Math.max(...a) - Math.min(...a) > 0.05; }), await ev(() => Boolean(window.__walkBase.S.physLive)));
+await q('phys-reset').click(); await page.waitForTimeout(400);
+check('Stand it up gives the figure a body, standing on the ground', await ev(() => { const s = window.__walkBase.physState(); return s.body && Math.abs(s.body.y[9] - 0.075) < 0.01 && s.body.y[0] > 1; }));
 check('the controls are there: gravity, muscles, holds, record', (await Promise.all(['phys-gravity', 'phys-strength', 'phys-drag', 'phys-add-hold', 'phys-record', 'phys-reset'].map((t) => page.locator(`[data-testid="${t}"]`).count()))).every((n) => n === 1));
 await shot('1-stand');
 const stand = await where();
@@ -84,8 +86,7 @@ await page.waitForTimeout(300);
 }
 
 // ---- space: no gravity, and nothing brings it down
-await q('phys-reset').click(); await q('phys-env-space').click(); await page.waitForTimeout(200);
-await q('phys-jump').click();
+await q('phys-reset').click(); await q('phys-env-space').click(); // the preset itself gives it a hop
 check('Space sets gravity to nothing', (await ev(() => window.__walkBase.S.phys.gravity)) === 0);
 {
   // a jump is the same spring up from the feet in both; what differs is what the body does next. Stepped exactly, so the timing is the same everywhere.
@@ -93,12 +94,20 @@ check('Space sets gravity to nothing', (await ev(() => window.__walkBase.S.phys.
   check('in space the jump keeps its upward speed (gravity would have taken most of it)', speeds[0] > 3 && speeds[1] > speeds[0] * 0.75 && speeds[2] === 0, speeds);
   await shot('6-space');
 }
-await q('phys-env-earth').click();
+await q('phys-reset').click(); await q('phys-env-earth').click(); await page.waitForTimeout(300);
+{ // the settings do something: the same hop goes higher on the Moon than on Earth
+  const hop = async (btn) => { await q('phys-reset').click(); await q(btn).click(); return ev(() => { const w = window.__walkBase; const { body } = w.physState(); let top = 0; for (let i = 0; i < 40; i++) { w.physAdvance(1); top = Math.max(top, body.y[0]); } return top; }); };
+  const earth = await hop('phys-env-earth'); const moon = await hop('phys-env-moon');
+  check('the weight and air settings work: the same jump goes much higher on the Moon', moon > earth + 0.5, [earth, moon]);
+  await q('phys-reset').click(); await ev(() => { const s = document.querySelector('[data-testid="phys-gravity"]'); s.value = '0.3'; s.dispatchEvent(new Event('input', { bubbles: true })); });
+  check('and a slider changes the live setting', (await ev(() => window.__walkBase.S.phys.gravity)) === 0.3);
+  await q('phys-env-earth').click();
+}
 
 // ---- a box in the scene is ground
 await q('phys-reset').click(); await page.waitForTimeout(200);
 await ev(() => { const w = window.__walkBase; w.S.scene.props.push({ id: 'pbox', name: 'Box', kind: 'box', x: 0, y: 0, z: 0, w: 1.4, d: 0.6, h: 0.5, rot: 0, visible: true, locked: false, color: '#b08968', tilt: 0 }); w.S.ver++; });
-await ev(() => { const { body } = window.__walkBase.physState(); for (let i = 0; i < 11; i++) { body.y[i] += 1.2; body.oy[i] += 1.2; } });
+await ev(() => { const { body } = window.__walkBase.physState(); for (let i = 0; i < 12; i++) { body.y[i] += 1.2; body.oy[i] += 1.2; } });
 await page.waitForTimeout(1500);
 {
   const w1 = await where(); check('the figure falls onto a box and stands on top of it', Math.abs(w1.y[9] - 0.575) < 0.05 && w1.y[0] > 1.5, [w1.y[9], w1.y[0]]);
@@ -111,7 +120,7 @@ await ev(() => window.__walkBase.setFrame(0));
 await q('phys-record').click(); await page.waitForTimeout(150);
 check('Record starts a take on the timeline', await ev(() => Boolean(window.__walkBase.physState().taking)));
 const rec = await ev(() => { // lifted and dropped, stepped by hand in one go so nothing else moves it
-  const w = window.__walkBase; const { body } = w.physState(); for (let i = 0; i < 11; i++) { body.y[i] += 1.5; body.oy[i] += 1.5; } w.physAdvance(36);
+  const w = window.__walkBase; const { body } = w.physState(); for (let i = 0; i < 12; i++) { body.y[i] += 1.5; body.oy[i] += 1.5; } w.physAdvance(36);
   const tk = w.physState().taking; return { start: tk.start, rows: tk.frames.map((c) => [c['pelvis.y'], c['foot.y.R'], c['arm.pitch.R'], c['pelvis.x']]) };
 });
 const during = await ev(() => window.__walkBase.S.frame); check('the playhead moves on as it records', during > rec.start + 30, during);
@@ -131,6 +140,16 @@ check('the walk is off under it, and the body falls: high at the start, on the g
 await shot('7-playback');
 await page.locator('[data-testid="tab-Auto"]').click(); await q('phys-lanes-clear').click(); await page.waitForTimeout(200);
 check('Remove it takes the physics lanes off the timeline', await ev(() => Object.values(window.__walkBase.S.lanes).every((l) => !l.phys)));
+
+// ---- rag doll: every joint goes limp
+await page.locator('[data-testid="tab-Physics"]').click(); await q('phys-on').check(); await q('phys-reset').click(); await page.waitForTimeout(300);
+await q('phys-ragdoll').click();
+check('Rag doll switches the muscles off', await ev(() => window.__walkBase.S.phys.strength === 0 && window.__walkBase.S.phys.limbs === 0));
+check('and the body crumples under its own weight: hips and head come down, the back folds', await until(() => { const b = window.__walkBase.physState().body; return b.y[0] < 0.6 && b.y[2] < 0.6; }, undefined, 6000));
+await shot('8-ragdoll');
+await q('phys-ragdoll').click(); check('Stiffen up puts the muscles back', await ev(() => window.__walkBase.S.phys.strength > 0.5));
+await q('phys-reset').click(); await page.waitForTimeout(500);
+check('and it stands again', await until(() => { const b = window.__walkBase.physState().body; return b.y[0] > 1 && b.y[2] > 1.8; }, undefined, 4000));
 
 // ---- holds are kept with the settings
 await page.locator('[data-testid="tab-Physics"]').click(); await q('phys-add-ladder').click(); await page.waitForTimeout(200);

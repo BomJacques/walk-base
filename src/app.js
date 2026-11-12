@@ -69,7 +69,7 @@ const S = {
   // The scene: other figures with walks of their own, and scenery. sceneSel is the one being edited.
   scene: { actors: [], props: [] }, sceneSel: null,
   // Physics: the settings of the body simulation, and the values it is writing to the figure right now (physLive, never saved).
-  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, balance: 0.8, friction: 0.6, bounce: 0.1, keep: 'stay', holds: [] }, physLive: null,
+  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, limbs: 0.3, balance: 0.8, friction: 0.6, bounce: 0.1, keep: 'stay', holds: [] }, physLive: null,
   // The file: its name, the state when it was last saved (to tell what has changed since), and the clipboard for Copy and Paste.
   fileName: 'walk-settings', savedState: null, everSaved: false, clipboard: null,
 };
@@ -206,7 +206,7 @@ function adopt(raw) {
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
-  S.phys = { ...cleanPhysState(raw.phys), on: S.phys.on }; PH.dirty = true;
+  Object.assign(S.phys, cleanPhysState(raw.phys), { on: S.phys.on }); PH.dirty = true; // in place, so the panel's sliders keep pointing at it
   adoptSampler(raw.sampler);
   if (raw.preset) S.preset = raw.preset;
   { const a = adoptArcs('human', raw.s?.arcs); if (a) S.s.arcs = a; const d = adoptArcs('dog', raw.s?.arcsDog); if (d) S.s.arcsDog = d; }
@@ -1320,11 +1320,11 @@ function recordable(rng, num, targets, readStored, writeStored, apply) {
 // ---------- the physics tab: the figure as a body with weight ----------
 // The body (body.js) is simulated live in the side view. Drag it by a hand, the head, the hips or a foot and let go: it falls, lands, swings from a hold, floats, or is thrown.
 // Each frame the body's joint angles are written to the rig's channels as live values (physpose.js), so the figure is posed by the real rig. A take writes those frames to ordinary lanes.
-const PH = { body: null, raf: 0, last: 0, acc: 0, taking: null, drag: null, dirty: false, zoomOut: false };
+const PH = { body: null, raf: 0, last: 0, acc: 0, taking: null, drag: null, dirty: false, zoomOut: false, engaged: false };
 function cleanPhysState(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const n = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : d);
-  return { on: false, gravity: n(r.gravity, 0, 2, 1), drag: n(r.drag, 0, 6, 0.15), strength: n(r.strength, 0, 1, 0.8), balance: n(r.balance, 0, 1, 0.8), friction: n(r.friction, 0, 1, 0.6), bounce: n(r.bounce, 0, 0.8, 0.1), keep: r.keep === 'return' ? 'return' : 'stay',
+  return { on: false, gravity: n(r.gravity, 0, 2, 1), drag: n(r.drag, 0, 6, 0.15), strength: n(r.strength, 0, 1, 0.8), limbs: n(r.limbs, 0, 1, 0.3), balance: n(r.balance, 0, 1, 0.8), friction: n(r.friction, 0, 1, 0.6), bounce: n(r.bounce, 0, 0.8, 0.1), keep: r.keep === 'return' ? 'return' : 'stay',
     holds: (Array.isArray(r.holds) ? r.holds : []).slice(0, 24).map((q) => ({ x: n(q?.x, -12, 12, 0), y: n(q?.y, -0.5, 12, 3) })) };
 }
 const physOk = () => S.source !== 'sampled' && S.p.rig === 'human';
@@ -1337,13 +1337,19 @@ function physEnv() {
   const ground = boxes.length ? (lx) => { let g = 0; const wx = lx + px; for (const q of boxes) if (Math.abs(wx - q.x) <= q.w / 2) g = Math.max(g, (q.y || 0) + q.h); return g; } : () => 0;
   const cam = S.last?.cam; const xmin = cam ? -cam.cx / cam.scale + 0.3 : -Infinity; const xmax = cam ? (cam.w - cam.cx) / cam.scale - 0.3 : Infinity; // the sides of the frame are walls, and the top is a ceiling
   const ymax = cam ? cam.target[1] + cam.cy / cam.scale - 0.5 : Infinity;
-  return { gravity: S.phys.gravity, drag: S.phys.drag, strength: S.phys.strength, balance: S.phys.balance, friction: S.phys.friction, bounce: S.phys.bounce, holds: S.phys.holds, ground, xmin, xmax, ymax, fps: Math.max(1, S.p.fps), autoGrab: true, reach: 0.14 };
+  return { gravity: S.phys.gravity, drag: S.phys.drag, strength: S.phys.strength, limbs: S.phys.limbs, balance: S.phys.balance, friction: S.phys.friction, bounce: S.phys.bounce, holds: S.phys.holds, ground, xmin, xmax, ymax, fps: Math.max(1, S.p.fps), autoGrab: true, reach: 0.14 };
 }
-function physNew() { PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true }); PH.dirty = true; }
+/** Physics on, but not yet touched: the body is the figure's pose at this frame (to pick up and draw handles on), and the walk carries on as it was. */
+function physIdle() { const nv = nowValues(); PH.body = bodyFromRig({ ...nv.p, proportions: S.r }, nv.m, frameU(), { stand: false }); PH.engaged = false; S.physLive = null; PH.dirty = true; }
+/** The body takes over from the pose it is in. Playback stops there, since the figure is no longer following the walk. */
+function physEngage() { if (PH.engaged) return; if (S.playing) pause(); const x = PH.body ? PH.body.x[0] : 0; PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true, x }); PH.engaged = true; PH.dirty = true; } // a walking pose is mid-stride and cannot stand, so the body takes over on its feet, where the figure is
+/** A new body standing on its feet, in charge at once. */
+function physNew() { PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true }); PH.engaged = true; PH.dirty = true; }
 const physChannels = () => bodyChannels(PH.body, neutralPose(physParams(), S.motion, frameU()));
 /** Moves the body on by n frames, writes the pose to the figure, and feeds a take that is being recorded. */
 function physAdvance(n = 1) {
-  if (!PH.body) physNew();
+  if (!PH.body) physIdle();
+  physEngage();
   let ch = null;
   for (let i = 0; i < n; i++) { bodyStep(PH.body, physEnv(), 1); ch = physChannels(); if (PH.taking) physTake(ch); }
   S.physLive = liveOf(ch || physChannels()); PH.dirty = false;
@@ -1352,7 +1358,8 @@ function physAdvance(n = 1) {
 function physLoop(t) {
   PH.raf = 0;
   if (!physActive()) { physStop(); return; }
-  if (!PH.body) physNew();
+  if (!PH.body) physIdle();
+  if (!PH.engaged) { physIdle(); if (PH.dirty) { PH.dirty = false; render(); } PH.raf = requestAnimationFrame(physLoop); return; } // not touched yet: the walk plays on
   PH.acc += Math.min(0.1, Math.max(0, (t - PH.last) / 1000)); PH.last = t;
   const per = 1 / Math.max(1, S.p.fps); let steps = 0;
   while (PH.acc >= per && steps < 3) { PH.acc -= per; steps++; }
@@ -1361,8 +1368,8 @@ function physLoop(t) {
   if (steps || PH.dirty || S.physLive) render();
   PH.raf = requestAnimationFrame(physLoop);
 }
-function physStart() { if (PH.raf) return; if (!PH.body) physNew(); PH.last = performance.now(); PH.acc = 0; PH.raf = requestAnimationFrame(physLoop); render(); }
-function physStop() { if (PH.raf) cancelAnimationFrame(PH.raf); PH.raf = 0; if (PH.taking) physEndTake(); PH.drag = null; if (S.physLive) { S.physLive = null; render(); } }
+function physStart() { if (PH.raf) return; if (!PH.body) physIdle(); PH.last = performance.now(); PH.acc = 0; PH.raf = requestAnimationFrame(physLoop); render(); }
+function physStop() { if (PH.raf) cancelAnimationFrame(PH.raf); PH.raf = 0; if (PH.taking) physEndTake(); PH.drag = null; PH.engaged = false; if (S.physLive) { S.physLive = null; render(); } }
 /** Called when the tab or the switch changes. */
 function physSync() { if (physActive()) { physFrame(true); physStart(); } else { physStop(); physFrame(false); } }
 /** While physics is on the figure is drawn smaller, so there is room above and beside it to lift and throw it; the view comes back when it is off. */
@@ -1372,6 +1379,7 @@ const stageStyle = () => (PH.zoomOut ? { ...S.s, figureHeight: Math.min(S.s.figu
 const PHYS_RETURN = 18; // frames a take takes to hand the figure back to the walk when it is set to
 function physStartTake() {
   if (!physActive() || PH.taking) return;
+  physEngage();
   const start = S.frame; const end = Math.min(MAX_FRAMES, start + Math.max(1, S.p.fps) * 30); const old = S.lanes[CADENCE];
   // the walk's cycle stops where the take starts, so the feet are measured from one fixed pose
   S.lanes[CADENCE] = { ...replaceSpan(old, Math.max(0, start - 1), end, [...(start > 0 ? [{ t: start - 1, v: laneValue(old, start - 1, 1) }] : []), { t: start, v: 0 }, { t: end, v: 0 }]), interp: 'linear' };
@@ -1399,6 +1407,7 @@ function physEndTake() {
     put(targetOfChannel(id, 'amount'), [{ t: t0, v: 0 }], 1, 1);
   }
   put(targetOfParam('headBob'), [{ t: t0, v: 0 }], S.p.headBob, S.p.headBob);
+  if (ret) { const cad = S.lanes[CADENCE]; const to = Math.max(0, ...(cad?.pts || []).filter((q) => q.t < tk.start - 1 && q.v > 0).slice(-1).map((q) => q.v), 1); S.lanes[CADENCE] = { ...replaceSpan(cad, t1, tk.end, [{ t: t1, v: 0 }, { t: tail, v: 0 }, { t: tail + 12, v: to }]), interp: 'linear' }; } // handing back to the walk: the cycle turns again
   if (tk.hadLen <= 0) S.perfLen = Math.min(MAX_FRAMES, Math.max(Math.round(S.p.cycleFrames), tail + 1)); else S.perfLen = Math.max(S.perfLen, tail + 1);
   S.ver++; markCustom(); buildStrip(); renderPanel(); render(); save();
   setMessage(`Recorded ${tk.frames.length} frames of physics (frames ${t0 + 1} to ${t1 + 1}). It is on the timeline now: play it, scrub it, or export it.`);
@@ -1406,6 +1415,8 @@ function physEndTake() {
 const physLaneTargets = () => Object.keys(S.lanes).filter((t) => S.lanes[t]?.phys);
 function physClearLanes() {
   for (const t of physLaneTargets()) delete S.lanes[t];
+  const cad = S.lanes[CADENCE]; // the take stopped the walk's cycle: give it back (a lane of nothing but a stop is removed, otherwise only the stops go)
+  if (cad?.pts?.length) { const live = cad.pts.filter((q) => q.v !== 0); if (live.length <= 1) delete S.lanes[CADENCE]; else S.lanes[CADENCE] = { ...cad, pts: live }; }
   S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage('The physics take is removed from the timeline.');
 }
 
@@ -1444,23 +1455,26 @@ function physicsSection() {
   const seg = (items, cur, on, tp) => h('div', { class: 'seg', role: 'group' }, items.map(([v, label]) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(cur === v), testid: `${tp}-${v}`, onClick: () => on(v) }, label)));
   const slider = (label, key, lo, hi, step, tid, help) => {
     const val = h('span', { class: 'mini-v' }, String(+ph[key].toFixed(2)));
-    return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: ph[key], testid: tid, 'aria-label': label, onInput: (e) => { ph[key] = Number(e.target.value); val.textContent = String(+ph[key].toFixed(2)); PH.dirty = true; save(); } }), val);
+    return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: ph[key], testid: tid, 'aria-label': label, onInput: (e) => { S.phys[key] = Number(e.target.value); val.textContent = String(+S.phys[key].toFixed(2)); PH.dirty = true; save(); } }), val);
   };
   host.append(h('section', { class: 'group' }, h('h3', null, 'Body physics'),
-    h('p', { class: 'hint' }, 'Turn it on, then drag the figure by a hand, the head, the hips or a foot, and let go. It falls, lands, swings from a hold, floats or is thrown, by the numbers below. This is worked out as a body with weight, not drawn as a pose.'),
+    h('p', { class: 'hint' }, 'Turn it on and the walk plays on as before. Then drag the figure by a hand, the head, the hips or a foot, and let go. It falls, lands, swings from a hold, floats or is thrown, by the numbers below. This is worked out as a body with weight, not drawn as a pose.'),
     h('div', { class: 'btnrow' },
-      h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: ph.on, testid: 'phys-on', onChange: (e) => { ph.on = e.target.checked; if (ph.on) physNew(); physSync(); renderPanel(); } }), h('span', null, 'Physics on')),
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: ph.on, testid: 'phys-on', onChange: (e) => { ph.on = e.target.checked; if (ph.on) physIdle(); physSync(); renderPanel(); } }), h('span', null, 'Physics on')),
       h('button', { type: 'button', class: 'btn', testid: 'phys-reset', title: 'Put the figure back on its feet where it started', onClick: () => { physNew(); setMessage('Standing again.'); } }, 'Stand it up'),
-      h('button', { type: 'button', class: 'btn', testid: 'phys-letgo', title: 'Let go of every hold', onClick: () => { if (PH.body) { bodyRelease(PH.body, 'R', 1); bodyRelease(PH.body, 'L', 1); } } }, 'Let go')),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-walk', title: 'Hand the figure back to its walk', onClick: () => { physIdle(); setMessage('Back to the walk.'); render(); } }, 'Back to the walk'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-letgo', title: 'Let go of every hold', onClick: () => { physEngage(); if (PH.body) { bodyRelease(PH.body, 'R', 1); bodyRelease(PH.body, 'L', 1); } } }, 'Let go')),
     h('div', { class: 'btnrow' },
-      h('button', { type: 'button', class: 'btn', testid: 'phys-jump', title: 'Spring up from the feet', onClick: () => { if (PH.body) bodyShove(PH.body, 0, 6, S.p.fps); } }, 'Jump'),
-      h('button', { type: 'button', class: 'btn', testid: 'phys-shove-fwd', title: 'Knock it forward', onClick: () => { if (PH.body) bodyShove(PH.body, 4, 1, S.p.fps); } }, 'Push forward'),
-      h('button', { type: 'button', class: 'btn', testid: 'phys-shove-back', title: 'Knock it back', onClick: () => { if (PH.body) bodyShove(PH.body, -4, 1, S.p.fps); } }, 'Push back'))));
+      h('button', { type: 'button', class: 'btn', testid: 'phys-ragdoll', 'aria-pressed': String(ph.strength === 0 && ph.limbs === 0), title: 'Every joint goes limp: it moves only by weight, momentum and whatever it hits', onClick: () => { const on = ph.strength === 0 && ph.limbs === 0; if (on) Object.assign(S.phys, { strength: S.phys.prevStrength ?? 0.8, limbs: S.phys.prevLimbs ?? 0.3 }); else Object.assign(S.phys, { prevStrength: S.phys.strength || 0.8, prevLimbs: S.phys.limbs || 0.3, strength: 0, limbs: 0 }); physEngage(); save(); renderPanel(); } }, ph.strength === 0 && ph.limbs === 0 ? 'Stiffen up' : 'Rag doll'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-jump', title: 'Spring up from the feet', onClick: () => { physEngage(); if (PH.body) bodyShove(PH.body, 0, 6, S.p.fps); } }, 'Jump'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-shove-fwd', title: 'Knock it forward', onClick: () => { physEngage(); if (PH.body) bodyShove(PH.body, 4, 1, S.p.fps); } }, 'Push forward'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-shove-back', title: 'Knock it back', onClick: () => { physEngage(); if (PH.body) bodyShove(PH.body, -4, 1, S.p.fps); } }, 'Push back'))));
   host.append(h('section', { class: 'group' }, h('h3', null, 'Weight and air'),
-    h('div', { class: 'chips', role: 'group', 'aria-label': 'Where it is' }, [['Earth', { gravity: 1, drag: 0.15, strength: 0.8 }], ['Moon', { gravity: 0.17, drag: 0.05, strength: 0.8 }], ['Water', { gravity: 0.3, drag: 3, strength: 0.5 }], ['Space', { gravity: 0, drag: 0.4, strength: 0.45 }]].map(([name, v]) => h('button', { type: 'button', class: 'pchip', testid: `phys-env-${name.toLowerCase()}`, onClick: () => { Object.assign(ph, v); save(); renderPanel(); } }, name))),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Where it is' }, [['Earth', { gravity: 1, drag: 0.15, strength: 0.8 }], ['Moon', { gravity: 0.17, drag: 0.05, strength: 0.8 }], ['Water', { gravity: 0.3, drag: 3, strength: 0.5 }], ['Space', { gravity: 0, drag: 0.4, strength: 0.45 }]].map(([name, v]) => h('button', { type: 'button', class: 'pchip', testid: `phys-env-${name.toLowerCase()}`, onClick: () => { Object.assign(S.phys, v); save(); renderPanel(); physEngage(); if (PH.body) bodyShove(PH.body, 0, 4, S.p.fps); setMessage(`${name}: gravity ${v.gravity}. It hops so you can see the difference; lift the figure and let go to try it properly.`); } }, name))),
     slider('Gravity', 'gravity', 0, 2, 0.01, 'phys-gravity', '1 is the earth. 0 floats for ever.'),
     slider('Air or water drag', 'drag', 0, 6, 0.05, 'phys-drag', 'How fast it slows down. High for water.'),
-    slider('Muscle strength', 'strength', 0, 1, 0.01, 'phys-strength', '0 is limp, a rag doll. 1 holds its pose firmly.'),
+    slider('Muscle strength', 'strength', 0, 1, 0.01, 'phys-strength', 'The legs and the back, the muscles that keep it standing. 0 is a rag doll.'),
+    slider('Arms and head', 'limbs', 0, 1, 0.01, 'phys-limbs', 'How firmly the arms and the head are held. Low and they swing and lag behind the body, like a puppet. 0 is limp.'),
     slider('Balance', 'balance', 0, 1, 0.01, 'phys-balance', 'How hard it keeps itself upright on its feet.'),
     slider('Ground grip', 'friction', 0, 1, 0.01, 'phys-friction', 'How much the feet and body slide on the ground. Low is ice.'),
     slider('Bounce', 'bounce', 0, 0.8, 0.01, 'phys-bounce', 'How much it bounces when it lands.')));
@@ -3157,6 +3171,7 @@ function gestures() {
     if (!physActive() || !PH.body) return false;
     const w = physWorld(e.clientX, e.clientY); if (!w) return false;
     const hit = physPick(w); if (!hit) return false;
+    physEngage();
     PH.drag = { id: e.pointerId, ...hit };
     if (hit.kind === 'point') bodyDragStart(PH.body, hit.i, w.x, w.y, performance.now() / 1000);
     return true;
@@ -3474,7 +3489,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
-  physAdvance, physNew, physPick, physActive, physState: () => ({ body: PH.body, taking: PH.taking, drag: PH.drag }), buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
+  physAdvance, physNew, physPick, physActive, physState: () => ({ body: PH.body, taking: PH.taking, drag: PH.drag, engaged: PH.engaged }), buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   addActor, addProp, inkFrame, inkTarget, toUV, fromUV, setMoodPad, mood: () => MOOD, designOf: () => designOf(), patchPart, partKeys, packCurrentCharacter, importCharacterObject, exportUvTemplate, applyAtlas, triggerPad, storePad, padBank, padRun: () => PADRUN, padMode: (m) => { PADMODE = m; },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
