@@ -226,3 +226,5 @@ PNG frames in a ZIP, as one file per timeline frame or one per drawing plus a ti
 | `tests/` | Unit, browser and decode checks |
 
 **Draw tab.** Draw a part on its own (choose it in the list) or the whole figure at once, with a pen, a fill-shape tool and an eraser. A line that crosses from one part to another is split between them. Each stroke sticks to its part and moves with it, so you can redraw a head, a leg or the whole character and then play the walk. "Use my drawing instead of the part" hides the stock shape and keeps only your drawing.
+
+**Pictures.** Skins, attachments, the scene picture, the reference picture and the sampler open PNG, JPG, WebP, GIF (first frame), AVIF, BMP, ICO and SVG (an SVG with no size gets one from its viewBox), plus HEIC and TIFF where the browser can decode them (Safari can, Chrome cannot). A file the browser cannot open says what kind it is. A video dropped on a skin becomes a 16-frame sprite sheet that loops. In the skin's UV preview, drag inside to slide the picture under the part, a corner to scale it both ways, an edge to scale along or across; Fit to the part puts it back.

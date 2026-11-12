@@ -615,3 +615,7 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 ## Done (2026-11-12): the Draw tab, drawing on parts and on the whole figure
 
 - **Draw tab.** Pen, Fill shape, Eraser and Pick part, with colour, size and opacity. **One part** mode draws on the chosen part; **Whole figure** mode draws over everything and splits each line between the parts it crosses. Strokes are stored in each part's UV box (the same one skins use), so a drawing turns and moves with its part, in every drawing style, and goes out in character files. Undo, clear a part, clear all, faint part outlines as a guide, and "Use my drawing instead of the part/figure" to hide the stock shapes. Limits: 300 strokes of 500 points per part. Not done: a drawing per frame (one drawing per part, so far), drawing on scene figures and attachments, a drawing that bends with a bent hose limb, a zoomed-in canvas for a single part, drawing a figure from nothing.
+
+## Done (2026-11-12): skins: more picture types, scaling in the preview, sliders that stuck
+- Fixed: the skin and shadow sliders worked from the values the panel was drawn with, so moving Scale across undid Scale along. They now change the live values. Scale range is 0.05 to 10.
+- New: src/pictures.js (one decoder for every picture file, SVG sizing, file type from the name, video to sprite sheet); the UV preview has a box with handles, a Scale (both ways) slider and Fit to the part.

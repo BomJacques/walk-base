@@ -19,7 +19,7 @@ import { propParts, faceLight } from './scene.js';
 import { paintEyes, paintBrows, mouthOptions, EYE_BASE } from './face.js';
 import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
 import { clayOutline } from './clay.js';
-import { partKey, shapeFrame, skinMatrix, cellFor, fromUV } from './design.js';
+import { partKey, shapeFrame, skinMatrix, cellFor, fromUV, strokeShows } from './design.js';
 import { hasGround, hasDrop, stageDrop, castShadow, paintGroundShadow, groundStrength } from './shadow.js';
 import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
@@ -411,11 +411,12 @@ function paintSkin(ctx, sh, skin, frame, pivot) {
   ctx.restore();
 }
 /** The strokes drawn on a part, laid on it through its UV box so they turn and move with it. A stroke's width is a share of the part's size. */
-function paintInk(ctx, sh, ink, pivot) {
+function paintInk(ctx, sh, ink, pivot, frame = 0) {
   if (!ink?.strokes?.length || sh.pts.length < 3) return;
   const fr = shapeFrame(sh.pts, pivot); const size = (fr.L + fr.W) / 2;
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (const s of ink.strokes) {
+    if (!strokeShows(s, frame)) continue;
     const P = s.pts.map(([u, v]) => fromUV(fr, u, v)); ctx.globalAlpha = s.a; ctx.beginPath();
     if (P.length === 1) { ctx.arc(P[0][0], P[0][1], Math.max(0.6, (s.w * size) / 2), 0, TAU); ctx.fillStyle = s.c; ctx.fill(); continue; }
     ctx.moveTo(P[0][0], P[0][1]);
@@ -797,7 +798,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
       c.save(); if (sh.dz && sh.dz.opacity < 1) c.globalAlpha *= sh.dz.opacity;
       if (sh.dz?.ink?.replace && !ghost) { /* the drawing stands in for the part */ } else if (st.lineOffset && !ghost && OUTLINED[st.style]) { c.save(); c.translate(st.lineOffset * cam.k, st.lineOffset * cam.k * 0.7); paintShape(c, sh, cam, st, ghost); c.restore(); } else paintShape(c, sh, cam, st, ghost);
       if (sh.dz?.skin && !ghost) paintSkin(c, sh, sh.dz.skin, opts.skinFrame ?? 0, pivotOf(pz, cam, sh.part, sh.side));
-      if (sh.dz?.ink && !ghost) paintInk(c, sh, sh.dz.ink, pivotOf(pz, cam, sh.part, sh.side));
+      if (sh.dz?.ink && !ghost) paintInk(c, sh, sh.dz.ink, pivotOf(pz, cam, sh.part, sh.side), opts.skinFrame ?? 0);
       c.restore();
     };
     if (sh.dz?.shadow?.on && !ghost) castShadow(ctx, sh.dz.shadow, cam.k, paintBody); else paintBody(ctx);

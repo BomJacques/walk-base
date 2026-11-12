@@ -27,13 +27,16 @@ export function cleanStroke(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.pts)) return null;
   const pts = []; for (const q of raw.pts.slice(0, MAX_STROKE_PTS)) { if (Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])) pts.push([r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5))]); }
   if (!pts.length) return null;
-  return { c: hex6(raw.c, '#000000'), w: r3(clamp(raw.w, 0.002, 0.6, 0.03)), a: clamp(raw.a, 0.02, 1, 1), fill: Boolean(raw.fill), pts };
+  const f = Number.isFinite(+raw.f) && raw.f !== null && raw.f !== '' ? Math.round(clamp(raw.f, 0, 99999, 0)) : null; // a stroke may belong to one frame only
+  return { c: hex6(raw.c, '#000000'), w: r3(clamp(raw.w, 0.002, 0.6, 0.03)), a: clamp(raw.a, 0.02, 1, 1), fill: Boolean(raw.fill), ...(f === null ? {} : { f }), pts };
 }
 export function cleanInk(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.strokes)) return null;
   const strokes = raw.strokes.slice(0, MAX_STROKES).map(cleanStroke).filter(Boolean); if (!strokes.length) return null;
   return { replace: Boolean(raw.replace), strokes };
 }
+/** Whether a stroke shows on a frame: one with no frame of its own shows on every frame. */
+export const strokeShows = (s, frame) => s.f == null || s.f === frame;
 /** Thins a stroke that was just drawn: points closer together than `gap` (in the same units as the points) are dropped, the last one is always kept. */
 export function thinStroke(pts, gap) {
   if (pts.length < 3) return pts.slice();

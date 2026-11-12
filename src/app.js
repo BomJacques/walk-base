@@ -26,7 +26,8 @@ import { makeSeamless, loopGap } from './loop.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PHYS_MODES } from './propphys.js';
 import { cleanShadow } from './shadow.js';
-import { partKey, newSkin, newPart, isPlain, cleanDesign, cellFor, toUV, fromUV, uvToCell, atlasLayout, atlasSkin, MAX_STROKES, MAX_STROKE_PTS, BLENDS as SKIN_BLENDS } from './design.js';
+import { decodePicture, videoSheet, isVideo, PICTURE_ACCEPT, PICTURE_VIDEO_ACCEPT } from './pictures.js';
+import { partKey, newSkin, newPart, isPlain, cleanDesign, cellFor, toUV, fromUV, uvToCell, cellToUV, atlasLayout, atlasSkin, MAX_STROKES, MAX_STROKE_PTS, strokeShows, BLENDS as SKIN_BLENDS } from './design.js';
 import { packCharacter, readCharacter } from './character.js';
 import { PAD_COUNT, BLENDS, newBank, capturePad, transitionValues, blendFrames, cleanBank, cleanBanks } from './pads.js';
 import { newMood, cleanMood, blendMood, moodKeys, moodsFor, moodWeights, CORNERS, CORNER_LABELS } from './mood.js';
@@ -48,7 +49,7 @@ let PADMODE = 'play'; // what a tap on a pad does: play | store | clear
 let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
-  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true }, // the Draw tab: what the pen does
+  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all' }, // the Draw tab: what the pen does
   design: {}, // each figure's design: { figure: { part key: its own look and skin } }
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, stageOnly: false,
@@ -307,7 +308,7 @@ async function pickAttachImage(file) {
   if (!file) return;
   const url = URL.createObjectURL(file);
   try {
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That file is not a picture this browser can open.')); i.src = url; });
+    const img = await decodePicture(file);
     const k = Math.min(1, 720 / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
@@ -324,7 +325,7 @@ const partName = (it) => { const t = attachTargets(S.p.rig).find((q) => q.key ==
 function attachSection() {
   const rig = S.p.rig; const list = attachList(); const sel = attachItem();
   const host = h('div', { class: 'attach' });
-  const fileIn = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a picture to attach', testid: 'attach-file', onChange: (e) => { pickAttachImage(e.target.files?.[0]); e.target.value = ''; } });
+  const fileIn = h('input', { type: 'file', accept: PICTURE_ACCEPT, class: 'sr', tabindex: '-1', 'aria-label': 'Choose a picture to attach', testid: 'attach-file', onChange: (e) => { pickAttachImage(e.target.files?.[0]); e.target.value = ''; } });
   const addMenu = menuButton({ label: 'Add', testid: 'attach-add', iconName: null, className: 'btn primary', items: () => [
     ...KINDS.map(([k, l]) => ({ label: l, testid: `attach-add-${k}`, onClick: () => addAttach(k) })),
     { separator: true },
@@ -632,7 +633,7 @@ async function pickRef(file) {
   if (!file) return;
   const url = URL.createObjectURL(file);
   try {
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That file is not a picture this browser can open.')); i.src = url; });
+    const img = await decodePicture(file);
     const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
@@ -663,7 +664,7 @@ async function pickScenePicture(file) {
   if (!file) return;
   const url = URL.createObjectURL(file);
   try {
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That file is not a picture this browser can open.')); i.src = url; });
+    const img = await decodePicture(file);
     const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
@@ -889,7 +890,7 @@ function moodSection() {
 function sceneSection() {
   const host = h('div', { testid: 'scene-section' });
   const addFig = menuButton({ label: 'Add figure', testid: 'scene-add-figure', items: () => FIG_GROUPS.flatMap(([, list], i) => [...(i ? [{ separator: true }] : []), ...list.map((f) => ({ label: FIG_LABELS[f], testid: `scene-add-${f}`, onClick: () => addActor(f) }))]) });
-  const sceneFile = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a picture for the scene', testid: 'scene-picture-file', onChange: (e) => { pickScenePicture(e.target.files?.[0]); e.target.value = ''; } });
+  const sceneFile = h('input', { type: 'file', accept: PICTURE_ACCEPT, class: 'sr', tabindex: '-1', 'aria-label': 'Choose a picture for the scene', testid: 'scene-picture-file', onChange: (e) => { pickScenePicture(e.target.files?.[0]); e.target.value = ''; } });
   const addPr = menuButton({ label: 'Add scenery', testid: 'scene-add-prop', items: () => PROP_KINDS.map((k) => ({ label: k.label, testid: `scene-prop-${k.id}`, onClick: () => (k.kind === 'image' ? sceneFile.click() : addProp(k.id)) })) });
   host.append(sceneFile);
   // The list is the layers: the nearest at the top, the furthest at the bottom, so up brings one forward and down sends it back.
@@ -963,7 +964,7 @@ function refSection() {
   const has = Boolean(REF.img);
   return h('section', { class: 'group', testid: 'ref-section' }, h('h3', null, 'Reference picture'),
     h('p', { class: 'hint' }, 'Put a photo, a frame of footage or one of your drawings under the figure to line it up. Tap where its feet touch the ground with Ground line, then match Size.'),
-    h('div', { class: 'btnrow' }, h('label', { class: 'btn file-btn' }, has ? 'Replace picture' : 'Add picture', h('input', { type: 'file', accept: 'image/*', class: 'file-input', 'aria-label': 'Choose a reference picture', testid: 'ref-file', onChange: (e) => { pickRef(e.target.files?.[0]); e.target.value = ''; } })),
+    h('div', { class: 'btnrow' }, h('label', { class: 'btn file-btn' }, has ? 'Replace picture' : 'Add picture', h('input', { type: 'file', accept: PICTURE_ACCEPT, class: 'file-input', 'aria-label': 'Choose a reference picture', testid: 'ref-file', onChange: (e) => { pickRef(e.target.files?.[0]); e.target.value = ''; } })),
       has ? h('button', { type: 'button', class: 'btn', testid: 'ref-remove', onClick: () => { REF.img = null; REF.data = null; REF.name = ''; refSave(); renderPanel(); render(); } }, 'Remove') : null),
     has ? h('div', null,
       h('p', { class: 'hint', testid: 'ref-name' }, REF.name),
@@ -1732,31 +1733,70 @@ function patchPart(key, patch, { panel = false } = {}) {
   S.ver++; render(); save(); refreshUv(); if (panel) renderPanel();
 }
 const designKeySel = () => (S.sel?.part ? partKey(S.sel.part, S.sel.side) : null);
-let uvCanvas = null;
+let uvCanvas = null; let uvGeom = null; let uvDrag = null;
+const UV_HANDLES = [[0, 0], [1, 0], [1, 1], [0, 1], [0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]].map(([u, v]) => ({ u, v, edge: u === 0.5 ? 'v' : v === 0.5 ? 'u' : null }));
 /** The picture the part's skin shows, with the outline of the part where it falls in it: so it is plain what part of the picture lands on the part. */
 function refreshUv() {
   const cv = uvCanvas; if (!cv || !cv.isConnected) return; const g = cv.getContext('2d'); const W = cv.width; g.clearRect(0, 0, W, W);
   g.fillStyle = '#e9e9ee'; g.fillRect(0, 0, W, W);
   const key = designKeySel(); const skin = key ? designOf()[key]?.skin : null; const inf = skin ? imageInfo(skin.img) : null;
   if (!skin || !inf?.img) { g.fillStyle = '#777'; g.font = '14px sans-serif'; g.textAlign = 'center'; g.fillText('No skin on this part', W / 2, W / 2); return; }
-  const idx = cellFor(skin, S.frame); const cw = inf.img.naturalWidth / skin.cols; const ch = inf.img.naturalHeight / skin.rows; const k = Math.min(W / cw, W / ch); const ox = (W - cw * k) / 2; const oy = (W - ch * k) / 2;
+  const idx = cellFor(skin, S.frame); const cw = inf.img.naturalWidth / skin.cols; const ch = inf.img.naturalHeight / skin.rows; const k = Math.min((W - 28) / cw, (W - 28) / ch); const ox = (W - cw * k) / 2; const oy = (W - ch * k) / 2; // a margin, so the handles at the edges can be reached
   g.drawImage(inf.img, (idx % skin.cols) * cw, Math.floor(idx / skin.cols) * ch, cw, ch, ox, oy, cw * k, ch * k);
   g.strokeStyle = '#888'; g.lineWidth = 1; g.strokeRect(ox + 0.5, oy + 0.5, cw * k - 1, ch * k - 1);
-  const f = S.last?.frames?.[key]?.[0]; if (!f) return;
+  uvGeom = { ox, oy, k, cw, ch };
+  const at = (u, v) => { const [s, t] = uvToCell(skin, u, v); return [ox + s * cw * k, oy + t * ch * k]; };
+  g.save(); g.setLineDash([5, 4]); g.strokeStyle = '#0088dd'; g.lineWidth = 1.5; g.beginPath(); [[0, 0], [1, 0], [1, 1], [0, 1]].forEach(([u, v], i) => { const [px, py] = at(u, v); if (i) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath(); g.stroke(); g.restore(); // the part's box: where the picture is placed
+  const f = S.last?.frames?.[key]?.[0]; if (!f) { drawUvHandles(g, skin); return; }
   g.beginPath(); f.pts.forEach(([x, y], i) => { const [u, v] = toUV(f.fr, x, y); const [s, t] = uvToCell(skin, u, v); const px = ox + s * cw * k; const py = oy + t * ch * k; if (i) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath();
   g.fillStyle = 'rgba(0,170,255,0.18)'; g.fill(); g.strokeStyle = '#0088dd'; g.lineWidth = 2; g.stroke();
+  for (const hd of UV_HANDLES) { const [px, py] = at(hd.u, hd.v); g.beginPath(); g.arc(px, py, 5, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.strokeStyle = '#0088dd'; g.lineWidth = 1.5; g.stroke(); }
 }
+function drawUvHandles(g, skin) {
+  const gm = uvGeom; if (!gm) return;
+  for (const hd of UV_HANDLES) { const [s, t] = uvToCell(skin, hd.u, hd.v); g.beginPath(); g.arc(gm.ox + s * gm.cw * gm.k, gm.oy + t * gm.ch * gm.k, 5, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.strokeStyle = '#0088dd'; g.lineWidth = 1.5; g.stroke(); }
+}
+const uvPoint = (e) => { const r = uvCanvas.getBoundingClientRect(); return [((e.clientX - r.left) * uvCanvas.width) / r.width, ((e.clientY - r.top) * uvCanvas.height) / r.height]; };
+const uvCell = (e) => { const [px, py] = uvPoint(e); const gm = uvGeom; return [(px - gm.ox) / (gm.cw * gm.k), (py - gm.oy) / (gm.ch * gm.k)]; };
+/** What the skin becomes when the handle of the box is dragged to a point (s, t) of the picture: the picture point under the handle stays under the pointer. */
+function uvScaleFrom(sk0, hd, s, t) {
+  const clampS = (v) => Math.min(10, Math.max(0.05, v));
+  if (hd.edge && Math.abs(sk0.rot) < 0.5) {
+    if (hd.edge === 'u') { const x = sk0.flip ? 0.5 - s : s - 0.5; const v = (hd.u - 0.5 - sk0.u) / x; return Math.abs(x) > 0.01 && v > 0 ? { su: clampS(v) } : {}; }
+    const y = t - 0.5; const v = (hd.v - 0.5 - sk0.v) / y; return Math.abs(y) > 0.01 && v > 0 ? { sv: clampS(v) } : {};
+  }
+  const [pu, pv] = cellToUV(sk0, s, t); const cu = 0.5 + sk0.u; const cv = 0.5 + sk0.v; const dp = Math.hypot(pu - cu, pv - cv); if (dp < 1e-4) return {};
+  const f = Math.hypot(hd.u - cu, hd.v - cv) / dp; return { su: clampS(sk0.su * f), sv: clampS(sk0.sv * f) };
+}
+function uvDown(e) {
+  const key = designKeySel(); const sk = key && designOf()[key]?.skin; if (!sk || !uvGeom) return;
+  const [px, py] = uvPoint(e); const gm = uvGeom; let best = null; let bd = 14;
+  for (const hd of UV_HANDLES) { const [s, t] = uvToCell(sk, hd.u, hd.v); const d = Math.hypot(gm.ox + s * gm.cw * gm.k - px, gm.oy + t * gm.ch * gm.k - py); if (d < bd) { bd = d; best = hd; } }
+  uvCanvas.setPointerCapture?.(e.pointerId); const [s0, t0] = uvCell(e); uvDrag = { id: e.pointerId, key, sk0: { ...sk }, hd: best, s0, t0 };
+}
+function uvMove(e) {
+  const dr = uvDrag; if (!dr || e.pointerId !== dr.id || !designOf()[dr.key]?.skin) return; const [s, t] = uvCell(e); const sk0 = dr.sk0; let patch;
+  if (!dr.hd) { // drag inside: slide the box over the picture
+    const dx = (sk0.flip ? -(s - dr.s0) : s - dr.s0) * sk0.su; const dy = (t - dr.t0) * sk0.sv; const r = (sk0.rot * Math.PI) / 180;
+    patch = { u: sk0.u - (dx * Math.cos(r) - dy * Math.sin(r)), v: sk0.v - (dx * Math.sin(r) + dy * Math.cos(r)) };
+  } else patch = uvScaleFrom(sk0, dr.hd, s, t);
+  patchPart(dr.key, { skin: { ...designOf()[dr.key].skin, ...patch } });
+}
+function uvUp(e) { if (uvDrag && e.pointerId === uvDrag.id) { uvDrag = null; renderPanel(); } }
 async function loadPictureData(file, maxSide = 1024) {
   const url = URL.createObjectURL(file);
   try {
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That file is not a picture this browser can open.')); i.src = url; });
+    const img = await decodePicture(file);
     const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight)); const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); const id = freshId(); await registerImage(id, c.toDataURL(file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.92)); return id;
   } finally { URL.revokeObjectURL(url); }
 }
 async function pickSkinPicture(file) {
   const key = designKeySel(); if (!file || !key) return;
-  try { const id = await loadPictureData(file); patchPart(key, { skin: { ...(designOf()[key]?.skin || newSkin(id)), img: id } }, { panel: true }); saveAttachImages(); setMessage('Skin added. Slide, scale and turn it to fit, or set the columns and rows if it is a sprite sheet.'); } catch (e) { setMessage(e.message); }
+  try {
+    if (isVideo(file)) { setMessage('Taking 16 frames from the video…'); const v = await videoSheet(file); const id = freshId(); await registerImage(id, v.canvas.toDataURL('image/jpeg', 0.88)); patchPart(key, { skin: { ...newSkin(id), cols: v.cols, rows: v.rows, anim: 'loop', cellFrames: 2 } }, { panel: true }); saveAttachImages(); setMessage('The video is a sprite sheet of 16 frames, playing in a loop. Change the columns, rows and frames per cell to retime it.'); return; }
+    const id = await loadPictureData(file); patchPart(key, { skin: { ...(designOf()[key]?.skin || newSkin(id)), img: id } }, { panel: true }); saveAttachImages(); setMessage('Skin added. Slide, scale and turn it to fit, or set the columns and rows if it is a sprite sheet.');
+  } catch (e) { setMessage(e.message); }
 }
 /** The UV template: one cell for every part, with its outline drawn where it sits in its UV box, to paint over in another app and bring back with Import painted sheet. */
 function exportUvTemplate() {
@@ -1819,7 +1859,7 @@ function inkMove(e, toFrame) {
   const fr = inkFrame(key); if (!fr) return;
   if (!g.cur || g.cur.key !== key || g.cur.stroke.pts.length >= MAX_STROKE_PTS - 1) { // a new stroke: at the start, on moving into another part, or when one has got too long
     if (inkOf(key).strokes.length >= MAX_STROKES) { setMessage('That part has as many strokes as it can hold. Clear some or use the eraser.'); return; }
-    const stroke = { c: D.color, w: Math.round(inkRel(fr) * 1000) / 1000, a: D.opacity, fill: g.tool === 'fill', pts: [] };
+    const stroke = { c: D.color, w: Math.round(inkRel(fr) * 1000) / 1000, a: D.opacity, fill: g.tool === 'fill', ...(D.scope === 'frame' ? { f: S.frame } : {}), pts: [] };
     if (g.cur && g.last && g.tool === 'pen') stroke.pts.push(toUV(fr, g.last.x, g.last.y)); // carry the line across, so there is no gap where it crosses from one part to the next
     inkOf(key).strokes.push(stroke); g.adds.push({ key, stroke }); g.cur = { key, stroke };
   }
@@ -1833,7 +1873,7 @@ function inkErase(g, q, under) {
   for (const key of keys) {
     const ink = designOf()[key]?.ink; const fr = inkFrame(key); if (!ink || !fr) continue; const size = (fr.L + fr.W) / 2;
     for (let i = ink.strokes.length - 1; i >= 0; i--) {
-      const s = ink.strokes[i]; const P = s.pts.map(([u, v]) => fromUV(fr, u, v)); let hit = false;
+      const s = ink.strokes[i]; if (!strokeShows(s, S.frame)) continue; const P = s.pts.map(([u, v]) => fromUV(fr, u, v)); let hit = false;
       for (let j = 0; j < P.length && !hit; j++) {
         const a = P[j]; const b = P[j + 1] || a; const dx = b[0] - a[0]; const dy = b[1] - a[1]; const l2 = dx * dx + dy * dy; const tt = l2 ? Math.max(0, Math.min(1, ((q.x - a[0]) * dx + (q.y - a[1]) * dy) / l2)) : 0;
         hit = Math.hypot(q.x - (a[0] + dx * tt), q.y - (a[1] + dy * tt)) <= r + (s.fill ? 0 : (s.w * size) / 2);
@@ -1862,6 +1902,24 @@ function inkUndoStep() {
   for (const { key, stroke, i } of [...g.dels].reverse()) { const s = inkOf(key).strokes; s.splice(Math.min(i, s.length), 0, stroke); }
   S.ver++; render(); save(); renderPanel();
 }
+/** Copies what shows on this frame onto the next frame of the cycle. */
+function inkCopyNext() {
+  const T = cycleFrames(P()).frames.length; const to = (S.frame + 1) % T; const g = { fig: figKey(), adds: [], dels: [] }; let n = 0;
+  for (const [key, p] of Object.entries(designOf())) {
+    if (!p.ink) continue;
+    for (const s of [...p.ink.strokes]) { if (s.f !== S.frame || p.ink.strokes.length >= MAX_STROKES) continue; const c = { ...s, f: to, pts: s.pts.map((q) => [...q]) }; p.ink.strokes.push(c); g.adds.push({ key, stroke: c }); n++; }
+  }
+  if (g.adds.length) inkUndo.push(g);
+  S.ver++; render(); save(); renderPanel(); setMessage(n ? `Copied ${n} stroke${n === 1 ? '' : 's'} to frame ${to + 1}.` : 'Nothing is drawn on this frame only. Switch to This frame only and draw, then copy.');
+}
+/** Zooms and pans the stage so a part fills it, to draw on it large. */
+function zoomToPart(key) {
+  const fs = S.last?.frames?.[key]; const m = S.map; if (!fs?.length || !m) return;
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; for (const f of fs) for (const [x, y] of f.pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const cw = stage.width; const ch = stage.height; const bw = Math.max(8, ((x1 - x0) / m.fcw) * m.zw); const bh = Math.max(8, ((y1 - y0) / m.fch) * m.zh);
+  const old = S.zoom; const nz = Math.min(8, Math.max(0.25, old * Math.min((0.7 * cw) / bw, (0.7 * ch) / bh))); const zw2 = (m.zw * nz) / old; const zh2 = (m.zh * nz) / old;
+  S.zoom = nz; S.panX = (cw / 2 - (((x0 + x1) / 2) / m.fcw) * zw2 - (cw - zw2) / 2) / m.d; S.panY = (ch / 2 - (((y0 + y1) / 2) / m.fch) * zh2 - (ch - zh2) / 2) / m.d; render();
+}
 function inkClear(keys) {
   const d = designOf(); let n = 0; for (const k of keys) if (d[k]?.ink) { n += d[k].ink.strokes.length; d[k].ink = null; inkTidy(k); }
   inkUndo = []; S.ver++; render(); save(); renderPanel(); if (n) setMessage(`Cleared ${n} stroke${n === 1 ? '' : 's'}.`);
@@ -1883,7 +1941,7 @@ function drawSection() {
   host.append(h('section', { class: 'group', testid: 'draw-main' }, h('h3', null, 'Draw'),
     h('p', { class: 'hint' }, 'Draw a part on its own, or the whole figure at once: a line that crosses from the head to the neck is split between them. What you draw sticks to its part and moves with it. Two fingers still pan and zoom.'),
     seg('Draw', [['part', 'One part'], ['whole', 'Whole figure']], D.mode, (v) => { D.mode = v; redraw(); }, 'draw-mode'),
-    D.mode === 'part' ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Choose the part to draw on' }, list.map((e) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(e.key === sel), testid: `draw-part-${e.key}`, onClick: () => selectPart({ part: e.part, side: e.side }, { openTab: false }) }, `${wd(partLabel(e.part, e.side))}${d[e.key]?.ink ? ' •' : ''}`))) : null,
+    D.mode === 'part' ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Choose the part to draw on' }, list.map((e) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(e.key === sel), testid: `draw-part-${e.key}`, onClick: () => selectPart({ part: e.part, side: e.side }, { openTab: false }) }, `${wd(partLabel(e.part, e.side))}${d[e.key]?.ink ? (d[e.key].ink.replace ? ' ●' : ' •') : ''}`))) : null,
     D.mode === 'part' && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Choose a part above, or use Pick part and tap one on the stage.') : null));
   host.append(h('section', { class: 'group', testid: 'draw-pen' }, h('h3', null, 'Pen'),
     seg('Tool', [['pen', 'Pen'], ['fill', 'Fill shape'], ['eraser', 'Eraser'], ['pick', 'Pick part']], D.tool, (v) => { D.tool = v; redraw(); }, 'draw-tool'),
@@ -1892,12 +1950,20 @@ function drawSection() {
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-undo', disabled: !inkUndo.length, onClick: inkUndoStep }, 'Undo'),
       D.mode === 'part' ? h('button', { type: 'button', class: 'btn', testid: 'draw-clear-part', disabled: !cur?.ink, onClick: () => inkClear([sel]) }, 'Clear this part') : null,
       h('button', { type: 'button', class: 'btn', testid: 'draw-clear-all', disabled: !total, onClick: () => inkClear(Object.keys(d)) }, 'Clear all drawing'))));
-  const some = Object.values(d).some((p) => p.ink);
-  host.append(h('section', { class: 'group', testid: 'draw-show' }, h('h3', null, 'Showing'),
+  const drawn = Object.values(d).filter((p) => p.ink); const some = drawn.length > 0; const allOn = some && drawn.every((p) => p.ink.replace);
+  const T = cycleFrames(P()).frames.length;
+  host.append(h('section', { class: 'group', testid: 'draw-frames' }, h('h3', null, 'Frames'),
+    seg('Draw on', [['all', 'Every frame'], ['frame', 'This frame only']], D.scope, (v) => { D.scope = v; renderPanel(); }, 'draw-scope'),
+    h('p', { class: 'hint' }, D.scope === 'frame' ? `Frame ${S.frame + 1} of ${T}: what you draw shows on this frame only, so a part can be redrawn frame by frame. Step along the timeline to draw the next one. The eraser only takes what shows on this frame.` : 'What you draw shows on every frame of the walk. Switch to This frame only to draw frame by frame.'),
+    h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-copy-next', disabled: !some, title: 'Copy what is drawn on this frame onto the next one, to change it from there', onClick: inkCopyNext }, 'Copy to the next frame'))));
+  host.append(h('section', { class: 'group', testid: 'draw-commit-sec' }, h('h3', null, 'Commit'),
+    h('p', { class: 'hint' }, 'Commit a drawing to make it the body shape: the original line work of that part turns off and only your drawing shows. Uncommit brings the original back. The drawing is kept, so you can commit again, or keep drawing while it is committed.'),
+    D.mode === 'part' ? (cur?.ink ? h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'draw-commit', 'aria-pressed': String(cur.ink.replace), onClick: () => { d[sel].ink.replace = !d[sel].ink.replace; S.ver++; render(); save(); renderPanel(); } }, cur.ink.replace ? 'Uncommit this part' : 'Commit this part'), h('span', { class: 'hint', testid: 'draw-commit-state' }, cur.ink.replace ? 'Committed: its own shape is off.' : 'Not committed: its own shape still shows.')) : h('p', { class: 'hint' }, 'Draw on the part, then commit it.'))
+      : h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'draw-commit-all', disabled: !some, onClick: () => { for (const p of drawn) p.ink.replace = !allOn; S.ver++; render(); save(); renderPanel(); } }, allOn ? 'Uncommit all' : 'Commit all drawn parts')),
+    h('p', { class: 'hint' }, `${total} stroke${total === 1 ? '' : 's'} on this figure; ${drawn.filter((p) => p.ink.replace).length} of ${drawn.length} drawn parts committed.`)));
+  host.append(h('section', { class: 'group', testid: 'draw-show' }, h('h3', null, 'View'),
     check('Show the part outlines', D.guides, (v) => { D.guides = v; render(); renderPanel(); }, 'draw-guides'),
-    D.mode === 'part' ? (cur?.ink ? check('Use my drawing instead of this part', cur.ink.replace, (v) => { d[sel].ink.replace = v; S.ver++; render(); save(); renderPanel(); }, 'draw-replace') : h('p', { class: 'hint' }, 'Draw on the part, then you can hide its own shape and keep only your drawing.'))
-      : h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-replace-all', disabled: !some, onClick: () => { const on = !Object.values(d).filter((p) => p.ink).every((p) => p.ink.replace); for (const p of Object.values(d)) if (p.ink) p.ink.replace = on; S.ver++; render(); save(); renderPanel(); } }, Object.values(d).filter((p) => p.ink).every((p) => p.ink.replace) && some ? 'Show the figure\'s own shapes again' : 'Use my drawing instead of the figure')),
-    h('p', { class: 'hint' }, `${total} stroke${total === 1 ? '' : 's'} drawn on this figure.`)));
+    h('div', { class: 'btnrow' }, D.mode === 'part' ? h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-part', disabled: !sel, onClick: () => zoomToPart(sel) }, 'Zoom to this part') : null, h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-reset', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } }, 'Reset the view'))));
   return host;
 }
 
@@ -1921,29 +1987,33 @@ function designSection() {
     const sh = cur.shadow;
     host.append(h('section', { class: 'group', testid: 'design-shadow' }, h('h3', null, 'Drop shadow'),
       check('Shadow', sh.on, (v) => set({ shadow: { ...sh, on: v } }, true), 'design-shadow-on'),
-      sh.on ? slider('Across', () => sh.x, (v) => set({ shadow: { ...cur.shadow, x: v } }), -40, 40, 1, 'design-shadow-x') : null, sh.on ? slider('Down', () => sh.y, (v) => set({ shadow: { ...cur.shadow, y: v } }), -40, 40, 1, 'design-shadow-y') : null,
-      sh.on ? slider('Soft', () => sh.blur, (v) => set({ shadow: { ...cur.shadow, blur: v } }), 0, 40, 1, 'design-shadow-blur') : null, sh.on ? slider('Strength', () => sh.opacity, (v) => set({ shadow: { ...cur.shadow, opacity: v } }), 0, 1, 0.01, 'design-shadow-opacity') : null,
-      sh.on ? h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('input', { type: 'color', class: 'color', value: sh.color, 'aria-label': 'Shadow colour', testid: 'design-shadow-color', onInput: (e) => set({ shadow: { ...cur.shadow, color: e.target.value } }) })) : null));
-    const sk = cur.skin; const fileIn = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a skin picture', testid: 'design-skin-file', onChange: (e) => { pickSkinPicture(e.target.files?.[0]); e.target.value = ''; } });
-    const sset = (patch, panel = false) => set({ skin: { ...cur.skin, ...patch } }, panel);
+      sh.on ? slider('Across', () => sh.x, (v) => set({ shadow: { ...(designOf()[sel] || newPart()).shadow, x: v } }), -40, 40, 1, 'design-shadow-x') : null, sh.on ? slider('Down', () => sh.y, (v) => set({ shadow: { ...(designOf()[sel] || newPart()).shadow, y: v } }), -40, 40, 1, 'design-shadow-y') : null,
+      sh.on ? slider('Soft', () => sh.blur, (v) => set({ shadow: { ...(designOf()[sel] || newPart()).shadow, blur: v } }), 0, 40, 1, 'design-shadow-blur') : null, sh.on ? slider('Strength', () => sh.opacity, (v) => set({ shadow: { ...(designOf()[sel] || newPart()).shadow, opacity: v } }), 0, 1, 0.01, 'design-shadow-opacity') : null,
+      sh.on ? h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('input', { type: 'color', class: 'color', value: sh.color, 'aria-label': 'Shadow colour', testid: 'design-shadow-color', onInput: (e) => set({ shadow: { ...(designOf()[sel] || newPart()).shadow, color: e.target.value } }) })) : null));
+    const sk = cur.skin; const fileIn = h('input', { type: 'file', accept: PICTURE_VIDEO_ACCEPT, class: 'sr', tabindex: '-1', 'aria-label': 'Choose a skin picture', testid: 'design-skin-file', onChange: (e) => { pickSkinPicture(e.target.files?.[0]); e.target.value = ''; } });
+    const live = () => designOf()[sel] || newPart();
+    const sset = (patch, panel = false) => set({ skin: { ...live().skin, ...patch } }, panel);
     const sheetCells = sk ? sk.cols * sk.rows : 1;
-    uvCanvas = h('canvas', { class: 'uvprev', width: 240, height: 240, role: 'img', 'aria-label': 'The skin picture, with the part outlined where it falls in it', testid: 'design-uv' });
+    uvCanvas = h('canvas', { class: 'uvprev', width: 240, height: 240, role: 'img', 'aria-label': 'The skin picture, with the part outlined where it falls in it', testid: 'design-uv', onPointerdown: uvDown, onPointermove: uvMove, onPointerup: uvUp, onPointercancel: uvUp });
+    uvCanvas.style.touchAction = 'none'; uvCanvas.style.cursor = 'move';
     host.append(h('section', { class: 'group', testid: 'design-skin' }, h('h3', null, 'Skin'), fileIn,
       h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'design-skin-add', onClick: () => fileIn.click() }, sk ? 'Replace the picture…' : 'Choose a picture…'), sk ? h('button', { type: 'button', class: 'btn', testid: 'design-skin-remove', onClick: () => set({ skin: null }, true) }, 'Remove the skin') : null),
       sk ? h('div', null, uvCanvas,
-        h('p', { class: 'hint' }, 'The blue outline is the part, where it falls on the picture. "Along" runs from the joint the part swings from toward its far end; "across" is the other way.'),
+        h('p', { class: 'hint' }, 'The dashed box is the part\'s UV box, the blue outline is the part, where they fall on the picture. Drag inside to slide the picture under the part; drag a corner to scale it (both ways), or an edge to scale along or across. "Along" runs from the joint the part swings from toward its far end; "across" is the other way.'),
+        h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'design-fit', onClick: () => { sset({ u: 0, v: 0, su: 1, sv: 1, rot: 0, flip: false, fit: 'stretch' }, true); } }, 'Fit to the part')),
+        slider('Scale (both ways)', () => +((sk.su + sk.sv) / 2).toFixed(3), (v) => { const l = live().skin; const m = (l.su + l.sv) / 2; const f = v / Math.max(1e-6, m); sset({ su: Math.min(10, Math.max(0.05, l.su * f)), sv: Math.min(10, Math.max(0.05, l.sv * f)) }); }, 0.1, 6, 0.01, 'design-scale'),
         seg('Fit', [['stretch', 'Stretch'], ['tile', 'Tile']], sk.fit, (v) => sset({ fit: v }, true), 'design-fit'),
         slider('Sheet columns', () => sk.cols, (v) => sset({ cols: Math.round(v), cell: Math.min(sk.cell, Math.round(v) * sk.rows - 1) }, true), 1, 16, 1, 'design-cols'), slider('Sheet rows', () => sk.rows, (v) => sset({ rows: Math.round(v), cell: Math.min(sk.cell, sk.cols * Math.round(v) - 1) }, true), 1, 16, 1, 'design-rows'),
         sheetCells > 1 ? slider('Cell', () => sk.cell, (v) => sset({ cell: Math.round(v) }), 0, sheetCells - 1, 1, 'design-cell') : null,
         sheetCells > 1 ? seg('Play the cells', [['none', 'Hold'], ['loop', 'Loop'], ['pingpong', 'Ping-pong']], sk.anim, (v) => sset({ anim: v }, true), 'design-anim') : null,
         sheetCells > 1 && sk.anim !== 'none' ? slider('Frames per cell', () => sk.cellFrames, (v) => sset({ cellFrames: Math.round(v) }), 1, 24, 1, 'design-cellframes') : null,
         slider('Slide along', () => sk.u, (v) => sset({ u: v }), -1, 1, 0.01, 'design-u'), slider('Slide across', () => sk.v, (v) => sset({ v }), -1, 1, 0.01, 'design-v'),
-        slider('Scale along', () => sk.su, (v) => sset({ su: v }), 0.1, 6, 0.01, 'design-su'), slider('Scale across', () => sk.sv, (v) => sset({ sv: v }), 0.1, 6, 0.01, 'design-sv'),
+        slider('Scale along', () => sk.su, (v) => sset({ su: v }), 0.05, 10, 0.01, 'design-su'), slider('Scale across', () => sk.sv, (v) => sset({ sv: v }), 0.05, 10, 0.01, 'design-sv'),
         slider('Turn', () => sk.rot, (v) => sset({ rot: v }), -180, 180, 1, 'design-rot'), check('Flip', sk.flip, (v) => sset({ flip: v }, true), 'design-flip'),
         slider('Skin opacity', () => sk.opacity, (v) => sset({ opacity: v }), 0, 1, 0.01, 'design-skin-opacity'), seg('Blend', SKIN_BLENDS, sk.blend, (v) => sset({ blend: v }, true), 'design-blend')) : h('p', { class: 'hint' }, 'A picture, or a sheet of pictures in a grid. A plain picture is stretched over the part; set the columns and rows for a sprite sheet, and choose which cell shows or have them play.')));
     setTimeout(refreshUv, 0);
   } else host.append(h('p', { class: 'hint', testid: 'design-none' }, 'Nothing chosen. Tap a part on the stage, or choose one above.'));
-  const sheetIn = h('input', { type: 'file', accept: 'image/*', class: 'sr', tabindex: '-1', 'aria-label': 'Choose a painted sheet', testid: 'design-sheet-file', onChange: (e) => { applyAtlas(e.target.files?.[0]); e.target.value = ''; } });
+  const sheetIn = h('input', { type: 'file', accept: PICTURE_ACCEPT, class: 'sr', tabindex: '-1', 'aria-label': 'Choose a painted sheet', testid: 'design-sheet-file', onChange: (e) => { applyAtlas(e.target.files?.[0]); e.target.value = ''; } });
   const any = Object.values(d).some((p) => p.skin);
   host.append(h('section', { class: 'group', testid: 'design-sheet' }, h('h3', null, 'Whole figure'), sheetIn,
     h('p', { class: 'hint' }, 'Colour the whole figure on one flat sheet: save a UV template (one cell for each part, with its outline in it), paint over it in any app, and bring it back. Every part takes its own cell and wears it as it moves.'),
@@ -2819,7 +2889,7 @@ function samplerSection() {
     h('div', { class: 'seg', role: 'group', 'aria-label': label }, items.map(([v, t, tid]) => h('button', { type: 'button', class: 'segbtn', testid: tid, 'aria-pressed': String(get() === v), onClick: () => { set(v); renderPanel(); save(); } }, t))), h('p', { class: 'help' }, help));
 
   host.append(h('p', { class: 'hint' }, 'Load a picture of a movement sequence: a photo, a scan, a sheet of your own drawings. The app finds the drawings, cuts them into frames, and plays them on the timeline. The picture stays on this device.'));
-  const input = h('input', { type: 'file', accept: 'image/*', class: 'file-input', 'aria-label': 'Choose a picture', testid: 'sampler-file', onChange: (e) => { pickPicture(e.target.files?.[0]); e.target.value = ''; } });
+  const input = h('input', { type: 'file', accept: PICTURE_ACCEPT, class: 'file-input', 'aria-label': 'Choose a picture', testid: 'sampler-file', onChange: (e) => { pickPicture(e.target.files?.[0]); e.target.value = ''; } });
   host.append(h('section', { class: 'group' }, h('h3', null, '1. Picture'),
     h('div', { class: 'btnrow' }, h('label', { class: 'btn primary file-btn' }, SM.loaded ? 'Choose another picture' : 'Choose a picture', input),
       SM.loaded ? h('button', { type: 'button', class: 'btn', testid: 'sampler-remove', onClick: () => { unload(); setSource('walk'); S.savedSampler = null; renderPanel(); save(); } }, 'Remove picture') : null),
