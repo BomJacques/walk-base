@@ -23,6 +23,32 @@ export function poseBuild(keys, { kill = [], stay = false } = {}) {
     return out;
   };
 }
+/** Gravity, metres per second squared. */
+export const GRAVITY = 9.81;
+/** The frames a drop from height h takes to fall, at fps: the free fall time, so a higher drop takes longer. */
+export const fallFrames = (h, fps) => Math.sqrt((2 * h) / GRAVITY) * fps;
+/** The height of the body above where it stands, frame by frame, through a drop: lifted, held, let go, falling under gravity (y = h - gt^2/2), landing, giving at the knees, and up. */
+export function dropHeights(D, fps, h, dip = 0.3) {
+  const lift = Math.max(3, Math.round(0.16 * D)); const f0 = Math.round(0.3 * D); const land = Math.min(D - 12, f0 + Math.max(2, Math.round(fallFrames(h, fps)))); const span = 8; const ys = [];
+  for (let f = 0; f <= D; f++) {
+    if (f < lift) { const s = f / lift; ys.push(h * s * s * (3 - 2 * s)); } else if (f <= f0) ys.push(h);
+    else if (f < land) { const s = (f - f0) / (land - f0); ys.push(h * (1 - s * s)); } else { const q = f - land; ys.push(q < span ? -dip * Math.sin((Math.PI * q) / span) : 0); }
+  }
+  return { ys, lift, f0, land };
+}
+/**
+ * A drop: the figure is picked up and held, let go, falls with its limbs trailing, lands with the knees giving, and recovers. The height lane is written frame by frame, so the fall is the true parabola
+ * for the height and the frame rate, and the other channels are poses along the clip.
+ */
+function dropBuild({ root, feet, hold, air, impact, recover, kill = [], h0 = 0.75, dip = 0.3 }) {
+  return (b, D, k = 1) => {
+    const fps = b.fps || 24; const h = h0 * k; const { ys, lift, f0, land } = dropHeights(D, fps, h, dip * Math.max(0.5, k)); const F = (f) => Math.min(0.98, f / D);
+    const out = poseBuild([[F(lift), hold], [F(f0), hold], [F((f0 + land) / 2), air], [F(land + 1), impact], [F(land + 6), impact], [F(land + 6 + Math.round(0.28 * D)), recover]], { kill })(b, D, k);
+    out[C(root, 'offset')] = ys.map((v, t) => ({ t, v }));
+    for (const id of feet) out[C(id, 'offset')] = ys.map((v, t) => ({ t, v: 0.95 * Math.max(0, v) })); // the feet hang from the body until they touch down
+    return out;
+  };
+}
 /** The params a walk is made of, ramped from where they are to `to(b)`; used for starting, running and slowing down. */
 const ramp = (names, to, D, from = 0, end = 0.85) => Object.fromEntries(names.map((n) => [P(n), at(D, [[0, 0], [end, to(n)]])]));
 
@@ -70,6 +96,17 @@ export const HUMAN_MOVES = [
       [0.56, { 'pelvis.y': 0.5, 'foot.y.R': 0.48, 'foot.y.L': 0.48, 'foot.x.R': 0.04, 'foot.x.L': -0.04, 'arm.pitch.R': 2.8, 'arm.pitch.L': 2.8, 'elbow.flex.R': 0.15, 'elbow.flex.L': 0.15 }],
       [0.74, { 'pelvis.y': -0.26, 'pelvis.x': -0.1, 'spine1.pitch': 0.3, 'spine2.pitch': 0.22, 'arm.pitch.R': 0.4, 'arm.pitch.L': 0.4, 'elbow.flex.R': 0.4, 'elbow.flex.L': 0.4 }],
     ], { kill: BASE_ARMS }),
+  },
+  {
+    id: 'drop', label: 'Drop', frames: 72, ends: 'lands and stands up',
+    help: 'The figure is lifted and held, then let go. It falls under gravity (a higher drop takes longer: the fall time follows the height and the frame rate), the arms trailing up, lands with the knees giving, and stands. Start from standing. Strength sets the height.',
+    build: dropBuild({
+      root: 'pelvis.y', feet: ['foot.y.R', 'foot.y.L'], kill: BASE_ARMS,
+      hold: { 'arm.pitch.R': 2.5, 'arm.pitch.L': 2.5, 'elbow.flex.R': 0.15, 'elbow.flex.L': 0.15, 'spine1.pitch': -0.08, 'head.pitch': -0.1 },
+      air: { 'arm.pitch.R': 2.9, 'arm.pitch.L': 2.7, 'elbow.flex.R': 0.2, 'elbow.flex.L': 0.35, 'spine1.pitch': 0.05, 'head.pitch': 0.05 },
+      impact: { 'pelvis.x': -0.12, 'spine1.pitch': 0.5, 'spine2.pitch': 0.35, 'spine3.pitch': 0.2, 'neck.pitch': -0.3, 'arm.pitch.R': 0.6, 'arm.pitch.L': 0.6, 'elbow.flex.R': 0.5, 'elbow.flex.L': 0.5 },
+      recover: { 'spine1.pitch': 0.08, 'arm.pitch.R': 0.15, 'arm.pitch.L': 0.15, 'elbow.flex.R': 0.15, 'elbow.flex.L': 0.15 },
+    }),
   },
   {
     id: 'wave', label: 'Wave', frames: 56, ends: 'arm comes down',
@@ -247,6 +284,17 @@ export const DOG_MOVES = [
       [0.7, { 'dog.pelvis.y': 0.08, 'dog.pelvis.pitch': -0.1, 'dog.hpaw.y.R': 0.08, 'dog.hpaw.y.L': 0.08, 'dog.fpaw.y.R': 0.08, 'dog.fpaw.y.L': 0.08, 'dog.fpaw.x.R': 0.15, 'dog.fpaw.x.L': 0.15 }],
       [0.84, { 'dog.pelvis.y': -0.12, 'dog.neck.pitch': 0.15, 'dog.spine3.pitch': 0.08 }],
     ]),
+  },
+  {
+    id: 'drop', label: 'Drop', frames: 72, ends: 'lands and stands',
+    help: 'The dog is lifted and held with its paws dangling, then let go. It falls under gravity (a higher drop takes longer), lands on all four paws with the body giving, and stands. Start from standing. Strength sets the height.',
+    build: dropBuild({
+      root: 'dog.pelvis.y', feet: ['dog.hpaw.y.R', 'dog.hpaw.y.L', 'dog.fpaw.y.R', 'dog.fpaw.y.L'], h0: 0.5, dip: 0.12,
+      hold: { 'dog.neck.pitch': -0.15, 'dog.tail1.pitch': 0.1, 'dog.pelvis.pitch': 0.05 },
+      air: { 'dog.neck.pitch': -0.3, 'dog.pelvis.pitch': -0.12, 'dog.tail1.pitch': 0.35, 'dog.fpaw.x.R': 0.12, 'dog.fpaw.x.L': 0.12 },
+      impact: { 'dog.spine3.pitch': 0.12, 'dog.neck.pitch': 0.2, 'dog.tail1.pitch': -0.1, 'dog.pelvis.pitch': 0.05 },
+      recover: { 'dog.neck.pitch': 0.05 },
+    }),
   },
   {
     id: 'shake', label: 'Shake off', frames: 44, ends: 'settles',

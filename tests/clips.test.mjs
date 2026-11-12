@@ -177,3 +177,16 @@ test('the dog walk to stop frees the tail and ears, and every id it frees is a r
   assert.ok(stop.free.length >= 6);
   for (const id of stop.free) assert.ok(CHANNEL_BY_ID[id], id);
 });
+
+test('a drop falls under gravity: held at the height, then y = h - g t squared over two, the fall time grows with the height, and it lands and stands again', async () => {
+  const { dropHeights, fallFrames, GRAVITY } = await import('../src/moves.js');
+  const c = clip('drop'); assert.ok(c, 'there is a Drop for the human'); const D = c.frames; const lanes = applyClip({}, c, base, 0); const s = sim(lanes, D + 1);
+  const y = (t) => at(lanes, s, t).pelvis[1]; const y0 = y(0); const h = 0.75; const f0 = Math.round(0.3 * D); const T = Math.round(fallFrames(h, 24));
+  assert.ok(Math.abs(y(f0) - y0 - h) < 0.05, `held at the height (${(y(f0) - y0).toFixed(3)})`);
+  for (const n of [2, 4, 6]) assert.ok(Math.abs(y(f0 + n) - y0 - h * (1 - (n / T) ** 2)) < 0.05, `frame ${n} into the fall: ${(y(f0 + n) - y0).toFixed(3)} against ${(h * (1 - (n / T) ** 2)).toFixed(3)}`);
+  assert.ok(Math.abs(y(f0 + T) - y0) < 0.03, 'on the ground when the fall is over'); assert.ok(y(f0 + T + 4) - y0 < -0.1, 'the body gives on landing'); assert.ok(Math.abs(y(D) - y0) < 0.03, 'standing at the end');
+  const { ys: ys1 } = dropHeights(72, 24, 0.75); const { ys: ys2 } = dropHeights(72, 24, 1.5); const hit = (ys) => ys.findIndex((v, i) => i > f0 && v <= 0.0005) - f0;
+  assert.ok(hit(ys2) / hit(ys1) > 1.2 && hit(ys2) / hit(ys1) < 1.7, `a drop twice as high takes about 1.4 times as long (${hit(ys1)} and ${hit(ys2)} frames)`);
+  assert.ok(Math.abs(fallFrames(4.905, 24) - 24) < 1e-9 && GRAVITY === 9.81, 'free fall of 4.9 m takes a second');
+  assert.ok(ys1.every(Number.isFinite) && Math.max(...ys1) <= 0.75 + 1e-9);
+});

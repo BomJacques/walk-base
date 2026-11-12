@@ -627,3 +627,7 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 ## Done (2026-11-12): picking a part, bucket fill, spider wave gait
 - Draw tab: the little figure to pick parts on (src/app.js paintPicker, TPOSE), hold-to-pick, tap = dot, bucket fill (ink.js floodRegion, maskLoops, simplifyLoop; a fill stroke is `loops` painted even-odd), drawings painted after all part fills, no selection outline over a drawing. Outline and Ink looks cover the hairline where two fills meet (the faint seam lines on the dinosaurs).
 - Spider: a wave gait, each leg stepping in turn from the back of a side to the front, the far side half a cycle behind. The crab keeps two sets of four. Not done: a choice of gait for the spider, and a wave for the crab.
+
+## Done (2026-11-12): physics phase 0, the Drop movement
+- **Drop** (Body tab > Movements > Action, for the people and the dog, and the rubber hose figure): the figure is lifted and held, let go, falls under gravity, lands with the knees giving, and stands. The height lane is written frame by frame as the true parabola (`dropHeights` in src/moves.js: y = h - g t^2 / 2, fall time = sqrt(2h/g) at the frame rate, so a higher drop takes longer; Strength sets the height). Tested against the formula, and the fall time scaling.
+- Still to do from the physics roadmap: grab and release with a flick (phase 1), spring chains for the figure's own tail and ears (phase 2), ragdoll, balance, authoring. Not done for the other animals' movement lists.
