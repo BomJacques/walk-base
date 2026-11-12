@@ -32,8 +32,8 @@ export function cleanStroke(raw) {
 }
 export function cleanInk(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.strokes)) return null;
-  const strokes = raw.strokes.slice(0, MAX_STROKES).map(cleanStroke).filter(Boolean); if (!strokes.length) return null;
-  return { replace: Boolean(raw.replace), strokes };
+  const strokes = raw.strokes.slice(0, MAX_STROKES).map(cleanStroke).filter(Boolean); const blank = Boolean(raw.blank && raw.replace); if (!strokes.length && !blank) return null; // a part started blank is kept with nothing drawn on it yet
+  return { replace: Boolean(raw.replace), ...(blank ? { blank: true } : {}), strokes };
 }
 /** Whether a stroke shows on a frame: one with no frame of its own shows on every frame. */
 export const strokeShows = (s, frame) => s.f == null || s.f === frame;
@@ -95,9 +95,42 @@ export function shapeFrame(pts, pivot = null) {
   return { cx: cx + ax * mu - ay * mv, cy: cy + ay * mu + ax * mv, ax, ay, L: Math.max(1e-6, u1 - u0), W: Math.max(1e-6, v1 - v0) };
 }
 /** A point of the screen as a point of the part's UV box (0 to 1 each way across it). */
-export const toUV = (fr, x, y) => [((x - fr.cx) * fr.ax + (y - fr.cy) * fr.ay) / fr.L + 0.5, (-(x - fr.cx) * fr.ay + (y - fr.cy) * fr.ax) / fr.W + 0.5];
+export function toUV(fr, x, y) {
+  if (fr.to) return fr.to(x, y); if (fr.spine) return spineToUV(fr, x, y);
+  return [((x - fr.cx) * fr.ax + (y - fr.cy) * fr.ay) / fr.L + 0.5, (-(x - fr.cx) * fr.ay + (y - fr.cy) * fr.ax) / fr.W + 0.5];
+}
 /** A point of the UV box as a point of the screen. */
-export const fromUV = (fr, u, v) => [fr.cx + fr.ax * (u - 0.5) * fr.L - fr.ay * (v - 0.5) * fr.W, fr.cy + fr.ay * (u - 0.5) * fr.L + fr.ax * (v - 0.5) * fr.W];
+export function fromUV(fr, u, v) {
+  if (fr.from) return fr.from(u, v); if (fr.spine) return spineFromUV(fr, u, v);
+  return [fr.cx + fr.ax * (u - 0.5) * fr.L - fr.ay * (v - 0.5) * fr.W, fr.cy + fr.ay * (u - 0.5) * fr.L + fr.ax * (v - 0.5) * fr.W];
+}
+
+/**
+ * The frame of a bent part (a rubber hose limb, a tail, a neck): its UV runs along the curve it is drawn on, so a drawing or a skin on it bends as it bends.
+ * pts: the points down the middle, from the joint it swings from, [{x, y}, ...]; radii: its half width at each. u is the share of the way along the curve, v is across it (0.5 on the line, a half width is 0.25).
+ */
+export function spineFrame(pts, radii) {
+  const P = pts.map((p) => [p.x, p.y]); const cum = [0]; for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+  const total = Math.max(1e-6, cum[cum.length - 1]); const W = Math.max(1e-6, 2 * Math.max(...radii));
+  return { spine: true, P, cum, total, L: total, W, cx: P.reduce((t, q) => t + q[0], 0) / P.length, cy: P.reduce((t, q) => t + q[1], 0) / P.length };
+}
+function spineToUV(fr, x, y) {
+  const { P, cum, total, W } = fr; let best = Infinity; let arc = 0; let off = 0;
+  for (let i = 0; i < P.length - 1; i++) {
+    const ax = P[i][0]; const ay = P[i][1]; const dx = P[i + 1][0] - ax; const dy = P[i + 1][1] - ay; const l = Math.hypot(dx, dy); if (l < 1e-9) continue;
+    const tx = dx / l; const ty = dy / l; let t = ((x - ax) * tx + (y - ay) * ty); if (i > 0) t = Math.max(0, t); if (i < P.length - 2) t = Math.min(l, t); // beyond the ends the end segments carry straight on
+    const d = Math.hypot(x - (ax + tx * t), y - (ay + ty * t)); if (d < best - 1e-9) { best = d; arc = cum[i] + t; off = (x - ax) * -ty + (y - ay) * tx; }
+  }
+  return [arc / total, 0.5 + off / W];
+}
+function spineFromUV(fr, u, v) {
+  const { P, cum, total, W } = fr; const arc = u * total; let i = 0; while (i < P.length - 2 && arc > cum[i + 1]) i++;
+  let k = i; while (k < P.length - 2 && Math.hypot(P[k + 1][0] - P[k][0], P[k + 1][1] - P[k][1]) < 1e-9) k++;
+  const dx = P[k + 1][0] - P[k][0]; const dy = P[k + 1][1] - P[k][1]; const l = Math.hypot(dx, dy) || 1; const tx = dx / l; const ty = dy / l; const t = arc - cum[k];
+  const o = (v - 0.5) * W; return [P[k][0] + tx * t - ty * o, P[k][1] + ty * t + tx * o];
+}
+/** The UV frame of a drawn shape: along its curve when it has one (a hose limb), else the box round it. */
+export const partFrame = (sh, pivot) => (sh.spine ? spineFrame(sh.spine, sh.spineR) : shapeFrame(sh.pts, pivot));
 
 /** Where a point of a cell of the picture (0 to 1 each way) falls in the UV box, with the skin's offset, scale, turn and flip. */
 export function cellToUV(skin, s, t) {

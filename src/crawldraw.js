@@ -17,7 +17,7 @@ export function buildCrawlerShapes(pz, cam, st = {}) {
     const { pts, radii, N } = pz.chain; const L = pz.body.length;
     const range = (a, b) => { const i0 = Math.floor(a * (N - 1)); const i1 = Math.ceil(b * (N - 1)); return { p: pts.slice(i0, i1 + 1), r: radii.slice(i0, i1 + 1) }; };
     for (const [part, a, b] of [['dog.tail1', 0.76, 1], ['dog.spine1', 0.56, 0.8], ['dog.spine2', 0.34, 0.6], ['dog.spine3', 0.16, 0.38], ['dog.neck', 0.02, 0.2]]) {
-      const { p, r } = range(a, b); if (p.length < 2) continue; const P = p.map(S); shapes.push({ pts: tubePoly(P, r.map((v) => v * sc)), depth: mean(P.map((q) => q.d)), part, side: null, role: 'body' });
+      const { p, r } = range(a, b); if (p.length < 2) continue; const P = p.map(S); shapes.push({ pts: tubePoly(P, r.map((v) => v * sc)), depth: mean(P.map((q) => q.d)), part, side: null, role: 'body', spine: P, spineR: r.map((v) => v * sc) });
     }
     const hc = pz.headC; const nose = pz.noseTip; const hr = pz.body.head * 0.42 * girth;
     capsule(add(hc, mul(norm(sub(pts[3], hc)), 0.04)), nose, hr * 1.05, hr * 0.7, 'dog.head', null);

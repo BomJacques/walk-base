@@ -19,7 +19,8 @@ import { propParts, faceLight } from './scene.js';
 import { paintEyes, paintBrows, mouthOptions, EYE_BASE } from './face.js';
 import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
 import { clayOutline } from './clay.js';
-import { partKey, shapeFrame, skinMatrix, cellFor, fromUV, strokeShows } from './design.js';
+import { partKey, partFrame, skinMatrix, cellFor, cellToUV, fromUV } from './design.js';
+import { paintStrokes } from './ink.js';
 import { hasGround, hasDrop, stageDrop, castShadow, paintGroundShadow, groundStrength } from './shadow.js';
 import { hoseCurve, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { movedProp } from './propphys.js';
@@ -252,7 +253,7 @@ function buildHoseShapes(pz, cam, st) {
   const tubeOf = (pts3, radii, part, side, role, color, bias = 0, wob = null) => {
     let P = pts3.map(S); if (wob != null) { const o = typeof wob === 'number' ? { k: wob } : wob; P = wobble(P, wobA + (o.plus || 0), (pz.u || 0) * wobR + o.k, o.free); }
     const poly = tubePoly(P, radii.map((r) => r * sc));
-    add1(poly, P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
+    add1(poly, P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color); Object.assign(shapes[shapes.length - 1], { spine: P, spineR: radii.map((r) => r * sc) }); // so a drawing or a skin bends with it
     if (st.style === 'lowpoly') withFacets(shapes[shapes.length - 1], chainFacets(S, sc, pts3, radii, Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)))), false);
   };
   const blob = (center, R, rad, n = 10, m = 24) => { // an ellipsoid's outline
@@ -404,27 +405,22 @@ function cellCanvas(img, id, cols, rows, idx) {
 function paintSkin(ctx, sh, skin, frame, pivot) {
   const inf = imageInfo(skin.img); if (!inf?.img || !inf.img.naturalWidth || sh.pts.length < 3) return;
   const cell = cellCanvas(inf.img, skin.img, skin.cols, skin.rows, cellFor(skin, frame));
-  const M = skinMatrix(shapeFrame(sh.pts, pivot), skin, cell.width, cell.height);
+  const fr = partFrame(sh, pivot); const M = fr.spine ? null : skinMatrix(fr, skin, cell.width, cell.height);
   ctx.save(); tracePts(ctx, sh.pts); ctx.clip(); ctx.globalAlpha *= skin.opacity; ctx.globalCompositeOperation = skin.blend || 'source-over';
-  if (skin.fit === 'tile' && typeof DOMMatrix !== 'undefined') { const pat = ctx.createPattern(cell, 'repeat'); pat.setTransform(new DOMMatrix(M)); ctx.fillStyle = pat; const b = boundsOf(sh.pts); ctx.fillRect(b.x0 - 2, b.y0 - 2, b.x1 - b.x0 + 4, b.y1 - b.y0 + 4); }
+  if (fr.spine) { // a bent part: the picture is cut into slices across its length, each laid on the curve
+    const N = 24; const cw = cell.width; const ch = cell.height; const map = (s, t) => { const [u, v] = cellToUV(skin, s, t); return fromUV(fr, u, v); };
+    for (let i = 0; i < N; i++) {
+      const s0 = i / N; const s1 = (i + 1) / N; const A = map(s0, 0); const B = map(s1, 0); const C = map(s0, 1); const sx0 = s0 * cw; const sw = (s1 - s0) * cw;
+      const a = (B[0] - A[0]) / sw; const b = (B[1] - A[1]) / sw; ctx.save(); ctx.transform(a, b, (C[0] - A[0]) / ch, (C[1] - A[1]) / ch, A[0] - a * sx0, A[1] - b * sx0); ctx.drawImage(cell, sx0, 0, Math.min(sw + 1, cw - sx0), ch, sx0, 0, Math.min(sw + 1, cw - sx0), ch); ctx.restore();
+    }
+  } else if (skin.fit === 'tile' && typeof DOMMatrix !== 'undefined') { const pat = ctx.createPattern(cell, 'repeat'); pat.setTransform(new DOMMatrix(M)); ctx.fillStyle = pat; const b = boundsOf(sh.pts); ctx.fillRect(b.x0 - 2, b.y0 - 2, b.x1 - b.x0 + 4, b.y1 - b.y0 + 4); }
   else { ctx.transform(M[0], M[1], M[2], M[3], M[4], M[5]); ctx.imageSmoothingQuality = 'high'; ctx.drawImage(cell, 0, 0); }
   ctx.restore();
 }
-/** The strokes drawn on a part, laid on it through its UV box so they turn and move with it. A stroke's width is a share of the part's size. */
+/** The strokes drawn on a part, laid on it through its UV frame so they turn and move with it (and bend with it, if it bends). A stroke's width is a share of the part's size. */
 function paintInk(ctx, sh, ink, pivot, frame = 0) {
   if (!ink?.strokes?.length || sh.pts.length < 3) return;
-  const fr = shapeFrame(sh.pts, pivot); const size = (fr.L + fr.W) / 2;
-  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  for (const s of ink.strokes) {
-    if (!strokeShows(s, frame)) continue;
-    const P = s.pts.map(([u, v]) => fromUV(fr, u, v)); ctx.globalAlpha = s.a; ctx.beginPath();
-    if (P.length === 1) { ctx.arc(P[0][0], P[0][1], Math.max(0.6, (s.w * size) / 2), 0, TAU); ctx.fillStyle = s.c; ctx.fill(); continue; }
-    ctx.moveTo(P[0][0], P[0][1]);
-    for (let i = 1; i < P.length - 1; i++) ctx.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2); // smoothed through the midpoints
-    ctx.lineTo(P[P.length - 1][0], P[P.length - 1][1]);
-    if (s.fill) { ctx.closePath(); ctx.fillStyle = s.c; ctx.fill(); } else { ctx.strokeStyle = s.c; ctx.lineWidth = Math.max(0.6, s.w * size); ctx.stroke(); }
-  }
-  ctx.restore();
+  const fr = partFrame(sh, pivot); paintStrokes(ctx, ink.strokes, (u, v) => fromUV(fr, u, v), (fr.L + fr.W) / 2, frame);
 }
 /** The dash pattern for the line style, for a line this wide. */
 const dashOf = (st, w) => (st.lineDash === 'dashed' ? [w * 4, w * 3] : st.lineDash === 'dotted' ? [0.01, w * 2.4] : []);
@@ -587,8 +583,9 @@ function sceneDrawables(ctx, params, st, cam, env) {
     const st2 = a.fill || a.line || a.tint ? { ...st, ...(a.fill ? { fillColor: a.fill, hoseBody: a.fill, hoseShorts: a.fill } : {}), ...(a.line ? { lineColor: a.line } : {}), ...(a.tint ? { farTint: a.tint } : {}) } : st;
     out.push({ d: cA.p([pzA.pelvisX, 0, 0]).d, paint: () => {
       if (hasGround(st) && !a.noShadow) paintGroundShadow(ctx, cA.p, st, cam.k, [pzA.pelvisX + (dogA ? (pzA.pelvis[0] + pzA.j3[0]) / 2 : 0.05), 0, 0], dogA ? Math.abs(pzA.j3[0] - pzA.pelvis[0]) / 2 + 0.22 : 0.27, dogA ? 0.13 : 0.15, 1);
-      const r = hasDrop(st) && !a.noShadow ? castShadow(ctx, stageDrop(st), cam.k, (c) => drawFigureShapes(c, pzA, cA, st2, {})) : drawFigureShapes(ctx, pzA, cA, st2, {});
-      hits.push({ id: a.id, shapes: r.shapes || [] });
+      const fo = { design: a.design || null, skinFrame: env.frame ?? 0, wantFrames: env.wantFrames };
+      const r = hasDrop(st) && !a.noShadow ? castShadow(ctx, stageDrop(st), cam.k, (c) => drawFigureShapes(c, pzA, cA, st2, fo)) : drawFigureShapes(ctx, pzA, cA, st2, fo);
+      hits.push({ id: a.id, shapes: r.shapes || [], frames: r.frames || null });
     } });
   }
   for (const q0 of sc.props || []) {
@@ -790,9 +787,9 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
   }
   for (const sh of shapes) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
-    if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam); continue; }
+    if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam, null, opts.skinFrame ?? 0); continue; }
     if (!ghost && coveredByPicture(sh, st, opts.attach)) continue;
-    if (frames && sh.part && sh.pts.length >= 3) { const k = partKey(sh.part, sh.side); (frames[k] ||= []).push({ pts: sh.pts, fr: shapeFrame(sh.pts, pivotOf(pz, cam, sh.part, sh.side)) }); }
+    if (frames && sh.part && sh.pts.length >= 3) { const k = partKey(sh.part, sh.side); (frames[k] ||= []).push({ pts: sh.pts, fr: partFrame(sh, pivotOf(pz, cam, sh.part, sh.side)) }); }
     if (sh.hidden) continue;
     const paintBody = (c) => {
       c.save(); if (sh.dz && sh.dz.opacity < 1) c.globalAlpha *= sh.dz.opacity;
@@ -802,8 +799,9 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
       c.restore();
     };
     if (sh.dz?.shadow?.on && !ghost) castShadow(ctx, sh.dz.shadow, cam.k, paintBody); else paintBody(ctx);
-    if (sh.face && !ghost && faceStyle(st)) paintHoseFace(ctx, pz, cam, st, opts.mouth);
-    const faceOn = sh.part === 'head' && !hose && !ghost && faceStyle(st);
+    const drawnOver = sh.dz?.ink?.replace; // a head the user has drawn takes no stock face
+    if (sh.face && !ghost && !drawnOver && faceStyle(st)) paintHoseFace(ctx, pz, cam, st, opts.mouth);
+    const faceOn = sh.part === 'head' && !hose && !ghost && !drawnOver && faceStyle(st);
     if (faceOn && (opts.mouth || st.mouthShow === 'always')) paintHeadMouth(ctx, pz, cam, st, opts.mouth || 'rest');
     let ownEyes = true;
     if (faceOn && (st.eyeStyle !== 'default' || st.browStyle !== 'none')) { // eyes and eyebrows of a chosen style, on the front of the head
@@ -811,7 +809,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
       if (map([0, 0]).d > cam.p([pz.headC[0] + pz.pelvisX, pz.headC[1], pz.headC[2]]).d) { const fo = { base: EYE_BASE.mannequin, lw: cam.lw * 0.9, line: st.lineColor, skin: st.fillColor, u: pz.u }; ownEyes = !paintEyes(ctx, map, st, fo); paintBrows(ctx, map, st, fo); }
       else ownEyes = st.eyeStyle === 'default';
     }
-    if ((sh.part === 'head' || sh.part === 'dog.head') && !hose && faceStyle(st) && !ghost) {
+    if ((sh.part === 'head' || sh.part === 'dog.head') && !hose && !drawnOver && faceStyle(st) && !ghost) {
       ctx.strokeStyle = st.lineColor; ctx.fillStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.9;
       for (const e of ownEyes ? face.eyes : []) { ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.5, cam.lw * 0.9, 0.05 * pz.headR * cam.scale), 0, TAU); ctx.fill(); }
       if (face.dot) { ctx.beginPath(); ctx.arc(face.dot.x, face.dot.y, Math.max(2, cam.lw * 1.4), 0, TAU); ctx.fill(); }
@@ -1008,7 +1006,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
   }
 
   let figFrames = null; let shapes = []; let placedAttach = []; let handles = null; let fixHandle = null; const sceneHits = [];
-  const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz, hits: sceneHits, frame: perf ? t0 : frame }) : [];
+  const sceneItems = !opts.parts && !headView && st.showScene !== false && (params.scene?.actors?.length || params.scene?.props?.length) ? sceneDrawables(ctx, params, st, cam, { ph, perf, t0, sp, pz, hits: sceneHits, frame: perf ? t0 : frame, wantFrames: opts.wantFrames }) : [];
   const dMain = camF.p([pz.pelvisX, 0, 0]).d;
   if (layers.figure) {
     for (const it of sceneItems) if (it.d < dMain) it.paint();

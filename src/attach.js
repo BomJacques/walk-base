@@ -3,6 +3,7 @@
 // own units, so it follows every channel, curve and automation on the part, and stays put when the camera orbits.
 // An anchor is where it is fixed: a point that slides around the edge of the part (a capsule around the bone), or a free point.
 // Pure logic plus canvas painting; no DOM.
+import { paintStrokes } from './ink.js';
 import { add, mul, sub, len, hoseLimbs } from './rig3.js';
 import { STRIP_DEFAULTS } from './stripdefs.js';
 import { newShadow, cleanShadow, castShadow } from './shadow.js';
@@ -191,13 +192,32 @@ export function bendPoint(f, s, n) {
 }
 const unit2 = (x, y) => { const l = Math.hypot(x, y) || 1; return { x: x / l, y: y / l }; };
 
+/** The UV frame of an item, for drawing on it: u and v run 0 to 1 across its box. A picture bent over a joint is followed round it. */
+export function itemUVFrame(it, f, cam) {
+  const inf = it.kind === 'image' ? imageInfo(it.img) : null; const sz = itemSize(it, inf?.aspect); const w = sz.w; const h = sz.h || w * 0.25; const pl = itemPlace(it, f, cam);
+  const to = (x, y) => { const p = toItem(pl, it, x, y); return [p.x / w + 0.5, p.y / h + 0.5]; };
+  const from = (u, v) => { const q = fromItem(pl, it, (u - 0.5) * w, (v - 0.5) * h); return [q.x, q.y]; };
+  if (inf && f.chain) {
+    const warp = bentWarp(it, f, inf); const N = 40; const grid = []; for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) { const q = warp(i / N - 0.5, j / N - 0.5); grid.push([q.x, q.y, i / N, j / N]); }
+    return { item: true, L: w * pl.k, W: h * pl.k, from: (u, v) => { const q = warp(u - 0.5, v - 0.5); return [q.x, q.y]; }, to: (x, y) => { let best = Infinity; let r = [0.5, 0.5]; for (const g of grid) { const d = (g[0] - x) ** 2 + (g[1] - y) ** 2; if (d < best) { best = d; r = [g[2], g[3]]; } } return r; } };
+  }
+  return { item: true, L: w * pl.k, W: h * pl.k, to, from };
+}
+
 /** Paints a picture bent along its limb: cut into thin slices across its long direction, each placed on the curve. */
-function paintBent(ctx, it, f, inf) {
+/** Where a point of a bent picture goes on the screen: u and v run from -0.5 to 0.5 across its box. */
+export function bentWarp(it, f, inf) {
   const a = anchorLocal(it, f.L, f.r); const cx = a.x + it.x; const cy = a.y + it.y;
   const { w, h } = itemSize(it, inf.aspect); const sw = w * it.scale; const sh = h * it.scale; const rot = (it.rot * Math.PI) / 180;
   const cr = Math.cos(rot); const sr = Math.sin(rot); const fl = it.flip ? -1 : 1;
   const toPart = (u, v) => { const px = u * sw; const py = v * sh * fl; return { x: cx + cr * px - sr * py, y: cy + sr * px + cr * py }; };
-  const warp = (u, v) => { const q = toPart(u, v); return bendPoint(f, q.x, q.y); };
+  return (u, v) => { const q = toPart(u, v); return bendPoint(f, q.x, q.y); };
+}
+function paintBent(ctx, it, f, inf) {
+  const a = anchorLocal(it, f.L, f.r);
+  const { w, h } = itemSize(it, inf.aspect); const rot = (it.rot * Math.PI) / 180;
+  const cr = Math.cos(rot); const sr = Math.sin(rot); void a; void w; void h;
+  const warp = bentWarp(it, f, inf);
   const alongX = Math.abs(cr) >= Math.abs(sr); const N = 28; const iw = inf.img.naturalWidth; const ih = inf.img.naturalHeight;
   for (let i = 0; i < N; i++) {
     const t0 = i / N; const t1 = (i + 1) / N;
@@ -315,22 +335,27 @@ export const imageUrls = () => Object.fromEntries([...IMAGES.entries()].map(([id
 const hexA = (hex, a) => { const n = parseInt(String(hex).slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
 
 /** Paints an item. `ghost` is a tint for onion skin ghosts. */
-export function paintItem(ctx, it, f, cam, ghost = null) {
-  if (it.shadow?.on && !ghost) { castShadow(ctx, it.shadow, cam.k ?? 1, (c) => paintItemBody(c, it, f, cam, ghost)); return; } // a drop shadow of its own
-  paintItemBody(ctx, it, f, cam, ghost);
+export function paintItem(ctx, it, f, cam, ghost = null, frame = 0) {
+  if (it.shadow?.on && !ghost) { castShadow(ctx, it.shadow, cam.k ?? 1, (c) => paintItemBody(c, it, f, cam, ghost, frame)); return; } // a drop shadow of its own
+  paintItemBody(ctx, it, f, cam, ghost, frame);
 }
-function paintItemBody(ctx, it, f, cam, ghost = null) {
+function paintItemBody(ctx, it, f, cam, ghost = null, frame = 0) {
   if (it.kind === 'strip') { paintStrip(ctx, it, f, cam, ghost); return; }
   const pl = itemPlace(it, f, cam);
   const inf = it.kind === 'image' ? imageInfo(it.img) : null;
-  if (inf && f.chain) { ctx.save(); ctx.globalAlpha *= clamp(it.opacity, 0, 1); paintBent(ctx, it, f, inf); ctx.restore(); return; }
+  const ink = it.ink?.strokes?.length || it.ink?.replace ? it.ink : null; const drawn = Boolean(ink?.replace) && !ghost; // committed: the drawing stands in for the item
+  if (inf && f.chain) {
+    ctx.save(); ctx.globalAlpha *= clamp(it.opacity, 0, 1); if (!drawn) paintBent(ctx, it, f, inf);
+    if (ink && !ghost) { const sz = itemSize(it, inf.aspect); const bh = sz.h || sz.w * 0.25; const warp = bentWarp(it, f, inf); paintStrokes(ctx, ink.strokes, (u, v) => { const q = warp(u - 0.5, v - 0.5); return [q.x, q.y]; }, ((sz.w + bh) / 2) * pl.k, frame); }
+    ctx.restore(); return;
+  }
   const { w, h } = itemSize(it, inf?.aspect);
   ctx.save();
   ctx.translate(pl.c.x, pl.c.y); ctx.rotate(pl.ang); ctx.scale(pl.k, it.flip ? -pl.k : pl.k);
   ctx.globalAlpha *= clamp(it.opacity, 0, 1);
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   const px = (cam.k ?? 1) / pl.k; // one unit of line width, in local units
-  if (it.kind === 'image') {
+  if (drawn) { /* the drawing replaces it */ } else if (it.kind === 'image') {
     if (inf) ctx.drawImage(inf.img, -w / 2, -h / 2, w, h);
     else { ctx.strokeStyle = '#999'; ctx.lineWidth = 2 * px; ctx.strokeRect(-w / 2, -h / 2, w, h); ctx.beginPath(); ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(w / 2, h / 2); ctx.moveTo(w / 2, -h / 2); ctx.lineTo(-w / 2, h / 2); ctx.stroke(); }
   } else {
@@ -342,6 +367,7 @@ function paintItemBody(ctx, it, f, cam, ghost = null) {
     if (it.kind !== 'line') { ctx.fillStyle = ghost ? hexA(ghost, 0.15) : it.fill; ctx.fill(); }
     if (it.sw > 0 || it.kind === 'line') { ctx.strokeStyle = ghost || it.stroke; ctx.lineWidth = Math.max(it.sw, it.kind === 'line' ? 1 : 0) * px; ctx.stroke(); }
   }
+  if (ink && !ghost) { const bh = h || w * 0.25; paintStrokes(ctx, ink.strokes, (u, v) => [(u - 0.5) * w, (v - 0.5) * bh], (w + bh) / 2, frame, 0.5 * px); }
   ctx.restore();
 }
 

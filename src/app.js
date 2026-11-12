@@ -26,8 +26,9 @@ import { makeSeamless, loopGap } from './loop.js';
 import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } from './scene.js';
 import { PHYS_MODES } from './propphys.js';
 import { cleanShadow } from './shadow.js';
+import { itemUVFrame } from './attach.js';
 import { decodePicture, videoSheet, isVideo, PICTURE_ACCEPT, PICTURE_VIDEO_ACCEPT } from './pictures.js';
-import { partKey, newSkin, newPart, isPlain, cleanDesign, cellFor, toUV, fromUV, uvToCell, cellToUV, atlasLayout, atlasSkin, MAX_STROKES, MAX_STROKE_PTS, strokeShows, BLENDS as SKIN_BLENDS } from './design.js';
+import { partKey, newSkin, newPart, isPlain, cleanDesign, cellFor, toUV, fromUV, uvToCell, cellToUV, atlasLayout, atlasSkin, MAX_STROKES, MAX_STROKE_PTS, strokeShows, cleanInk, BLENDS as SKIN_BLENDS } from './design.js';
 import { packCharacter, readCharacter } from './character.js';
 import { PAD_COUNT, BLENDS, newBank, capturePad, transitionValues, blendFrames, cleanBank, cleanBanks } from './pads.js';
 import { newMood, cleanMood, blendMood, moodKeys, moodsFor, moodWeights, CORNERS, CORNER_LABELS } from './mood.js';
@@ -49,7 +50,7 @@ let PADMODE = 'play'; // what a tap on a pad does: play | store | clear
 let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
-  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all' }, // the Draw tab: what the pen does
+  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', target: { kind: 'fig' }, actorKey: null }, // the Draw tab: what the pen does
   design: {}, // each figure's design: { figure: { part key: its own look and skin } }
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, stageOnly: false,
@@ -271,7 +272,7 @@ function cleanAttach(raw) {
         anchor: { mode: an.mode === 'free' ? 'free' : 'boundary', t: num(an.t, 0.12, 0, 1), off: num(an.off, 0, -0.3, 0.3), x: num(an.x, 0, -1.5, 1.5), y: num(an.y, 0, -1.5, 1.5) },
         x: num(a.x, 0, -2, 2), y: num(a.y, 0, -2, 2), rot: num(a.rot, 0, -360, 360), scale: num(a.scale, 1, 0.05, 8), w: num(a.w, 0.26, 0.01, 3), h: num(a.h, 0.18, 0.01, 3),
         fill: col(a.fill, '#f2b84b'), stroke: col(a.stroke, '#26231f'), sw: num(a.sw, 2, 0, 12), opacity: num(a.opacity, 0.92, 0, 1), depth: ['back', 'behind', 'front', 'top'].includes(a.depth) ? a.depth : 'front', flip: Boolean(a.flip), bend: Boolean(a.bend), visible: a.visible !== false,
-        img: a.kind === 'image' ? String(a.img || '') : null, shadow: cleanShadow(a.shadow),
+        img: a.kind === 'image' ? String(a.img || '') : null, shadow: cleanShadow(a.shadow), ...(a.ink && a.kind !== 'strip' ? (() => { const k = cleanInk(a.ink); return k ? { ink: k } : {}; })() : {}),
         ...(a.kind === 'strip' ? { phys: cleanPhys(a.phys) } : {}),
       });
     }
@@ -1013,6 +1014,7 @@ function paint() {
   ctx.drawImage(frameCanvas, x0, y0, zw, zh);
   paintFaceInset(ctx, cw, ch);
   S.last = info; S.map = { x0, y0, zw, zh, fcw, fch, d, left: r.left, top: r.top };
+  if (S.tab === 'Draw') { const sig = `${inkTid()}:${inkPartKeys().length}`; if (sig !== lastInkSig) { lastInkSig = sig; renderPanel(); } } // the list of parts to draw on is known once the stage has drawn them
   updateHud(info);
 }
 /** The pop-up buttons in the top bar are as wide as the choice they show (a native picker opens when you tap one), so the bar stays on one line. */
@@ -1833,27 +1835,53 @@ function designWidgets() {
   return { slider, seg, check };
 }
 
-// ---------- the draw tab: draw a part on its own, or the whole figure at once ----------
+// ---------- the draw tab: draw a part on its own, the whole figure, another figure in the scene, or an attachment ----------
 const INK_COLOURS = ['#1b1b1f', '#ffffff', '#d93a3a', '#f08a24', '#f2cf3a', '#3fae5b', '#3a7bd9', '#8a4fd0', '#8a5a3a', '#f1c9a5'];
-let inkGesture = null; let inkUndo = [];
-/** The UV frame of a part, as the stage last drew it. */
-const inkFrame = (key) => S.last?.frames?.[key]?.[0]?.fr || null;
+let inkGesture = null; let inkUndo = []; let lastInkSig = '';
+/** What the pen draws on: { kind: 'fig' } the main figure, { kind: 'actor', id } another figure in the scene, { kind: 'attach', id } one attachment. One that is gone falls back to the figure. */
+const inkTarget = () => {
+  const t = S.draw.target || { kind: 'fig' };
+  if (t.kind === 'actor' && !S.scene.actors.some((a) => a.id === t.id)) return { kind: 'fig' };
+  if (t.kind === 'attach' && !(S.attach[figKey()] || []).some((a) => a.id === t.id && a.kind !== 'strip')) return { kind: 'fig' };
+  return t;
+};
+const inkTid = () => { const t = inkTarget(); return `${figKey()}|${t.kind}|${t.id || ''}`; };
+const inkActor = () => { const t = inkTarget(); return t.kind === 'actor' ? S.scene.actors.find((a) => a.id === t.id) : null; };
+const inkItem = () => { const t = inkTarget(); return t.kind === 'attach' ? (S.attach[figKey()] || []).find((a) => a.id === t.id) : null; };
+const inkWhole = () => S.draw.mode === 'whole' && !inkItem();
+/** The drawings of the target, { part key: { ink } }. An attachment has one, called "item". */
+function inkMap() {
+  const it = inkItem(); if (it) return { get item() { return { get ink() { return it.ink || null; }, set ink(v) { if (v) it.ink = v; else delete it.ink; } }; } };
+  const a = inkActor(); if (a) return (a.design ||= {});
+  return designOf();
+}
+const inkSceneHit = () => { const a = inkActor(); return a ? (S.last?.sceneHits || []).find((h2) => h2.id === a.id) || null : null; };
+/** The shapes the pen can land on, as the stage last drew them. */
+const inkShapes = () => (inkItem() ? [] : inkActor() ? inkSceneHit()?.shapes || [] : S.last?.shapes || []).filter((s) => !s.attach && s.part);
+function inkPartKeys() { const seen = new Map(); for (const sh of inkShapes()) { const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); } return [...seen.values()].sort((a, b) => (a.key < b.key ? -1 : 1)); }
+/** The UV frame of a part (or of the attachment), as the stage last drew it. */
+function inkFrame(key) {
+  const it = inkItem(); if (it) { const p = (S.last?.attach || []).find((q) => q.it.id === it.id); return p ? itemUVFrame(it, p.f, S.last.cam) : null; }
+  const fs = inkActor() ? inkSceneHit()?.frames : S.last?.frames; return fs?.[key]?.[0]?.fr || null;
+}
 /** The key of the part under a point of the picture, or null. */
-function inkPartAt(q) { const hit = pickPart((S.last?.shapes || []).filter((s) => !s.attach && s.part), q.x, q.y); return hit ? partKey(hit.part, hit.side) : null; }
-const inkOf = (key) => { const p = (designOf()[key] ||= newPart()); return (p.ink ||= { replace: false, strokes: [] }); };
-function inkTidy(key) { const d = designOf(); const p = d[key]; if (!p) return; if (p.ink && !p.ink.strokes.length) p.ink = null; if (isPlain(p)) delete d[key]; }
+function inkPartAt(q) { if (inkItem()) return 'item'; const hit = pickPart(inkShapes(), q.x, q.y); return hit ? partKey(hit.part, hit.side) : null; }
+function inkSelKey() { if (inkItem()) return 'item'; if (inkActor()) return S.draw.actorKey || null; return S.sel ? partKey(S.sel.part, S.sel.side) : null; }
+/** The drawing of a part, made if there is none. The first line on a part commits it: its own shape turns off and only the drawing shows (unless drawing frame by frame, when the other frames would be left empty). Uncommit brings it back. */
+const inkOf = (key) => { const p = (inkMap()[key] ||= newPart()); return (p.ink ||= { replace: S.draw.scope !== 'frame', strokes: [] }); };
+function inkTidy(key) { const d = inkMap(); const p = d[key]; if (!p) return; if (p.ink && !p.ink.strokes.length && !(p.ink.blank && p.ink.replace)) p.ink = null; if (!inkItem() && isPlain(p)) delete d[key]; }
 const inkRel = (fr) => (S.draw.size * (S.map.fcw / S.map.zw)) / Math.max(1, (fr.L + fr.W) / 2);
 function inkDown(e, toFrame) {
   const q = toFrame(e.clientX, e.clientY); if (!q || !S.last?.frames) return false;
   pause();
-  if (S.draw.tool === 'pick') { const hit = pickPart((S.last.shapes || []).filter((s) => !s.attach && s.part), q.x, q.y); if (hit) selectPart(hit, { openTab: false }); return true; }
-  if (S.draw.mode === 'part' && !S.sel) { setMessage('Choose a part first: tap one in the list, or use Pick part.'); return true; }
-  inkGesture = { id: e.pointerId, fig: figKey(), tool: S.draw.tool, adds: [], dels: [], cur: null, key: null, last: null };
+  if (S.draw.tool === 'pick') { if (inkItem()) return true; const hit = pickPart(inkShapes(), q.x, q.y); if (hit) { if (inkActor()) { S.draw.actorKey = partKey(hit.part, hit.side); renderPanel(); render(); } else selectPart(hit, { openTab: false }); } return true; }
+  if (!inkWhole() && !inkSelKey()) { setMessage('Choose a part first: tap one in the list, or use Pick part.'); return true; }
+  inkGesture = { id: e.pointerId, tid: inkTid(), tool: S.draw.tool, adds: [], dels: [], cur: null, key: null, last: null };
   inkMove(e, toFrame); return true;
 }
 function inkMove(e, toFrame) {
   const g = inkGesture; const q = g && toFrame(e.clientX, e.clientY); if (!q) return;
-  const D = S.draw; const selKey = S.sel ? partKey(S.sel.part, S.sel.side) : null; const under = D.mode === 'part' ? selKey : inkPartAt(q);
+  const D = S.draw; const under = inkWhole() ? inkPartAt(q) : inkSelKey();
   if (g.tool === 'eraser') { inkErase(g, q, under); S.ver++; render(); return; }
   const key = g.tool === 'fill' ? (g.key ||= under) : under; if (!key) return;
   const fr = inkFrame(key); if (!fr) return;
@@ -1869,9 +1897,9 @@ function inkMove(e, toFrame) {
 }
 /** The eraser takes whole strokes that its circle touches. */
 function inkErase(g, q, under) {
-  const D = S.draw; const r = D.size * (S.map.fcw / S.map.zw); const keys = D.mode === 'part' ? (under ? [under] : []) : Object.keys(designOf());
+  const D = S.draw; const r = D.size * (S.map.fcw / S.map.zw); const keys = inkWhole() ? Object.keys(inkMap()) : (under ? [under] : []);
   for (const key of keys) {
-    const ink = designOf()[key]?.ink; const fr = inkFrame(key); if (!ink || !fr) continue; const size = (fr.L + fr.W) / 2;
+    const ink = inkMap()[key]?.ink; const fr = inkFrame(key); if (!ink || !fr) continue; const size = (fr.L + fr.W) / 2;
     for (let i = ink.strokes.length - 1; i >= 0; i--) {
       const s = ink.strokes[i]; if (!strokeShows(s, S.frame)) continue; const P = s.pts.map(([u, v]) => fromUV(fr, u, v)); let hit = false;
       for (let j = 0; j < P.length && !hit; j++) {
@@ -1885,70 +1913,79 @@ function inkErase(g, q, under) {
 }
 function inkEnd() {
   const g = inkGesture; inkGesture = null; if (!g) return;
-  for (const a of [...g.adds]) if (a.stroke.fill && a.stroke.pts.length < 3) { const ink = designOf()[a.key]?.ink; const i = ink ? ink.strokes.indexOf(a.stroke) : -1; if (i >= 0) ink.strokes.splice(i, 1); g.adds.splice(g.adds.indexOf(a), 1); inkTidy(a.key); } // a fill needs a shape to fill
+  for (const a of [...g.adds]) if (a.stroke.fill && a.stroke.pts.length < 3) { const ink = inkMap()[a.key]?.ink; const i = ink ? ink.strokes.indexOf(a.stroke) : -1; if (i >= 0) ink.strokes.splice(i, 1); g.adds.splice(g.adds.indexOf(a), 1); inkTidy(a.key); } // a fill needs a shape to fill
   if (g.adds.length || g.dels.length) { inkUndo.push(g); if (inkUndo.length > 60) inkUndo.shift(); }
   S.ver++; render(); save(); renderPanel();
 }
-function inkCancel() {
-  const g = inkGesture; inkGesture = null; if (!g) return;
-  for (const { key, stroke } of g.adds) { const ink = designOf()[key]?.ink; const i = ink ? ink.strokes.indexOf(stroke) : -1; if (i >= 0) ink.strokes.splice(i, 1); inkTidy(key); }
+/** Takes a gesture's changes back: its strokes out, the ones it erased in. */
+function inkRevert(g) {
+  for (const { key, stroke } of g.adds) { const ink = inkMap()[key]?.ink; const i = ink ? ink.strokes.indexOf(stroke) : -1; if (i >= 0) ink.strokes.splice(i, 1); inkTidy(key); }
   for (const { key, stroke, i } of [...g.dels].reverse()) { const s = inkOf(key).strokes; s.splice(Math.min(i, s.length), 0, stroke); }
-  S.ver++; render();
 }
+function inkCancel() { const g = inkGesture; inkGesture = null; if (!g) return; inkRevert(g); S.ver++; render(); }
 function inkUndoStep() {
-  let g = inkUndo.pop(); while (g && g.fig !== figKey()) g = inkUndo.pop(); // a gesture on another figure cannot be undone from here
-  if (!g) return;
-  for (const { key, stroke } of g.adds) { const ink = designOf()[key]?.ink; const i = ink ? ink.strokes.indexOf(stroke) : -1; if (i >= 0) ink.strokes.splice(i, 1); inkTidy(key); }
-  for (const { key, stroke, i } of [...g.dels].reverse()) { const s = inkOf(key).strokes; s.splice(Math.min(i, s.length), 0, stroke); }
-  S.ver++; render(); save(); renderPanel();
+  let g = inkUndo.pop(); while (g && g.tid !== inkTid()) g = inkUndo.pop(); // a gesture on something else cannot be undone from here
+  if (!g) return; inkRevert(g); S.ver++; render(); save(); renderPanel();
 }
 /** Copies what shows on this frame onto the next frame of the cycle. */
 function inkCopyNext() {
-  const T = cycleFrames(P()).frames.length; const to = (S.frame + 1) % T; const g = { fig: figKey(), adds: [], dels: [] }; let n = 0;
-  for (const [key, p] of Object.entries(designOf())) {
+  const T = cycleFrames(P()).frames.length; const to = (S.frame + 1) % T; const g = { tid: inkTid(), adds: [], dels: [] }; let n = 0;
+  for (const [key, p] of Object.entries(inkMap())) {
     if (!p.ink) continue;
     for (const s of [...p.ink.strokes]) { if (s.f !== S.frame || p.ink.strokes.length >= MAX_STROKES) continue; const c = { ...s, f: to, pts: s.pts.map((q) => [...q]) }; p.ink.strokes.push(c); g.adds.push({ key, stroke: c }); n++; }
   }
   if (g.adds.length) inkUndo.push(g);
   S.ver++; render(); save(); renderPanel(); setMessage(n ? `Copied ${n} stroke${n === 1 ? '' : 's'} to frame ${to + 1}.` : 'Nothing is drawn on this frame only. Switch to This frame only and draw, then copy.');
 }
+/** Hides the stock shape of every part, so the figure is drawn from nothing, over its skeleton. */
+function inkBlank() {
+  const keys = inkItem() ? ['item'] : inkPartKeys().map((e) => e.key); if (!keys.length) return;
+  for (const k of keys) { const ink = inkOf(k); ink.replace = true; ink.blank = true; }
+  S.draw.guides = true; inkUndo = []; S.ver++; render(); save(); renderPanel(); setMessage('A blank figure: its own shapes are off, and the outlines show where its parts are. Draw each part (or the whole figure) and it walks as you drew it.');
+}
 /** Zooms and pans the stage so a part fills it, to draw on it large. */
 function zoomToPart(key) {
-  const fs = S.last?.frames?.[key]; const m = S.map; if (!fs?.length || !m) return;
-  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; for (const f of fs) for (const [x, y] of f.pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const m = S.map; if (!m || !key) return; let pts = [];
+  if (inkItem()) { const fr = inkFrame('item'); if (fr) pts = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v)); } else { const fs = (inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; for (const f of fs || []) pts.push(...f.pts); }
+  if (!pts.length) return;
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   const cw = stage.width; const ch = stage.height; const bw = Math.max(8, ((x1 - x0) / m.fcw) * m.zw); const bh = Math.max(8, ((y1 - y0) / m.fch) * m.zh);
   const old = S.zoom; const nz = Math.min(8, Math.max(0.25, old * Math.min((0.7 * cw) / bw, (0.7 * ch) / bh))); const zw2 = (m.zw * nz) / old; const zh2 = (m.zh * nz) / old;
   S.zoom = nz; S.panX = (cw / 2 - (((x0 + x1) / 2) / m.fcw) * zw2 - (cw - zw2) / 2) / m.d; S.panY = (ch / 2 - (((y0 + y1) / 2) / m.fch) * zh2 - (ch - zh2) / 2) / m.d; render();
 }
 function inkClear(keys) {
-  const d = designOf(); let n = 0; for (const k of keys) if (d[k]?.ink) { n += d[k].ink.strokes.length; d[k].ink = null; inkTidy(k); }
+  const d = inkMap(); let n = 0; for (const k of keys) if (d[k]?.ink) { n += d[k].ink.strokes.length; d[k].ink = null; inkTidy(k); }
   inkUndo = []; S.ver++; render(); save(); renderPanel(); if (n) setMessage(`Cleared ${n} stroke${n === 1 ? '' : 's'}.`);
 }
 /** The outlines of the parts, faint, over the picture, so the sections show while drawing. The part being drawn on is shaded. */
 function paintDrawGuides(g, info, fcw) {
-  const selKey = S.draw.mode === 'part' && S.sel ? partKey(S.sel.part, S.sel.side) : null; g.save(); g.lineJoin = 'round'; g.setLineDash([Math.max(3, fcw / 300), Math.max(3, fcw / 300)]);
-  for (const sh of info.shapes || []) {
-    if (sh.attach || !sh.part || sh.hidden || sh.pts.length < 3) continue; const on = selKey && partKey(sh.part, sh.side) === selKey;
-    g.beginPath(); sh.pts.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath();
-    if (on) { g.fillStyle = 'rgba(0,140,255,0.10)'; g.fill(); }
-    g.strokeStyle = on ? 'rgba(0,120,230,0.85)' : 'rgba(0,120,230,0.35)'; g.lineWidth = Math.max(1, fcw / (on ? 600 : 900)); g.stroke();
-  }
+  const actor = inkActor(); const item = inkItem(); const selKey = !inkWhole() ? inkSelKey() : null; g.save(); g.lineJoin = 'round'; g.setLineDash([Math.max(3, fcw / 300), Math.max(3, fcw / 300)]);
+  const trace = (pts, on) => { g.beginPath(); pts.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); if (on) { g.fillStyle = 'rgba(0,140,255,0.10)'; g.fill(); } g.strokeStyle = on ? 'rgba(0,120,230,0.85)' : 'rgba(0,120,230,0.35)'; g.lineWidth = Math.max(1, fcw / (on ? 600 : 900)); g.stroke(); };
+  if (item) { const p = (info.attach || []).find((q) => q.it.id === item.id); if (p) { const fr = itemUVFrame(item, p.f, info.cam); trace([[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v)), true); } }
+  else for (const sh of (actor ? (info.sceneHits || []).find((h2) => h2.id === actor.id)?.shapes : info.shapes) || []) { if (sh.attach || !sh.part || sh.hidden || sh.pts.length < 3) continue; trace(sh.pts, selKey && partKey(sh.part, sh.side) === selKey); }
   g.restore();
 }
 function drawSection() {
-  const host = h('div', { class: 'design', testid: 'draw-section' }); const { slider, seg, check } = designWidgets(); const D = S.draw; const d = designOf(); const list = partKeys(); const sel = designKeySel();
+  const host = h('div', { class: 'design', testid: 'draw-section' }); const { slider, seg, check } = designWidgets(); const D = S.draw; const item = inkItem(); const actor = inkActor(); const d = inkMap();
+  const list = inkPartKeys(); const sel = inkSelKey(); const partMode = D.mode === 'part' || Boolean(item);
   const total = Object.values(d).reduce((n, p) => n + (p.ink?.strokes.length || 0), 0); const cur = sel ? d[sel] : null; const redraw = () => { renderPanel(); render(); };
+  const acts = S.scene.actors.filter((a) => a.visible !== false); const items = (S.attach[figKey()] || []).filter((a) => a.kind !== 'strip');
+  const tBtn = (label, target, tid, on) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(on), testid: tid, onClick: () => { D.target = target; D.actorKey = null; redraw(); } }, label);
+  host.append(h('section', { class: 'group', testid: 'draw-target' }, h('h3', null, 'Draw on'),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'What to draw on' }, tBtn('This figure', { kind: 'fig' }, 'draw-target-fig', !actor && !item),
+      acts.map((a) => tBtn(a.name, { kind: 'actor', id: a.id }, `draw-target-actor-${a.id}`, actor?.id === a.id)), items.map((a) => tBtn(`Attachment: ${a.name}`, { kind: 'attach', id: a.id }, `draw-target-attach-${a.id}`, item?.id === a.id))),
+    !acts.length && !items.length ? h('p', { class: 'hint' }, 'Figures added in the Scene section of the Body tab, and pictures and shapes added in the Attach tab, can be drawn on too.') : null));
   host.append(h('section', { class: 'group', testid: 'draw-main' }, h('h3', null, 'Draw'),
-    h('p', { class: 'hint' }, 'Draw a part on its own, or the whole figure at once: a line that crosses from the head to the neck is split between them. What you draw sticks to its part and moves with it. Two fingers still pan and zoom.'),
-    seg('Draw', [['part', 'One part'], ['whole', 'Whole figure']], D.mode, (v) => { D.mode = v; redraw(); }, 'draw-mode'),
-    D.mode === 'part' ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Choose the part to draw on' }, list.map((e) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(e.key === sel), testid: `draw-part-${e.key}`, onClick: () => selectPart({ part: e.part, side: e.side }, { openTab: false }) }, `${wd(partLabel(e.part, e.side))}${d[e.key]?.ink ? (d[e.key].ink.replace ? ' ●' : ' •') : ''}`))) : null,
-    D.mode === 'part' && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Choose a part above, or use Pick part and tap one on the stage.') : null));
+    h('p', { class: 'hint' }, item ? 'Draw on the attachment: what you draw stays on it and moves with it, and bends with it over a joint.' : 'Draw a part on its own, or the whole figure at once: a line that crosses from the head to the neck is split between them. What you draw sticks to its part and moves with it (a rubber hose limb bends it). Two fingers still pan and zoom.'),
+    item ? null : seg('Draw', [['part', 'One part'], ['whole', 'Whole figure']], D.mode, (v) => { D.mode = v; redraw(); }, 'draw-mode'),
+    !item && partMode ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Choose the part to draw on' }, list.map((e) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(e.key === sel), testid: `draw-part-${e.key}`, onClick: () => { if (actor) { D.actorKey = e.key; redraw(); } else selectPart({ part: e.part, side: e.side }, { openTab: false }); } }, `${wd(partLabel(e.part, e.side))}${d[e.key]?.ink ? (d[e.key].ink.replace ? ' ●' : ' •') : ''}`))) : null,
+    !item && partMode && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Choose a part above, or use Pick part and tap one on the stage.') : null));
   host.append(h('section', { class: 'group', testid: 'draw-pen' }, h('h3', null, 'Pen'),
     seg('Tool', [['pen', 'Pen'], ['fill', 'Fill shape'], ['eraser', 'Eraser'], ['pick', 'Pick part']], D.tool, (v) => { D.tool = v; redraw(); }, 'draw-tool'),
     h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('div', { class: 'swatches' }, INK_COLOURS.map((c) => h('button', { type: 'button', class: 'swatch', style: `background:${c}`, 'aria-label': `Colour ${c}`, 'aria-pressed': String(D.color === c), testid: `draw-swatch-${c.slice(1)}`, onClick: () => { D.color = c; renderPanel(); } })), h('input', { type: 'color', class: 'color', value: D.color, 'aria-label': 'Pen colour', testid: 'draw-color', onInput: (e) => { D.color = e.target.value; } }))),
     slider('Size', () => D.size, (v) => { D.size = v; }, 1, 60, 1, 'draw-size'), slider('Opacity', () => D.opacity, (v) => { D.opacity = v; }, 0.05, 1, 0.01, 'draw-opacity'),
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-undo', disabled: !inkUndo.length, onClick: inkUndoStep }, 'Undo'),
-      D.mode === 'part' ? h('button', { type: 'button', class: 'btn', testid: 'draw-clear-part', disabled: !cur?.ink, onClick: () => inkClear([sel]) }, 'Clear this part') : null,
+      partMode ? h('button', { type: 'button', class: 'btn', testid: 'draw-clear-part', disabled: !cur?.ink?.strokes.length, onClick: () => inkClear([sel]) }, 'Clear this part') : null,
       h('button', { type: 'button', class: 'btn', testid: 'draw-clear-all', disabled: !total, onClick: () => inkClear(Object.keys(d)) }, 'Clear all drawing'))));
   const drawn = Object.values(d).filter((p) => p.ink); const some = drawn.length > 0; const allOn = some && drawn.every((p) => p.ink.replace);
   const T = cycleFrames(P()).frames.length;
@@ -1957,13 +1994,15 @@ function drawSection() {
     h('p', { class: 'hint' }, D.scope === 'frame' ? `Frame ${S.frame + 1} of ${T}: what you draw shows on this frame only, so a part can be redrawn frame by frame. Step along the timeline to draw the next one. The eraser only takes what shows on this frame.` : 'What you draw shows on every frame of the walk. Switch to This frame only to draw frame by frame.'),
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-copy-next', disabled: !some, title: 'Copy what is drawn on this frame onto the next one, to change it from there', onClick: inkCopyNext }, 'Copy to the next frame'))));
   host.append(h('section', { class: 'group', testid: 'draw-commit-sec' }, h('h3', null, 'Commit'),
-    h('p', { class: 'hint' }, 'Commit a drawing to make it the body shape: the original line work of that part turns off and only your drawing shows. Uncommit brings the original back. The drawing is kept, so you can commit again, or keep drawing while it is committed.'),
-    D.mode === 'part' ? (cur?.ink ? h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'draw-commit', 'aria-pressed': String(cur.ink.replace), onClick: () => { d[sel].ink.replace = !d[sel].ink.replace; S.ver++; render(); save(); renderPanel(); } }, cur.ink.replace ? 'Uncommit this part' : 'Commit this part'), h('span', { class: 'hint', testid: 'draw-commit-state' }, cur.ink.replace ? 'Committed: its own shape is off.' : 'Not committed: its own shape still shows.')) : h('p', { class: 'hint' }, 'Draw on the part, then commit it.'))
-      : h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'draw-commit-all', disabled: !some, onClick: () => { for (const p of drawn) p.ink.replace = !allOn; S.ver++; render(); save(); renderPanel(); } }, allOn ? 'Uncommit all' : 'Commit all drawn parts')),
-    h('p', { class: 'hint' }, `${total} stroke${total === 1 ? '' : 's'} on this figure; ${drawn.filter((p) => p.ink.replace).length} of ${drawn.length} drawn parts committed.`)));
+    h('p', { class: 'hint' }, 'The first line you draw on a part commits it: the original line work of that part turns off and only your drawing shows. The dashed guide lines show where the parts are; hide them below. Uncommit brings the original back, and the drawing is kept, so you can commit again.'),
+    partMode ? (cur?.ink ? h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'draw-commit', 'aria-pressed': String(cur.ink.replace), onClick: () => { d[sel].ink.replace = !d[sel].ink.replace; inkTidy(sel); S.ver++; render(); save(); renderPanel(); } }, cur.ink.replace ? 'Uncommit this part' : 'Commit this part'), h('span', { class: 'hint', testid: 'draw-commit-state' }, cur.ink.replace ? 'Committed: its own shape is off.' : 'Not committed: its own shape still shows.')) : h('p', { class: 'hint' }, 'Draw on it, then commit it.'))
+      : h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'draw-commit-all', disabled: !some, onClick: () => { for (const p of drawn) p.ink.replace = !allOn; for (const k of Object.keys(d)) inkTidy(k); S.ver++; render(); save(); renderPanel(); } }, allOn ? 'Uncommit all' : 'Commit all drawn parts')),
+    item ? null : h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-blank', title: 'Turn off every part\'s own shape, to draw the figure from nothing', onClick: inkBlank }, 'Start from a blank figure')),
+    item ? null : h('p', { class: 'hint' }, 'A blank figure has none of its own shapes: the outlines show where its parts are, and you draw each one. It still walks, so what you draw walks.'),
+    h('p', { class: 'hint' }, `${total} stroke${total === 1 ? '' : 's'} here; ${drawn.filter((p) => p.ink.replace).length} of ${drawn.length} drawn parts committed.`)));
   host.append(h('section', { class: 'group', testid: 'draw-show' }, h('h3', null, 'View'),
-    check('Show the part outlines', D.guides, (v) => { D.guides = v; render(); renderPanel(); }, 'draw-guides'),
-    h('div', { class: 'btnrow' }, D.mode === 'part' ? h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-part', disabled: !sel, onClick: () => zoomToPart(sel) }, 'Zoom to this part') : null, h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-reset', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } }, 'Reset the view'))));
+    check('Hide guide lines', !D.guides, (v) => { D.guides = !v; render(); renderPanel(); }, 'draw-hide-guides'),
+    h('div', { class: 'btnrow' }, partMode ? h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-part', disabled: !sel, onClick: () => zoomToPart(sel) }, 'Zoom to this part') : null, h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-reset', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; render(); } }, 'Reset the view'))));
   return host;
 }
 
@@ -2970,7 +3009,7 @@ window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
   buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
-  setMoodPad, mood: () => MOOD, designOf: () => designOf(), patchPart, partKeys, packCurrentCharacter, importCharacterObject, exportUvTemplate, applyAtlas, triggerPad, storePad, padBank, padRun: () => PADRUN, padMode: (m) => { PADMODE = m; },
+  addActor, inkFrame, inkTarget, toUV, fromUV, setMoodPad, mood: () => MOOD, designOf: () => designOf(), patchPart, partKeys, packCurrentCharacter, importCharacterObject, exportUvTemplate, applyAtlas, triggerPad, storePad, padBank, padRun: () => PADRUN, padMode: (m) => { PADMODE = m; },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),
   exportMp4: (over = {}) => exportMp4(P(), S.s, { ...S.x, ...over }),
   frame: (i, part = null, over = {}) => renderFrame(P(), S.s, { ...S.x, ...over }, i, part),

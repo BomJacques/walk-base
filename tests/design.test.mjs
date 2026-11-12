@@ -74,3 +74,21 @@ test('ink: strokes are cleaned, capped and thinned; a part with ink is not plain
   const line = Array.from({ length: 100 }, (_, i) => [i / 100, 0]); const th = thinStroke(line, 0.05); assert.ok(th.length < 25 && th.length > 10); assert.deepEqual(th[th.length - 1], line[99]); assert.deepEqual(th[0], line[0]);
   assert.deepEqual(thinStroke([[0, 0], [0, 0.001]], 1), [[0, 0], [0, 0.001]]);
 });
+
+test('a bent part has a frame that follows its curve, and a point goes there and back', async () => {
+  const { spineFrame, toUV, fromUV, partFrame } = await import('../src/design.js');
+  const pts = Array.from({ length: 21 }, (_, i) => { const t = i / 20; return { x: 100 * t, y: 30 * Math.sin(t * Math.PI) }; }); const fr = spineFrame(pts, pts.map(() => 5));
+  assert.equal(fr.spine, true); assert.ok(fr.L > 100 && fr.W === 10);
+  for (const [u, v] of [[0, 0.5], [0.5, 0.5], [1, 0.5], [0.3, 0.2], [0.7, 0.9], [0.5, 0.75]]) { const [x, y] = fromUV(fr, u, v); const [u2, v2] = toUV(fr, x, y); assert.ok(Math.abs(u2 - u) < 0.03 && Math.abs(v2 - v) < 0.06, `${u},${v} -> ${u2},${v2}`); }
+  const mid = fromUV(fr, 0.5, 0.5); assert.ok(Math.abs(mid[0] - 50) < 3 && Math.abs(mid[1] - 30) < 1.5, 'the middle of the curve');
+  const off = fromUV(fr, 0.5, 0.75); assert.ok(Math.hypot(off[0] - mid[0], off[1] - mid[1]) > 2.4 && Math.hypot(off[0] - mid[0], off[1] - mid[1]) < 2.6, 'a quarter across is half a half-width off the line');
+  const past = fromUV(fr, 1.2, 0.5); assert.ok(past[0] > 100, 'beyond the end it carries straight on');
+  const sh = { pts: [[0, 0], [10, 0], [10, 10]], spine: pts, spineR: pts.map(() => 5) }; assert.equal(partFrame(sh, null).spine, true); assert.equal(partFrame({ pts: sh.pts }, null).spine, undefined);
+});
+test('a part committed with nothing drawn is kept (a blank part), and a scene figure keeps its drawing', async () => {
+  const { cleanInk, cleanPart, isPlain } = await import('../src/design.js'); const { cleanScene } = await import('../src/scene.js');
+  assert.deepEqual(cleanInk({ replace: true, blank: true, strokes: [] }), { replace: true, blank: true, strokes: [] }); assert.equal(cleanInk({ replace: true, strokes: [] }), null); assert.equal(cleanInk({ replace: false, blank: true, strokes: [] }), null); assert.equal(isPlain(cleanPart({ ink: { replace: true, blank: true, strokes: [] } })), false);
+  const defaults = { cycleFrames: 24 };
+  const sc = cleanScene({ actors: [{ id: 'a1', fig: 'human', p: {}, design: { head: { ink: { strokes: [{ c: '#ff0000', pts: [[0.5, 0.5], [0.6, 0.5]] }] } }, junk: 5 } }, { id: 'a2', fig: 'human', p: {} }] }, ['human'], defaults);
+  assert.equal(sc.actors[0].design.head.ink.strokes.length, 1); assert.equal(sc.actors[0].design.head.ink.strokes[0].c, '#ff0000'); assert.equal('design' in sc.actors[1], false);
+});

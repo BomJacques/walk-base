@@ -598,11 +598,11 @@ check('and nothing else was drawn on or moved', (await ev(() => Object.keys(wind
 const at4 = await stageShot(); await ev(() => { const w = window.__walkBase; w.setFrame(11); w.render(); }); await wait(200); const at11 = await stageShot();
 check('the drawing stays with the part as the figure moves', at4 !== at11 && (await ev(() => window.__walkBase.designOf().head.ink.strokes.length)) === 1);
 await ev(() => { const w = window.__walkBase; w.setFrame(4); w.render(); }); await wait(200);
-const preCommit = await stageShot(); await q('draw-commit').click(); await wait(250);
-check('committing a drawing turns the part\'s own shape off, and says so', (await ev(() => window.__walkBase.designOf().head.ink.replace)) === true && (await stageShot()) !== preCommit && /^Committed/.test(await q('draw-commit-state').innerText()));
+check('the first line on a part commits it: its own shape is off, and the panel says so', (await ev(() => window.__walkBase.designOf().head.ink.replace)) === true && /^Committed/.test(await q('draw-commit-state').innerText()));
+const committed = await stageShot(); await q('draw-commit').click(); await wait(250);
+check('Uncommit brings the original shape back, with the drawing kept', (await ev(() => window.__walkBase.designOf().head.ink.replace)) === false && (await stageShot()) !== committed && (await ev(() => window.__walkBase.designOf().head.ink.strokes.length)) === 1);
 await q('draw-commit').click(); await wait(250);
-check('uncommitting brings the original back, with the drawing kept', (await ev(() => window.__walkBase.designOf().head.ink.replace)) === false && (await stageShot()) === preCommit && (await ev(() => window.__walkBase.designOf().head.ink.strokes.length)) === 1);
-await q('draw-commit').click(); await wait(200); await q('draw-commit').click(); await wait(150);
+check('and Commit turns it off again', (await ev(() => window.__walkBase.designOf().head.ink.replace)) === true && (await stageShot()) === committed);
 // frame by frame: this frame only, and copying to the next
 await q('draw-scope-frame').click(); await wait(150); const fr0 = await ev(() => window.__walkBase.S.frame);
 const dhf = await clientOf('head'); await page.mouse.move(dhf.x - 6, dhf.y + 10); await page.mouse.down(); await page.mouse.move(dhf.x + 6, dhf.y + 10, { steps: 4 }); await page.mouse.up(); await wait(250);
@@ -641,8 +641,12 @@ await ev(() => { window.__walkBase.S.draw.size = 4; });
 await page.mouse.move(a1.x, a1.y); await page.mouse.down(); await page.mouse.move((a1.x + a2.x) / 2, (a1.y + a2.y) / 2, { steps: 10 }); await page.mouse.move(a2.x, a2.y, { steps: 10 }); await page.mouse.up(); await wait(250);
 const whole = await ev(() => Object.entries(window.__walkBase.designOf()).filter(([, p]) => p.ink).map(([k, p]) => [k, p.ink.strokes.length]));
 check('drawing the whole figure splits a line between the parts it crosses', whole.length >= 2 && whole.some(([k]) => k === 'head'), whole);
+const allRep = () => ev(() => Object.values(window.__walkBase.designOf()).filter((p) => p.ink).every((p) => p.ink.replace));
+check('a line drawn across the figure commits every part it touched, and the button offers to uncommit them', (await allRep()) === true && /^Uncommit all/.test(await q('draw-commit-all').innerText()));
 await q('draw-commit-all').click(); await wait(200);
-check('Commit all hides the stock shapes of every part drawn on, and the button then offers to uncommit', (await ev(() => Object.values(window.__walkBase.designOf()).filter((p) => p.ink).every((p) => p.ink.replace))) === true);
+check('Uncommit all brings the stock shapes back', (await allRep()) === false);
+await q('draw-commit-all').click(); await wait(200);
+check('and Commit all hides them again', (await allRep()) === true);
 check('the drawing is kept with the figure\'s design, and goes out in a character file', (await ev(() => JSON.stringify(window.__walkBase.packCurrentCharacter('t').design).includes('"ink"'))) === true);
 for (const stl of ['outline', 'stick', 'moebius', 'comic', 'lowpoly', 'ink', 'pencil', 'clay']) await ev((s) => { const w = window.__walkBase; w.S.s.style = s; w.setFrame(6); w.render(); }, stl);
 await ev(() => { const w = window.__walkBase; w.S.s.style = 'mannequin'; w.setFigure('dog'); w.setTab('Draw'); w.render(); w.setFigure('human'); });
@@ -679,6 +683,61 @@ await page.mouse.move(uvb2.x + uvb2.width * 0.5, uvb2.y + uvb2.height * 0.5); aw
 const msk = await ev(() => window.__walkBase.designOf().head.skin);
 check('dragging inside the preview slides the picture under the part', Math.abs(msk.u + 0.2) < 0.05 && Math.abs(msk.v) < 0.05, [msk.u, msk.v]);
 await ev(() => { const w = window.__walkBase; w.S.design = {}; w.setTab('Gait'); w.render(); });
+// ---- drawing that bends with a hose limb, on a figure in the scene, on an attachment, and a figure drawn from nothing
+const clientAt = (x, y) => ev(([x, y]) => { const m = window.__walkBase.S.map; return { x: m.left + (m.x0 + (x / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (y / m.fch) * m.zh) / m.d }; }, [x, y]);
+const dragPath = async (pts) => { const c = []; for (const [x, y] of pts) c.push(await clientAt(x, y)); await page.mouse.move(c[0].x, c[0].y); await page.mouse.down(); for (const p of c.slice(1)) await page.mouse.move(p.x, p.y, { steps: 4 }); await page.mouse.up(); await wait(250); };
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('hose'); w.S.design = {}; w.S.attach.hose = []; w.S.scene.actors = []; w.S.s.style = 'outline'; w.S.s.shadowMode = 'off'; w.S.s.camYaw = -25; w.S.s.camPitch = 0; Object.assign(w.S.draw, { mode: 'part', tool: 'pen', scope: 'all', target: { kind: 'fig' }, size: 4 }); w.setTab('Draw'); w.setFrame(3); w.render(); w.selectPart({ part: 'leg', side: 'R' }, { openTab: false }); }); await wait(300);
+const legFr = () => ev(() => { const f = window.__walkBase.S.last.frames['leg.R'][0]; return { spine: f.fr.spine === true, P: f.fr.P, n: f.pts.length }; });
+const lf = await legFr();
+check('a hose limb has a UV frame that follows its curve', lf.spine === true && lf.P.length >= 10, lf.P && lf.P.length);
+await dragPath([lf.P[2], lf.P[Math.floor(lf.P.length / 2)], lf.P[lf.P.length - 3]]);
+const bendCheck = (frame) => ev((fr) => { const w = window.__walkBase; w.setFrame(fr); w.render(); return new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => {
+  const f = w.S.last.frames['leg.R'][0]; const sk = w.designOf()['leg.R'].ink.strokes[0]; const inside = (x, y) => { let c = false; const p = f.pts; for (let a = 0, b = p.length - 1; a < p.length; b = a++) if ((p[a][1] > y) !== (p[b][1] > y) && x < ((p[b][0] - p[a][0]) * (y - p[a][1])) / (p[b][1] - p[a][1]) + p[a][0]) c = !c; return c; };
+  const mapped = sk.pts.map(([u, v]) => w.fromUV(f.fr, u, v)); const chord = Math.hypot(f.fr.P[f.fr.P.length - 1][0] - f.fr.P[0][0], f.fr.P[f.fr.P.length - 1][1] - f.fr.P[0][1]); res({ all: mapped.every(([x, y]) => inside(x, y)), n: mapped.length, first: f.fr.P[0], sagitta: f.fr.total - chord }); }))); }, frame);
+const b3 = await bendCheck(3); const b14 = await bendCheck(14);
+check('the line drawn on a hose limb is on the limb, at the start and when it has bent a different way', (await ev(() => window.__walkBase.designOf()['leg.R'].ink.strokes.length)) === 1 && b3.all && b14.all, [b3, b14]);
+const hosePlain = await stageShot();
+await ev(() => { const w = window.__walkBase; w.setTab('Design'); w.setFrame(3); w.render(); w.selectPart({ part: 'arm', side: 'R' }, { openTab: false }); }); await wait(250);
+await q('design-skin-file').setInputFiles({ name: 'face.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#e63946"/><circle cx="5" cy="5" r="3" fill="#ffffff"/></svg>') }); await wait(600);
+const withSkin = await stageShot();
+check('a skin on a hose limb is laid along its curve, in every drawing style, with no errors', (await ev(() => !!window.__walkBase.designOf()['arm.R'].skin)) && withSkin !== hosePlain && errors.length === 0, errors);
+for (const stl of ['mannequin', 'comic', 'lowpoly', 'ink', 'pencil', 'clay', 'stick']) await ev((s) => { const w = window.__walkBase; w.S.s.style = s; w.setFrame(8); w.render(); }, stl);
+check('and the hose animals and crawlers keep their curves too', await ev(() => { const w = window.__walkBase; const out = []; for (const f of ['hosehorse', 'snake', 'crab']) { w.setFigure(f); w.setTab('Draw'); w.render(); } return true; }) && errors.length === 0, errors);
+// a figure in the scene
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.design = {}; w.S.s.style = 'mannequin'; w.S.scene.actors = []; w.addActor('human'); w.S.draw.target = { kind: 'actor', id: w.S.scene.actors[0].id }; w.S.draw.actorKey = null; w.S.draw.mode = 'part'; w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(350);
+check('the Draw tab lists the figure in the scene to draw on, and its parts', (await page.locator('[data-testid^="draw-target-actor-"]').count()) === 1 && (await q('draw-part-head').count()) === 1);
+await q('draw-part-head').click(); await wait(250);
+const ahead = await ev(() => { const h = window.__walkBase.S.last.sceneHits[0].frames.head[0].fr; return [h.cx, h.cy]; }); const aShot0 = await stageShot();
+await dragPath([[ahead[0] - 6, ahead[1] - 3], [ahead[0] + 6, ahead[1] + 3]]);
+const actDraw = await ev(() => { const w = window.__walkBase; return { strokes: w.S.scene.actors[0].design?.head?.ink?.strokes.length, main: Object.keys(w.designOf()).length }; });
+check('drawing on the scene figure goes on that figure alone', actDraw.strokes === 1 && actDraw.main === 0 && (await stageShot()) !== aShot0, actDraw);
+check('and is kept with the scene', (await ev(() => JSON.stringify(window.__walkBase.S.scene)).then((s) => s.includes('"ink"'))) === true);
+await ev(() => { const w = window.__walkBase; w.S.scene.actors = []; w.S.draw.target = { kind: 'fig' }; w.S.design = {}; w.render(); });
+// an attachment
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.attach.human = []; w.selectPart({ part: 'spine.upper', side: null }, { openTab: false }); w.addAttach('rect', { w: 0.4, h: 0.3, fill: '#f2b84b' }); const id = w.attachItem().id; w.S.draw.target = { kind: 'attach', id }; w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(350);
+check('the Draw tab lists the attachment to draw on', (await page.locator('[data-testid^="draw-target-attach-"]').count()) === 1);
+const itemC = await ev(() => { const w = window.__walkBase; const fr = w.inkFrame('item'); return [w.fromUV(fr, 0.2, 0.5), w.fromUV(fr, 0.8, 0.5)]; }); const aShot1 = await stageShot();
+await dragPath(itemC);
+check('a line drawn over an attachment stays on it', (await ev(() => window.__walkBase.attachItem().ink?.strokes.length)) === 1 && (await stageShot()) !== aShot1);
+const atItem = await ev(() => { const w = window.__walkBase; const fr = w.inkFrame('item'); const s = w.attachItem().ink.strokes[0]; return w.fromUV(fr, s.pts[0][0], s.pts[0][1]); });
+await ev(() => { const w = window.__walkBase; w.setFrame(11); w.render(); }); await wait(250);
+const atItem2 = await ev(() => { const w = window.__walkBase; const fr = w.inkFrame('item'); const s = w.attachItem().ink.strokes[0]; return w.fromUV(fr, s.pts[0][0], s.pts[0][1]); });
+check('and moves with it as the figure walks', Math.hypot(atItem[0] - atItem2[0], atItem[1] - atItem2[1]) > 2, [atItem, atItem2]);
+await ev(() => { const w = window.__walkBase; w.setFrame(4); w.render(); }); await wait(150);
+check('the first line on an attachment commits it: its own shape is off', (await ev(() => window.__walkBase.attachItem().ink.replace)) === true);
+{ const was = await stageShot(); await q('draw-commit').click(); await wait(250); check('Uncommit brings the attachment back, with the drawing', (await ev(() => window.__walkBase.attachItem().ink.replace)) === false && (await stageShot()) !== was); await q('draw-commit').click(); await wait(200); }
+check('and the drawing comes through a save and a load', (await ev(() => { const w = window.__walkBase; const c = w.cleanAttach({ human: JSON.parse(JSON.stringify(w.S.attach.human)) }); return c.human[0].ink.strokes.length === 1 && c.human[0].ink.replace === true; })) === true);
+await ev(() => { const w = window.__walkBase; w.S.attach.human = []; w.S.draw.target = { kind: 'fig' }; w.render(); });
+// from nothing
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.design = {}; w.S.s.style = 'mannequin'; Object.assign(w.S.draw, { target: { kind: 'fig' }, mode: 'whole', tool: 'pen', size: 5, scope: 'all' }); w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(300);
+const stock = await stageShot(); await q('draw-blank').click(); await wait(300);
+check('Start from a blank figure turns every part\'s own shape off, leaving the outlines', (await ev(() => { const d = window.__walkBase.designOf(); const k = Object.values(d); return k.length >= 10 && k.every((p) => p.ink && p.ink.replace && p.ink.strokes.length === 0); })) === true && (await stageShot()) !== stock);
+const blank = await stageShot(); const hc = await ev(() => { const f = window.__walkBase.S.last.frames.head[0].fr; return [f.cx, f.cy]; });
+await dragPath([[hc[0] - 8, hc[1]], [hc[0], hc[1] + 8], [hc[0] + 8, hc[1]]]);
+check('and what is drawn on it shows, and walks with the figure', (await stageShot()) !== blank && (await ev(() => window.__walkBase.designOf().head.ink.strokes.length)) === 1);
+await q('draw-commit-all').click(); await wait(250);
+check('Uncommit all brings the stock figure back, and parts with nothing drawn are forgotten', (await ev(() => { const d = window.__walkBase.designOf(); return Object.keys(d).join(); })) === 'head');
+await ev(() => { const w = window.__walkBase; w.S.design = {}; w.S.draw.mode = 'part'; w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

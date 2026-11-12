@@ -619,3 +619,7 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 ## Done (2026-11-12): skins: more picture types, scaling in the preview, sliders that stuck
 - Fixed: the skin and shadow sliders worked from the values the panel was drawn with, so moving Scale across undid Scale along. They now change the live values. Scale range is 0.05 to 10.
 - New: src/pictures.js (one decoder for every picture file, SVG sizing, file type from the name, video to sprite sheet); the UV preview has a box with handles, a Scale (both ways) slider and Fit to the part.
+
+## Done (2026-11-12): drawing bends, scene figures, attachments, blank figures
+- Hose limbs, tails, necks and the snake carry their curve (`spine`), and their UV frame runs along it (design.js `spineFrame`), so strokes and skins bend with them; skins are cut into 24 slices along the curve (no tiling on a bent part yet). Scene figures have their own `design`; attachments have `ink`. Auto-commit on the first line, Hide guide lines, Start from a blank figure.
+- Still open: drawing on scenery props, per-frame drawings are one set per part, no freeform canvas that is not on a rig.

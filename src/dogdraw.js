@@ -23,7 +23,7 @@ function buildHoseAnimal(pz, cam, st) {
   const wobA = Math.max(0, p.hoseWobble || 0) * 0.03 * sc; const wobR = Math.max(1, Math.round(p.hoseWobbleRate || 2));
   const tube = (pts3, radii, part, side, role, color, bias = 0, wob = null, depth = null) => {
     let P = pts3.map(S); if (wob) P = wobble(P, wobA * (wob.gain ?? 1), (pz.u || 0) * wobR + wob.k, wob.free);
-    add1(tubePoly(P, radii.map((r) => r * sc)), depth ?? P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color);
+    add1(tubePoly(P, radii.map((r) => r * sc)), depth ?? P.reduce((t, q) => t + q.d, 0) / P.length + bias, part, side, role, color); Object.assign(shapes[shapes.length - 1], { spine: P, spineR: radii.map((r) => r * sc) });
     if (st.style === 'lowpoly') withFacets(shapes[shapes.length - 1], chainFacets(S, sc, pts3, radii, Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)))), false);
   };
   const BO = K.body;

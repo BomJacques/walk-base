@@ -1,4 +1,5 @@
 // The scene: more figures walking beside the main one, each with its own walk, and plain scenery to stand them in.
+import { cleanDesign } from './design.js';
 // Pure data and geometry. draw.js poses and paints the figures; this file knows how an item is described, cleaned, and how a prop is built from faces.
 
 const rad = (d) => (d * Math.PI) / 180;
@@ -45,7 +46,7 @@ export function cleanScene(raw, figs, defaults) {
     for (const [k, v] of Object.entries(a.p && typeof a.p === 'object' ? a.p : {})) if (k in defaults && (typeof v === typeof defaults[k])) p[k] = typeof v === 'number' ? (Number.isFinite(v) ? v : defaults[k]) : v;
     const r = {}; for (const [k, v] of Object.entries(a.r && typeof a.r === 'object' ? a.r : {})) if (Number.isFinite(Number(v))) r[k] = num(v, 1, 0.1, 4);
     out.actors.push({ id: String(a.id || sceneId()).slice(0, 40), fig: a.fig, name: String(a.name || a.fig).slice(0, 40), preset: String(a.preset || '').slice(0, 40), p, r,
-      x: num(a.x, 1.2, -12, 12), z: num(a.z, -0.5, -8, 8), yaw: num(a.yaw, 0, -360, 360), scale: num(a.scale, 1, 0.2, 3), phase: num(a.phase, 0, 0, 1), fill: col(a.fill, ''), line: col(a.line, ''), tint: col(a.tint, ''), visible: a.visible !== false, locked: Boolean(a.locked), noShadow: Boolean(a.noShadow) });
+      x: num(a.x, 1.2, -12, 12), z: num(a.z, -0.5, -8, 8), yaw: num(a.yaw, 0, -360, 360), scale: num(a.scale, 1, 0.2, 3), phase: num(a.phase, 0, 0, 1), fill: col(a.fill, ''), line: col(a.line, ''), tint: col(a.tint, ''), visible: a.visible !== false, locked: Boolean(a.locked), noShadow: Boolean(a.noShadow), ...(a.design ? (() => { const dz = cleanDesign({ [a.fig]: a.design }, [a.fig])[a.fig]; return dz ? { design: dz } : {}; })() : {}) });
   }
   for (const q of Array.isArray(raw.props) ? raw.props.slice(0, 40) : []) {
     if (!q || !PROP_BY_ID[q.type]) continue;
