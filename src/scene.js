@@ -1,5 +1,5 @@
 // The scene: more figures walking beside the main one, each with its own walk, and plain scenery to stand them in.
-import { cleanDesign } from './design.js';
+import { cleanDesign, cleanInk } from './design.js';
 // Pure data and geometry. draw.js poses and paints the figures; this file knows how an item is described, cleaned, and how a prop is built from faces.
 
 const rad = (d) => (d * Math.PI) / 180;
@@ -21,6 +21,7 @@ export const PROP_KINDS = [
   { id: 'pine', label: 'Pine', kind: 'lpine', w: 0.22, d: 0.22, h: 3.2, color: '#7fae8a' },
   { id: 'bush', label: 'Bush', kind: 'lbush', w: 1, d: 1, h: 0.75, color: '#9ccc8a' },
   { id: 'picture', label: 'Picture…', kind: 'image', w: 2.4, d: 0.05, h: 1.4, color: '#ffffff' },
+  { id: 'sheet', label: 'Drawing sheet', kind: 'sheet', w: 2.4, d: 0.05, h: 1.4, color: '#ffffff' },
   { id: 'rock', label: 'Rock', kind: 'ball', w: 0.9, d: 0.9, h: 0.55, color: '#8a8d91' },
 ];
 export const PROP_BY_ID = Object.fromEntries(PROP_KINDS.map((k) => [k.id, k]));
@@ -53,7 +54,7 @@ export function cleanScene(raw, figs, defaults) {
     const k = PROP_BY_ID[q.type];
     out.props.push({ id: String(q.id || sceneId()).slice(0, 40), type: k.id, name: String(q.name || k.label).slice(0, 40), kind: k.kind, x: num(q.x, 0, -12, 12), y: num(q.y, 0, -3, 8), z: num(q.z, 0, -8, 8), rot: num(q.rot, 0, -360, 360),
       w: num(q.w, k.w, 0.03, 8), d: num(q.d, k.d, 0.03, 8), h: num(q.h, k.h, 0.03, 8), color: col(q.color, k.color), visible: q.visible !== false, locked: Boolean(q.locked), img: typeof q.img === 'string' ? q.img.slice(0, 40) : '', asp: num(q.asp, 0.6, 0.05, 20), flip: Boolean(q.flip), noShadow: Boolean(q.noShadow),
-      phys: ['drop', 'tip'].includes(q.phys) ? q.phys : 'none', physStart: Math.round(num(q.physStart, 0, 0, 14400)), bounce: num(q.bounce, 0.5, 0, 0.95), friction: num(q.friction, 0.4, 0, 1), throwX: num(q.throwX, 0, -12, 12), push: num(q.push, 1.3, -3, 3) });
+      phys: ['drop', 'tip'].includes(q.phys) ? q.phys : 'none', physStart: Math.round(num(q.physStart, 0, 0, 14400)), bounce: num(q.bounce, 0.5, 0, 0.95), friction: num(q.friction, 0.4, 0, 1), throwX: num(q.throwX, 0, -12, 12), push: num(q.push, 1.3, -3, 3), ...(q.ink ? (() => { const k = cleanInk(q.ink); return k ? { ink: k } : {}; })() : {}) });
   }
   return out;
 }
@@ -93,6 +94,9 @@ export function prismFaces(q, sides = 4, radiusRatio = 1, y0 = 0, y1 = q.h, w = 
 
 /** Everything a prop is made of, back to front is left to the caller: { faces: [{pts, normal, color}], balls: [{c, r, color}] }. */
 export function propParts(q) {
+  if (q.kind === 'sheet') { // a blank sheet of paper standing on the ground, to draw on
+    const w = q.w; const hh = q.h; return { faces: [], balls: [], shade: (c) => c, image: { img: '', sheet: true, color: q.color, corners: [place(q, -w / 2, 0, 0), place(q, w / 2, 0, 0), place(q, w / 2, hh, 0), place(q, -w / 2, hh, 0)] } };
+  }
   if (q.kind === 'image') { // a flat picture standing on the ground, turned about its middle
     const w = q.w; const hh = q.w * (q.asp || 0.6); const L = q.flip ? w / 2 : -w / 2; const R = q.flip ? -w / 2 : w / 2;
     return { faces: [], balls: [], shade: (c) => c, image: { img: q.img, corners: [place(q, L, 0, 0), place(q, R, 0, 0), place(q, R, hh, 0), place(q, L, hh, 0)] } };
@@ -113,3 +117,18 @@ export function propParts(q) {
 }
 /** How lit a face is: the top brightest, one side lighter than the other. */
 export const faceLight = (normal) => 0.55 + 0.45 * Math.max(0, normal[0] * -0.35 + normal[1] * 0.8 + normal[2] * 0.4);
+
+/**
+ * The flat sheet a drawing on a prop is made on, as four world points [bottom left, bottom right, top right, top left]: the picture of a picture or a drawing sheet, otherwise the front face
+ * (the one toward you in the side view). A tree, pine or bush is drawn facing the camera, so it has none here (the painter gives it one on the screen).
+ */
+export function propSheet(q) {
+  if (q.kind === 'ltree' || q.kind === 'lpine' || q.kind === 'lbush') return null;
+  if (q.kind === 'image' || q.kind === 'sheet') return propParts(q).image.corners;
+  const z = q.d / 2; return [place(q, -q.w / 2, 0, z), place(q, q.w / 2, 0, z), place(q, q.w / 2, q.h, z), place(q, -q.w / 2, q.h, z)];
+}
+/** The UV frame of a sheet given as four screen points [bottom left, bottom right, top right, top left]: u runs along the top edge, v down the left, both 0 to 1. */
+export function sheetFrame(c) {
+  const TL = c[3]; const ux = { x: c[2].x - TL.x, y: c[2].y - TL.y }; const vy = { x: c[0].x - TL.x, y: c[0].y - TL.y }; const det = ux.x * vy.y - ux.y * vy.x || 1e-9;
+  return { item: true, L: Math.hypot(ux.x, ux.y), W: Math.hypot(vy.x, vy.y), to: (x, y) => { const dx = x - TL.x; const dy = y - TL.y; return [(dx * vy.y - dy * vy.x) / det, (ux.x * dy - ux.y * dx) / det]; }, from: (u, v) => [TL.x + u * ux.x + v * vy.x, TL.y + u * ux.y + v * vy.y] };
+}

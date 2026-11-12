@@ -15,7 +15,7 @@ import { paintMouth } from './mouth.js';
 import { speechAt, VISEME_BY_ID } from './lipsync.js';
 import { partBone } from './attach.js';
 import { placeItems, paintItem, itemHandles, paintHandles, imageInfo } from './attach.js';
-import { propParts, faceLight } from './scene.js';
+import { propParts, propSheet, faceLight } from './scene.js';
 import { paintEyes, paintBrows, mouthOptions, EYE_BASE } from './face.js';
 import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
 import { clayOutline } from './clay.js';
@@ -418,9 +418,9 @@ function paintSkin(ctx, sh, skin, frame, pivot) {
   ctx.restore();
 }
 /** The strokes drawn on a part, laid on it through its UV frame so they turn and move with it (and bend with it, if it bends). A stroke's width is a share of the part's size. */
-function paintInk(ctx, sh, ink, pivot, frame = 0) {
+function paintInk(ctx, sh, ink, pivot, frame = 0, seg = 0) {
   if (!ink?.strokes?.length || sh.pts.length < 3) return;
-  const fr = partFrame(sh, pivot); paintStrokes(ctx, ink.strokes, (u, v) => fromUV(fr, u, v), (fr.L + fr.W) / 2, frame);
+  const fr = partFrame(sh, pivot); paintStrokes(ctx, seg ? ink.strokes.filter((s) => (s.g || 0) === seg) : ink.strokes.filter((s) => !s.g), (u, v) => fromUV(fr, u, v), (fr.L + fr.W) / 2, frame); // only what was drawn on this piece: a leg is drawn in two, and the drawing must not show on both
 }
 /** The dash pattern for the line style, for a line this wide. */
 const dashOf = (st, w) => (st.lineDash === 'dashed' ? [w * 4, w * 3] : st.lineDash === 'dotted' ? [0.01, w * 2.4] : []);
@@ -592,8 +592,8 @@ function sceneDrawables(ctx, params, st, cam, env) {
     if (!q0.visible) continue;
     const q = movedProp(q0, env.frame ?? 0, params.fps || 24); // dropped or pushed over: where it has got to by this frame
     out.push({ d: cam.p([q.x, 0, q.z]).d, paint: () => {
-      if (hasGround(st) && !q.noShadow && q.kind !== 'image') paintGroundShadow(ctx, cam.p, st, cam.k, [q.x, q.y > 0 ? 0 : q.y, q.z], Math.max(0.08, q.w * 0.62), Math.max(0.06, (q.kind === 'box' ? q.d : q.w) * 0.55), 1 / (1 + 3.5 * Math.max(0, q.y)));
-      hits.push({ id: q.id, shapes: paintProp(ctx, q, cam, st).map((pts) => ({ pts, part: 'prop', side: null })) }); } });
+      if (hasGround(st) && !q.noShadow && q.kind !== 'image' && q.kind !== 'sheet') paintGroundShadow(ctx, cam.p, st, cam.k, [q.x, q.y > 0 ? 0 : q.y, q.z], Math.max(0.08, q.w * 0.62), Math.max(0.06, (q.kind === 'box' ? q.d : q.w) * 0.55), 1 / (1 + 3.5 * Math.max(0, q.y)));
+      const polys = paintProp(ctx, q, cam, st, env.frame ?? 0); hits.push({ id: q.id, shapes: polys.map((pts) => ({ pts, part: 'prop', side: null })), sheet: polys.sheet }); } });
   }
   void pz;
   return out.sort((a, b) => a.d - b.d);
@@ -605,7 +605,8 @@ const rng = (id) => { let h = 2166136261; for (let i = 0; i < String(id).length;
 function paintImageProp(ctx, im, cam, st) {
   const c = im.corners.map((w) => cam.p(w)); const info = imageInfo(im.img); const poly = c.map((p) => [p.x, p.y]);
   ctx.save();
-  if (info) {
+  if (im.sheet) { ctx.beginPath(); c.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.closePath(); ctx.fillStyle = im.color || '#ffffff'; ctx.fill(); ctx.strokeStyle = st.lineColor; ctx.lineWidth = cam.lw * 0.7; ctx.lineJoin = 'round'; ctx.stroke(); } // a sheet of paper
+  else if (info) {
     const iw = info.img.naturalWidth; const ih = info.img.naturalHeight;
     ctx.setTransform(...(() => { const m = ctx.getTransform(); const q = [(c[2].x - c[3].x) / iw, (c[2].y - c[3].y) / iw, (c[0].x - c[3].x) / ih, (c[0].y - c[3].y) / ih, c[3].x, c[3].y]; return [m.a * q[0] + m.c * q[1], m.b * q[0] + m.d * q[1], m.a * q[2] + m.c * q[3], m.b * q[2] + m.d * q[3], m.a * q[4] + m.c * q[5] + m.e, m.b * q[4] + m.d * q[5] + m.f]; })());
     ctx.drawImage(info.img, 0, 0);
@@ -663,10 +664,22 @@ function paintLineProp(ctx, L, cam, st) {
   return [[[x0, y0], [x1, y0], [x1, y1], [x0, y1]]];
 }
 
-function paintProp(ctx, q, cam, st) {
+/** What is drawn on a prop, over its sheet. The strokes are in the sheet's own units, so they stay on it as it moves, turns and is seen from another side. A ball only takes it inside its outline. */
+function paintPropInk(ctx, q, sheet, frame) {
+  const ink = q.ink; if (!ink?.strokes?.length || !sheet) return;
+  const TL = sheet[3]; const ux = { x: sheet[2].x - TL.x, y: sheet[2].y - TL.y }; const vy = { x: sheet[0].x - TL.x, y: sheet[0].y - TL.y }; const size = (Math.hypot(ux.x, ux.y) + Math.hypot(vy.x, vy.y)) / 2;
+  ctx.save();
+  if (q.kind === 'ball') { ctx.beginPath(); ctx.ellipse(TL.x + (ux.x + vy.x) / 2, TL.y + (ux.y + vy.y) / 2, Math.hypot(ux.x, ux.y) / 2, Math.hypot(vy.x, vy.y) / 2, 0, 0, TAU); ctx.clip(); }
+  paintStrokes(ctx, ink.strokes, (u, v) => [TL.x + u * ux.x + v * vy.x, TL.y + u * ux.y + v * vy.y], size, frame, 0.5);
+  ctx.restore();
+}
+/** The sheet of a tree, pine or bush, which always faces the camera: a box on the screen round the shape. */
+function lineSheet(L, cam) { const B = cam.p(L.base); const H = L.h * cam.scale; const W = H * (L.kind === 'lbush' ? 1.3 : L.kind === 'lpine' ? 0.5 : 0.7); return [{ x: B.x - W / 2, y: B.y }, { x: B.x + W / 2, y: B.y }, { x: B.x + W / 2, y: B.y - H }, { x: B.x - W / 2, y: B.y - H }]; }
+function paintProp(ctx, q, cam, st, frame = 0) {
   const { faces, balls, shade, image, line } = propParts(q);
-  if (image) return paintImageProp(ctx, image, cam, st);
-  if (line) return paintLineProp(ctx, line, cam, st);
+  const done = (polys, sheet) => { polys.sheet = sheet; paintPropInk(ctx, q, sheet, frame); return polys; };
+  if (image) return done(paintImageProp(ctx, image, cam, st), image.corners.map((w) => cam.p(w)));
+  if (line) return done(paintLineProp(ctx, line, cam, st), lineSheet(line, cam));
   const parts = [];
   for (const f of faces) { const pts = f.pts.map((w) => cam.p(w)); parts.push({ d: pts.reduce((t, p) => t + p.d, 0) / pts.length, face: f, pts }); }
   for (const b of balls) { const c = cam.p(b.c); parts.push({ d: c.d, ball: b, c }); }
@@ -684,7 +697,7 @@ function paintProp(ctx, q, cam, st) {
     }
   }
   ctx.restore();
-  return polys;
+  const sw = propSheet(q); return done(polys, sw ? sw.map((w) => cam.p(w)) : null);
 }
 
 /** Draws the attachments of a figure that is drawn as lines: behind ones first, then in front. Returns the placed items. */
@@ -786,10 +799,12 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     ctx.restore();
   }
   const inkQueue = []; // a drawing goes over every part's own fill, so a part drawn later never cuts into it
+  const segN = {}; // which piece of its part each shape is: the thigh and the shin of a leg, in the order they are drawn
   for (const sh of shapes) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam, null, opts.skinFrame ?? 0); continue; }
     if (!ghost && coveredByPicture(sh, st, opts.attach)) continue;
+    let seg = 0; if (sh.part && sh.pts.length >= 3) { const k0 = partKey(sh.part, sh.side); seg = segN[k0] = (segN[k0] ?? -1) + 1; }
     if (frames && sh.part && sh.pts.length >= 3) { const k = partKey(sh.part, sh.side); (frames[k] ||= []).push({ pts: sh.pts, fr: partFrame(sh, pivotOf(pz, cam, sh.part, sh.side)) }); }
     if (sh.hidden) continue;
     const paintBody = (c) => {
@@ -798,7 +813,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
       if (sh.dz?.skin && !ghost) paintSkin(c, sh, sh.dz.skin, opts.skinFrame ?? 0, pivotOf(pz, cam, sh.part, sh.side));
       if (sh.dz?.ink && !ghost) {
         const pv = pivotOf(pz, cam, sh.part, sh.side); const op = sh.dz.opacity;
-        if (sh.dz.shadow?.on) paintInk(c, sh, sh.dz.ink, pv, opts.skinFrame ?? 0); else inkQueue.push(() => { ctx.save(); if (op < 1) ctx.globalAlpha *= op; paintInk(ctx, sh, sh.dz.ink, pv, opts.skinFrame ?? 0); ctx.restore(); });
+        if (sh.dz.shadow?.on) paintInk(c, sh, sh.dz.ink, pv, opts.skinFrame ?? 0, seg); else inkQueue.push(() => { ctx.save(); if (op < 1) ctx.globalAlpha *= op; paintInk(ctx, sh, sh.dz.ink, pv, opts.skinFrame ?? 0, seg); ctx.restore(); });
       }
       c.restore();
     };

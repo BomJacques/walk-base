@@ -848,6 +848,161 @@ check('a spider does not show them, and a bird words them for wings', spiderHas 
 await ev(() => { const w = window.__walkBase; w.setFigure('bird'); w.setTab('Gait'); w.render(); }); await wait(300);
 check('a bird has them, worded for wings', (await q('rng-dLegF').count()) === 1 && /Wing length/.test(await page.locator('.row:has([data-testid="rng-dLegF"])').first().innerText()));
 await ev(() => { const w = window.__walkBase; w.S.r = {}; w.setFigure('human'); w.setTab('Gait'); w.render(); });
+// ---- scenery to draw on, shapes, moving and resizing a drawing, the colour picker, and both sides
+{ // its own block, so its names do not meet the ones above
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.design = {}; w.S.scene = { actors: [], props: [] }; w.S.draw.mode = 'part'; w.S.draw.tool = 'pen'; w.S.draw.color = '#d93a3a'; w.S.draw.scope = 'all'; w.addProp('sheet'); w.setTab('Draw'); w.render(); }); await wait(600);
+const onScreen = ([x, y]) => ev(([a, b]) => { const m = window.__walkBase.S.map; return { x: m.left + (m.x0 + (a / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (b / m.fch) * m.zh) / m.d }; }, [x, y]);
+const sheetAt = async (u, v) => { const [x, y] = await ev(([a, b]) => window.__walkBase.inkFrame('item').from(a, b), [u, v]); return onScreen([x, y]); };
+const drag = async (a, b) => { await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 4 }); await page.mouse.move(b.x, b.y, { steps: 5 }); await page.mouse.up(); await wait(250); };
+const sheetInk = () => ev(() => window.__walkBase.S.scene.props[0]?.ink?.strokes || []);
+check('adding a drawing sheet makes it the thing drawn on, and it is on the stage', (await ev(() => window.__walkBase.S.draw.target.kind)) === 'prop' && (await ev(() => window.__walkBase.inkFrame('item')?.L)) > 40);
+for (const t of ['shape', 'move', 'dropper']) check(`the ${t} tool is in the pen list`, (await q(`draw-tool-${t}`).count()) === 1);
+check('the drawing sheet is one of the things to draw on', (await q(`draw-target-prop-${await ev(() => window.__walkBase.S.scene.props[0].id)}`).count()) === 1);
+await drag(await sheetAt(0.2, 0.3), await sheetAt(0.7, 0.6));
+let ink1 = await sheetInk();
+check('a line drawn across the sheet stays on it, in the sheet\'s own units', ink1.length === 1 && ink1[0].pts.length >= 2 && ink1[0].pts.every(([u, v]) => u > 0.1 && u < 0.8 && v > 0.2 && v < 0.7), ink1);
+await q('draw-tool-shape').click(); await q('draw-shape-box').click(); await drag(await sheetAt(0.1, 0.1), await sheetAt(0.4, 0.35));
+ink1 = await sheetInk(); const box = ink1[1];
+check('a box dragged out is one closed stroke on the sheet', ink1.length === 2 && box.pts.length >= 8 && box.pts[0][0] === box.pts[box.pts.length - 1][0] && !box.fill, ink1.length);
+await q('draw-shape-oval').click(); await q('draw-shape-fill').check(); await drag(await sheetAt(0.55, 0.65), await sheetAt(0.9, 0.95));
+ink1 = await sheetInk(); check('a filled oval is a filled stroke', ink1.length === 3 && ink1[2].fill === true && ink1[2].pts.length >= 16, ink1[2]);
+await q('draw-shape-line').click(); await drag(await sheetAt(0.05, 0.9), await sheetAt(0.4, 0.9)); ink1 = await sheetInk(); check('a line is a straight run of points', ink1.length === 4 && ink1[3].pts.length >= 4 && ink1[3].pts.every(([, v]) => Math.abs(v - ink1[3].pts[0][1]) < 0.02), ink1[3]);
+// a tap with the shape tool draws nothing
+const tapAt = await sheetAt(0.5, 0.5); await page.mouse.click(tapAt.x, tapAt.y); await wait(200); check('a tap with the shape tool draws nothing', (await sheetInk()).length === 4);
+// move, bigger, smaller, turn
+await q('draw-tool-move').click(); const before = JSON.stringify(await sheetInk());
+await drag(await sheetAt(0.5, 0.5), await sheetAt(0.6, 0.5)); const moved = await sheetInk();
+check('dragging with Move slides every stroke', moved[0].pts[0][0] > ink1[0].pts[0][0] + 0.05 && Math.abs(moved[0].pts[0][1] - ink1[0].pts[0][1]) < 0.03, [moved[0].pts[0], ink1[0].pts[0]]);
+await q('draw-undo').click(); await wait(150); check('undo puts them back', JSON.stringify(await sheetInk()) === before);
+const span = (s) => { const us = s.pts.map((p) => p[0]); return Math.max(...us) - Math.min(...us); };
+const w0 = span((await sheetInk())[0]); await q('draw-xf-bigger').click(); await wait(150); const w1 = span((await sheetInk())[0]);
+check('Bigger makes the drawing bigger about its middle', w1 > w0 * 1.05 && w1 < w0 * 1.3, [w0, w1]);
+await q('draw-xf-smaller').click(); await wait(100); await q('draw-xf-smaller').click(); await wait(150); const w2 = span((await sheetInk())[0]); check('Smaller makes it smaller', w2 < w1 * 0.8, [w1, w2]);
+await q('draw-xf-right').click(); await wait(150); const turned = (await sheetInk())[0]; check('Turn changes the drawing', JSON.stringify(turned.pts) !== JSON.stringify(ink1[0].pts));
+for (let i = 0; i < 4; i++) { await q('draw-undo').click(); await wait(100); }
+check('each of those is one step of undo', JSON.stringify(await sheetInk()) === before);
+// the colour picker: tap on the red line
+await ev(() => { window.__walkBase.S.draw.color = '#3a7bd9'; window.__walkBase.S.draw.tool = 'pen'; window.__walkBase.S.draw.prevTool = 'pen'; }); await q('draw-tool-dropper').click();
+const redAt = await onScreen(await ev(() => { const w = window.__walkBase; const s = w.S.scene.props[0].ink.strokes[0]; const f = w.inkFrame('item'); const p = s.pts[Math.floor(s.pts.length / 2)]; return f.from(p[0], p[1]); }));
+await page.mouse.click(redAt.x, redAt.y); await wait(250);
+const pickedC = await ev(() => ({ c: window.__walkBase.S.draw.color, t: window.__walkBase.S.draw.tool }));
+check('the colour picker takes the colour under the finger and gives the pen back', /^#d[0-9a-f]3[0-9a-f]{3}$/.test(pickedC.c) && pickedC.t === 'pen', pickedC);
+// it saves with the scene
+const savedInk = await ev(() => JSON.stringify(window.__walkBase.S.scene.props[0].ink).length); check('the drawing is in the scene to be saved', savedInk > 100);
+// other scenery: a box takes a drawing on its front face
+await ev(() => { const w = window.__walkBase; w.addProp('wall'); w.render(); }); await wait(400);
+const wallId = await ev(() => window.__walkBase.S.scene.props[1].id); await ev((id) => { const w = window.__walkBase; w.S.draw.target = { kind: 'prop', id }; w.S.draw.tool = 'pen'; w.render(); }, wallId); await wait(300);
+const wallA = await onScreen(await ev(() => window.__walkBase.inkFrame('item').from(0.3, 0.4))); const wallB = await onScreen(await ev(() => window.__walkBase.inkFrame('item').from(0.7, 0.6)));
+await drag(wallA, wallB); check('a wall takes a drawing on its front face', (await ev(() => window.__walkBase.S.scene.props[1].ink?.strokes?.length)) === 1);
+const wallShot = await stageShot(); await ev(() => { window.__walkBase.S.scene.props[1].ink = null; window.__walkBase.render(); }); await wait(200); check('and it shows on the stage', (await stageShot()) !== wallShot);
+// both sides: draw on the right arm, copy and mirror to the left
+await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.draw.target = { kind: 'fig' }; w.S.draw.mode = 'part'; w.S.draw.tool = 'pen'; w.S.draw.color = '#1b1b1f'; w.setFigure('human'); w.selectPart({ part: 'arm', side: 'R' }, { openTab: false }); w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(500);
+const armC = await ev(() => { const w = window.__walkBase; const f = w.S.last.frames['arm.R']?.[0]?.fr; const m = w.S.map; return f ? { x: m.left + (m.x0 + (f.cx / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (f.cy / m.fch) * m.zh) / m.d } : null; });
+check('the right arm is on the stage to draw on', !!armC, armC);
+if (armC) {
+  await drag({ x: armC.x - 6, y: armC.y - 14 }, { x: armC.x + 6, y: armC.y + 14 });
+  const arm0 = await ev(() => window.__walkBase.designOf()['arm.R']?.ink?.strokes?.length); check('a line was drawn on the right arm', arm0 >= 1, arm0);
+  await q('draw-copy-side').click(); await wait(200);
+  const sides = await ev(() => { const d = window.__walkBase.designOf(); return { r: d['arm.R']?.ink?.strokes, l: d['arm.L']?.ink?.strokes }; });
+  check('Copy puts the same drawing on the left arm', sides.l?.length === sides.r?.length && JSON.stringify(sides.l.map((s) => s.pts)) === JSON.stringify(sides.r.map((s) => s.pts)), sides);
+  await q('draw-mirror-side').click(); await wait(200);
+  const mir = await ev(() => { const d = window.__walkBase.designOf(); return { r: d['arm.R'].ink.strokes, l: d['arm.L'].ink.strokes }; });
+  check('Mirror turns it over across the part, and replaces what was there', mir.l.length === mir.r.length && mir.l.every((s, i) => s.pts.every((p, j) => Math.abs(p[0] - mir.r[i].pts[j][0]) < 1e-9 && Math.abs(p[1] - (1 - mir.r[i].pts[j][1])) < 0.002)), mir);
+  await q('draw-undo').click(); await wait(150); const back = await ev(() => window.__walkBase.designOf()['arm.L'].ink.strokes.map((s) => s.pts)); check('and undo goes back to the copy', JSON.stringify(back) === JSON.stringify(sides.r.map((s) => s.pts)));
+}
+check('with no errors', errors.length === 0, errors);
+}
+// ---- twisting two fingers turns the page (Chromium can send real touches)
+if (name === 'chromium') {
+  await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.S.rot = 0; w.setFigure('human'); w.setTab('Draw'); w.render(); }); await wait(400);
+  const sb = await q('stage').boundingBox(); const cdp = await context.newCDPSession(page); const cxs = sb.x + sb.width / 2; const cys = sb.y + sb.height / 2; const R0 = Math.min(sb.width, sb.height) * 0.2;
+  const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], i) => ({ x, y, id: i + 1 })) });
+  const at = (a) => [[cxs + R0 * Math.cos(a), cys + R0 * Math.sin(a)], [cxs - R0 * Math.cos(a), cys - R0 * Math.sin(a)]];
+  await touch('touchStart', at(0)); for (let i = 1; i <= 8; i++) await touch('touchMove', at((i / 8) * (Math.PI / 4))); await touch('touchEnd', []); await wait(300);
+  const rot1 = await ev(() => window.__walkBase.S.rot);
+  check('twisting two fingers turns the page by about the same angle', Math.abs(rot1 - Math.PI / 4) < 0.12 && rot1 > 0, rot1);
+  const sh1 = await stageShot(); check('and the stage shows it turned', sh1 !== plainFig);
+  // a tap on the stage still lands where the picture is, whatever the turn
+  const back = await ev(() => { const w = window.__walkBase; const m = w.S.map; return { rot: m.rot, ccx: m.ccx, ccy: m.ccy }; }); check('the view knows its turn for the pen', Math.abs(back.rot - rot1) < 1e-9 && back.ccx > 0);
+  await q('draw-zoom-reset').scrollIntoViewIfNeeded(); await q('draw-zoom-reset').click(); await wait(250);
+  check('Reset the view turns the page back', (await ev(() => window.__walkBase.S.rot)) === 0);
+  await touch('touchStart', at(0)); for (let i = 1; i <= 6; i++) await touch('touchMove', at(-(i / 6) * (Math.PI / 2) * 0.98)); await touch('touchEnd', []); await wait(300);
+  const rot2 = await ev(() => window.__walkBase.S.rot); check('a turn that comes close to square snaps to it', Math.abs(rot2 + Math.PI / 2) < 1e-9, rot2);
+  await ev(() => { window.__walkBase.S.rot = 0; window.__walkBase.render(); });
+  // a pinch with no twist leaves the page square
+  await touch('touchStart', at(0)); for (let i = 1; i <= 6; i++) { const k = 1 + i * 0.1; await touch('touchMove', [[cxs + R0 * k, cys], [cxs - R0 * k, cys]]); } await touch('touchEnd', []); await wait(300);
+  check('a pinch does not turn the page', (await ev(() => window.__walkBase.S.rot)) === 0 && (await ev(() => window.__walkBase.S.zoom)) > 1.2);
+  await ev(() => { const w = window.__walkBase; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.render(); });
+}
+check('with no errors', errors.length === 0, errors);
+// ---- the bucket fills a closed shape drawn outside the part (hair over the head's own line), and says so when the shape is open
+{
+  await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.draw.target = { kind: 'fig' }; w.S.draw.mode = 'part'; w.S.draw.tool = 'pen'; w.S.draw.color = '#3a7bd9'; w.S.draw.size = 3; w.S.draw.scope = 'all'; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.S.rot = 0; w.setFigure('human'); w.selectPart({ part: 'head', side: null }, { openTab: false }); w.setTab('Draw'); w.setFrame(0); w.render(); }); await wait(500);
+  const top = await ev(() => { const w = window.__walkBase; const pts = w.S.last.frames.head[0].pts; const m = w.S.map; const xs = pts.map((p) => p[0]); const ys = pts.map((p) => p[1]); const px = (x, y) => ({ x: m.left + (m.x0 + (x / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (y / m.fch) * m.zh) / m.d }); const c = px((Math.min(...xs) + Math.max(...xs)) / 2, Math.min(...ys)); const e = px(Math.max(...xs), Math.min(...ys)); return { x: c.x, y: c.y, half: e.x - c.x }; });
+  const rr = Math.max(8, top.half * 0.7); const cx2 = top.x; const cy2 = top.y - rr * 1.6;
+  const arc = (cx, cy, n, from, to) => Array.from({ length: n + 1 }, (_, i) => { const a = from + ((to - from) * i) / n; return { x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr }; });
+  const drag2 = async (pts) => { await page.mouse.move(pts[0].x, pts[0].y); await page.mouse.down(); for (const p of pts.slice(1)) await page.mouse.move(p.x, p.y, { steps: 2 }); await page.mouse.up(); await wait(250); };
+  await drag2(arc(cx2, cy2, 28, 0, Math.PI * 2));
+  const fills = () => ev(() => (window.__walkBase.designOf().head?.ink?.strokes || []).filter((s) => s.fill).length);
+  await ev(() => { window.__walkBase.S.draw.tool = 'bucket'; window.__walkBase.S.draw.color = '#d93a3a'; window.__walkBase.render(); }); await wait(200);
+  await page.mouse.click(cx2, cy2); await wait(450);
+  check('the bucket fills a closed shape drawn outside the part', (await fills()) === 1, await ev(() => window.__walkBase.S.message));
+  const loop0 = await ev(() => window.__walkBase.designOf().head.ink.strokes.find((s) => s.fill).loops[0]);
+  check('and the fill lies outside the part\'s own outline (past its edge in UV)', loop0.some(([u, v]) => u < -0.05 || u > 1.05 || v < -0.05 || v > 1.05), loop0.slice(0, 4));
+  // an open shape (a C) will not fill: it would run out to the edge
+  await ev(() => { window.__walkBase.S.draw.tool = 'pen'; }); await drag2(arc(cx2 + 4.2 * rr, cy2, 24, 0.5, Math.PI * 2 - 0.5));
+  await ev(() => { window.__walkBase.S.draw.tool = 'bucket'; }); await wait(100);
+  await page.mouse.click(cx2 + 4.2 * rr, cy2); await wait(450);
+  check('an open shape is not filled, and says why', (await fills()) === 1 && /not closed/.test(await ev(() => window.__walkBase.S.message)));
+  await page.mouse.click(top.x, top.y + rr * 0.8); await wait(450);
+  check('a tap inside the part still fills the part', (await fills()) === 2);
+}
+check('with no errors', errors.length === 0, errors);
+// ---- a leg is drawn in two pieces (thigh and shin): what is drawn on one must not be painted again on the other
+{
+  await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.draw.target = { kind: 'fig' }; w.S.draw.mode = 'whole'; w.S.draw.tool = 'pen'; w.S.draw.color = '#d93a3a'; w.S.draw.size = 5; w.S.draw.scope = 'frame'; w.S.draw.guides = false; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.S.rot = 0; w.setFigure('human'); w.selectPart(null, { openTab: false }); w.setTab('Draw'); w.setFrame(6); w.render(); }); await wait(500);
+  const legKey = await ev(() => { const f = window.__walkBase.S.last.frames; return Object.keys(f).find((k) => /^leg\./.test(k) && f[k].length >= 2) || null; });
+  check('a leg is drawn in more than one piece', !!legKey, legKey);
+  if (legKey) {
+    const spots = await ev((k) => { const w = window.__walkBase; const m = w.S.map; const px = (x, y) => ({ x: m.left + (m.x0 + (x / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (y / m.fch) * m.zh) / m.d }); return w.S.last.frames[k].map((f) => { const c = f.pts.reduce((t, p) => [t[0] + p[0] / f.pts.length, t[1] + p[1] / f.pts.length], [0, 0]); return px(c[0], c[1]); }); }, legKey);
+    const dragB = async (a, b) => { await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 3 }); await page.mouse.move(b.x, b.y, { steps: 3 }); await page.mouse.up(); await wait(250); };
+    const grab = () => ev(() => { const s = document.querySelector('[data-testid="stage"]'); const g = s.getContext('2d'); return Array.from(g.getImageData(0, 0, s.width, s.height).data); });
+    const changed = (a, b) => { const out = []; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 90) out.push(i / 4); return out; };
+    const base0 = await grab();
+    await dragB({ x: spots[0].x - 3, y: spots[0].y - 10 }, { x: spots[0].x + 3, y: spots[0].y + 10 }); await wait(200);
+    const strokes = await ev((k) => window.__walkBase.designOf()[k]?.ink?.strokes || [], legKey);
+    check('a line drawn on the first piece is stored for that piece', strokes.length >= 1 && strokes.every((s) => !s.g), strokes);
+    const dims = await ev(() => { const s = document.querySelector('[data-testid="stage"]'); return { w: s.width, h: s.height }; });
+    const reds = changed(base0, await grab()); const ys = reds.map((i) => Math.floor(i / dims.w)); const xs = reds.map((i) => i % dims.w);
+    const spread = reds.length ? Math.max(Math.max(...ys) - Math.min(...ys), Math.max(...xs) - Math.min(...xs)) : 0;
+    check('and it shows once, in one place, not again on the other piece', reds.length > 20 && spread < 120 * (await ev(() => window.__walkBase.S.map.d)), { n: reds.length, spread });
+    await dragB({ x: spots[1].x - 3, y: spots[1].y - 10 }, { x: spots[1].x + 3, y: spots[1].y + 10 }); await wait(200);
+    const strokes2 = await ev((k) => window.__walkBase.designOf()[k]?.ink?.strokes || [], legKey);
+    check('a line drawn on the second piece is kept for that piece', strokes2.length === strokes.length + 1 && strokes2[strokes2.length - 1].g === 1, strokes2.map((s) => s.g));
+    const reds2 = changed(base0, await grab()); check('and both show, one on each piece', reds2.length > reds.length * 1.5, [reds.length, reds2.length]);
+  }
+}
+check('with no errors', errors.length === 0, errors);
+// ---- a quick tap with two fingers undoes (Chromium can send real touches)
+if (name === 'chromium') {
+  await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.draw.target = { kind: 'fig' }; w.S.draw.mode = 'part'; w.S.draw.tool = 'pen'; w.S.draw.color = '#1b1b1f'; w.S.draw.size = 4; w.S.draw.scope = 'all'; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.S.rot = 0; w.setFigure('human'); w.selectPart({ part: 'head', side: null }, { openTab: false }); w.setTab('Draw'); w.setFrame(0); w.render(); }); await wait(500);
+  const hp = await ev(() => { const w = window.__walkBase; const f = w.S.last.frames.head[0].fr; const m = w.S.map; return { x: m.left + (m.x0 + (f.cx / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (f.cy / m.fch) * m.zh) / m.d }; });
+  const strokesN = () => ev(() => (window.__walkBase.designOf().head?.ink?.strokes || []).length);
+  const drawLine = async (dx) => { await page.mouse.move(hp.x - 8 + dx, hp.y - 8); await page.mouse.down(); await page.mouse.move(hp.x + dx, hp.y, { steps: 3 }); await page.mouse.move(hp.x + 8 + dx, hp.y + 8, { steps: 3 }); await page.mouse.up(); await wait(200); };
+  await drawLine(0); await drawLine(3); const n0 = await strokesN(); check('two strokes are drawn', n0 === 2, n0);
+  const sbx = await q('stage').boundingBox(); const cdp2 = await context.newCDPSession(page); const tx = sbx.x + sbx.width * 0.8; const ty = sbx.y + sbx.height * 0.7;
+  const tch = (type, pts) => cdp2.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], i) => ({ x, y, id: i + 1 })) });
+  await tch('touchStart', [[tx, ty], [tx + 60, ty]]); await wait(80); await tch('touchEnd', []); await wait(300);
+  check('a quick tap with two fingers undoes the last stroke', (await strokesN()) === 1, await strokesN());
+  await tch('touchStart', [[tx, ty], [tx + 60, ty]]); await wait(800); await tch('touchEnd', []); await wait(300);
+  check('two fingers held down for a while do not undo', (await strokesN()) === 1, await strokesN());
+  await tch('touchStart', [[tx, ty], [tx + 60, ty]]); for (let i = 1; i <= 4; i++) await tch('touchMove', [[tx + i * 8, ty], [tx + 60 + i * 8, ty]]); await tch('touchEnd', []); await wait(300);
+  check('two fingers that move (a pan) do not undo', (await strokesN()) === 1, await strokesN());
+  await ev(() => { const w = window.__walkBase; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.S.rot = 0; w.render(); });
+  await tch('touchStart', [[tx, ty]]); await wait(60); await tch('touchEnd', []); await wait(300);
+  check('one finger tapping draws a dot, it does not undo', (await strokesN()) === 2, await strokesN());
+}
+check('with no errors', errors.length === 0, errors);
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

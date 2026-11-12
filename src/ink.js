@@ -1,5 +1,6 @@
 // Painting the strokes of a drawing. A stroke's points are in UV (0 to 1 across the thing drawn on); `map` takes a UV point to the canvas.
 import { strokeShows } from './design.js';
+import { isRich, keepWidth, densify, halfWidths } from './stroke.js';
 
 export { BRUSHES } from './design.js';
 
@@ -16,10 +17,33 @@ function along(P, step, fn) {
   }
 }
 const smoothTrace = (ctx, P) => { ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length - 1; i++) ctx.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2); ctx.lineTo(P[P.length - 1][0], P[P.length - 1][1]); };
+/**
+ * A stroke as one smooth ribbon of changing width: the centre line is a Catmull-Rom curve through the points, the two edges are offset by the half width there, and the whole is ONE filled path with round ends and round corners,
+ * so a stroke at half opacity is one even tone where it crosses itself. P: points on the canvas; F: the width factor at each; w: the width asked for.
+ */
+function ribbon(ctx, P, F, w, brush, tp, minW) {
+  const A = []; const B = []; for (let i = 0; i < P.length; i++) if (!i || Math.hypot(P[i][0] - A[A.length - 1][0], P[i][1] - A[A.length - 1][1]) > 0.05) { A.push(P[i]); B.push(F[i]); }
+  if (A.length < 2) { ctx.beginPath(); ctx.arc(A[0][0], A[0][1], Math.max(minW, w * 0.5) / 2, 0, Math.PI * 2); ctx.fill(); return; }
+  const { Q, V } = densify(A, B); let run = 0; for (let i = 1; i < A.length; i++) run += Math.hypot(A[i][0] - A[i - 1][0], A[i][1] - A[i - 1][1]);
+  if (brush !== 'taper' && run > 6 * w && Math.hypot(A[0][0] - A[A.length - 1][0], A[0][1] - A[A.length - 1][1]) < Math.max(1.5 * w, 6)) tp = 3; // a line that comes back to where it began is a closed shape: no taper, or it would pinch where it meets itself and leak for the bucket
+  const H = halfWidths(Q, V, w, brush, tp, minW); const n = Q.length; const L = []; const R = []; const turns = []; let nx = 0; let ny = 1;
+  for (let i = 0; i < n; i++) {
+    const a = Q[Math.max(0, i - 1)]; const b = Q[Math.min(n - 1, i + 1)]; const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (l > 1e-9) { nx = -(b[1] - a[1]) / l; ny = (b[0] - a[0]) / l; }
+    L.push([Q[i][0] + nx * H[i], Q[i][1] + ny * H[i]]); R.push([Q[i][0] - nx * H[i], Q[i][1] - ny * H[i]]);
+    if (i && i < n - 1) { const c = Q[i - 1]; const d = Q[i + 1]; const t1 = Math.atan2(Q[i][1] - c[1], Q[i][0] - c[0]); const t2 = Math.atan2(d[1] - Q[i][1], d[0] - Q[i][0]); let da = Math.abs(t2 - t1); if (da > Math.PI) da = 2 * Math.PI - da; if (da > 0.5) turns.push(i); }
+  }
+  const edge = (E, rev) => { const idx = rev ? E.map((_, i) => n - 1 - i) : E.map((_, i) => i); const p = (k) => E[idx[k]]; if (rev) ctx.lineTo(p(0)[0], p(0)[1]); else ctx.moveTo(p(0)[0], p(0)[1]); for (let k = 1; k < n - 1; k++) ctx.quadraticCurveTo(p(k)[0], p(k)[1], (p(k)[0] + p(k + 1)[0]) / 2, (p(k)[1] + p(k + 1)[1]) / 2); ctx.lineTo(p(n - 1)[0], p(n - 1)[1]); };
+  ctx.beginPath(); edge(L, false); edge(R, true); ctx.closePath();
+  const dot = (i) => { ctx.moveTo(Q[i][0] + H[i], Q[i][1]); ctx.arc(Q[i][0], Q[i][1], H[i], 0, Math.PI * 2, true); }; // drawn the way round the ribbon goes, so they add to it and never cancel it
+  dot(0); dot(n - 1); for (const i of turns) dot(i);
+  ctx.fill('nonzero');
+}
 /** One line stroke in the brush it names. P: its points on the canvas; w: its width there. Everything that looks random is seeded from the stroke, so it is the same every time it is drawn. */
 function brushStroke(ctx, s, P, w, minW, alpha) {
   const brush = s.b || 'round'; const seed = Math.round(s.pts[0][0] * 9973 + s.pts[0][1] * 7919 + s.pts.length * 31); const r = rng(seed);
   ctx.strokeStyle = s.c; ctx.fillStyle = s.c;
+  if (isRich(s) && (brush === 'round' || brush === 'taper')) { ribbon(ctx, P, s.pts.map((q) => q[2] ?? 0.5), w, brush, s.tp || 0, minW); return; }
   if (brush === 'marker') { ctx.lineCap = 'square'; ctx.lineJoin = 'miter'; ctx.lineWidth = Math.max(minW, w); smoothTrace(ctx, P); ctx.stroke(); return; }
   if (brush === 'dashed') { ctx.lineCap = 'butt'; ctx.lineWidth = Math.max(minW, w); ctx.setLineDash([Math.max(1, w * 2.4), Math.max(1, w * 1.6)]); smoothTrace(ctx, P); ctx.stroke(); ctx.setLineDash([]); return; }
   if (brush === 'dotted') { along(P, Math.max(1.2, w * 2), (x, y) => { ctx.beginPath(); ctx.arc(x, y, Math.max(minW / 2, w / 2), 0, Math.PI * 2); ctx.fill(); }); return; }
@@ -117,4 +141,41 @@ export function floodRegion(allowed, w, h, sx, sy) {
   }
   const grown = new Uint8Array(seen); for (let i = 0; i < w * h; i++) if (seen[i]) { const x = i % w; if (x > 0) grown[i - 1] = 1; if (x < w - 1) grown[i + 1] = 1; if (i >= w) grown[i - w] = 1; if (i < w * (h - 1)) grown[i + w] = 1; }
   return { mask: grown, loops: maskLoops(grown, w, h) };
+}
+
+/** The points of a shape dragged from a to b on the canvas, closely spaced so that it follows a curved surface when it is taken into UV: 'line', 'oval' or 'box'. A box and an oval end where they began. */
+export function shapePoints(kind, a, b, step = 8) {
+  const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  const seg = (p, q) => { const n = Math.max(1, Math.ceil(dist(p, q) / step)); return Array.from({ length: n }, (_, i) => [p[0] + ((q[0] - p[0]) * i) / n, p[1] + ((q[1] - p[1]) * i) / n]); };
+  if (kind === 'box') { const c = [a, [b[0], a[1]], b, [a[0], b[1]]]; return [...c.flatMap((p, i) => seg(p, c[(i + 1) % 4])), [a[0], a[1]]]; }
+  if (kind === 'oval') {
+    const cx = (a[0] + b[0]) / 2; const cy = (a[1] + b[1]) / 2; const rx = Math.abs(b[0] - a[0]) / 2; const ry = Math.abs(b[1] - a[1]) / 2;
+    const n = Math.min(96, Math.max(16, Math.ceil((Math.PI * (rx + ry)) / step))); return Array.from({ length: n + 1 }, (_, i) => [cx + rx * Math.cos((i / n) * Math.PI * 2), cy + ry * Math.sin((i / n) * Math.PI * 2)]);
+  }
+  return [...seg(a, b), [b[0], b[1]]];
+}
+/** A copy of a stroke with every point (and every point of a filled region) taken through fn([u, v]), and its width times k. */
+export function mapStroke(s, fn, k = 1) {
+  return { ...s, w: Math.min(0.5, Math.max(0.001, s.w * k)), pts: s.pts.map((p) => keepWidth(p, fn(p))), ...(s.loops ? { loops: s.loops.map((l) => l.map((p) => fn(p))) } : {}) };
+}
+/** A stroke for the other side of the body: the same, or turned over across (v to 1 - v) for a part that faces the other way. */
+export const mirrorStroke = (s, flipAcross) => mapStroke(s, ([u, v]) => [u, flipAcross ? Math.round((1 - v) * 1000) / 1000 : v]);
+
+/** Whether a filled region reaches the edge of its picture: a shape drawn outside a part that is not closed lets the fill run out to the edge. */
+export function touchesEdge(mask, w, h) {
+  for (let x = 0; x < w; x++) if (mask[x] || mask[(h - 1) * w + x]) return true;
+  for (let y = 0; y < h; y++) if (mask[y * w] || mask[y * w + w - 1]) return true;
+  return false;
+}
+
+/** Which of several outlines (a part drawn in pieces, such as the thigh and the shin of a leg) a point is in: the one it is inside, otherwise the one whose middle is nearest. */
+export function segmentAt(polys, x, y) {
+  let best = 0; let bd = Infinity;
+  for (let i = 0; i < polys.length; i++) {
+    const P = polys[i]; let inside = false;
+    for (let j = 0, k = P.length - 1; j < P.length; k = j++) { const [xi, yi] = P[j]; const [xk, yk] = P[k]; if (yi > y !== yk > y && x < ((xk - xi) * (y - yi)) / (yk - yi) + xi) inside = !inside; }
+    if (inside) return i;
+    const cx = P.reduce((t, p) => t + p[0], 0) / (P.length || 1); const cy = P.reduce((t, p) => t + p[1], 0) / (P.length || 1); const d = Math.hypot(cx - x, cy - y); if (d < bd) { bd = d; best = i; }
+  }
+  return best;
 }

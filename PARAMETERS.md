@@ -250,3 +250,12 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Import recipe | both |  | procreate, dreams, other | procreate | Picks the import notes that go in the ZIP. |
 | Frame digits | both |  | 2 to 8 | 4 | Zero padding, so names sort in frame order. |
 | Video bitrate | both | Mbps | 1 to 80 | 12 | MP4 only. |
+
+## Draw
+
+The Draw tab's Pen section (not saved with a character; they are the pen's settings for the session).
+
+| Name | Applies to | Unit | Range | Default | What it does |
+|---|---|---|---|---|---|
+| Smoothing | both |  | 0 to 1 | 0.5 | How much the pen's line is stabilised while drawing (Pen and Filled shape tools). 0 follows the pen exactly; 1 lags behind it by about 30 screen pixels and rounds off the shake. The line always ends where the pen lifted. |
+| Pressure and speed change the width | both |  | on, off | on | On: a pencil's pressure sets the width, and with none (mouse, finger) the line is a little thinner the quicker the pen goes. Off: one width all along (the ends of a Round or Brush pen line still taper). |

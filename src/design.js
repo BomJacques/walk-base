@@ -19,6 +19,8 @@ export const newPart = () => ({ fill: '', line: '', lineW: 1, opacity: 1, visibl
 /**
  * Drawing on a part: pen strokes kept in the part's UV box (u along the part, v across it), so the drawing turns and moves with the part.
  * ink: { replace, strokes: [{ c: colour, w: width as a fraction of the part's size, a: opacity, fill: a closed filled shape, pts: [[u, v], ...] }] }
+ * A point may carry a third number, [u, v, p]: the width factor there (0 to 1, 0.5 is the width asked for), from the pencil's pressure or the pen's speed; a stroke that has them is painted as a smooth tapered ribbon (stroke.js).
+ * tp (1 or 2 or 3, rare) says the start (1) or end (2) of a stroke goes on into another stroke, so it is not tapered there.
  * With replace, the drawing stands in for the part's own shape.
  */
 /** The brushes: [id, name]. A stroke that names none is round. */
@@ -27,14 +29,15 @@ export const MAX_STROKES = 300; export const MAX_STROKE_PTS = 500;
 const r3 = (v) => Math.round(v * 1000) / 1000;
 export function cleanStroke(raw) {
   if (!raw || typeof raw !== 'object' || !(Array.isArray(raw.pts) || Array.isArray(raw.loops))) return null;
-  const pts = []; for (const q of (Array.isArray(raw.pts) ? raw.pts : []).slice(0, MAX_STROKE_PTS)) { if (Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])) pts.push([r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5))]); }
+  const pts = []; for (const q of (Array.isArray(raw.pts) ? raw.pts : []).slice(0, MAX_STROKE_PTS)) { if (Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])) pts.push(q.length > 2 && Number.isFinite(+q[2]) && q[2] !== null && q[2] !== '' ? [r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5)), Math.round(clamp(q[2], 0, 1, 0.5) * 100) / 100] : [r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5))]); }
   let loops = null;
   if (Array.isArray(raw.loops)) loops = raw.loops.slice(0, 8).map((l) => (Array.isArray(l) ? l.slice(0, 400).filter((q) => Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])).map((q) => [r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5))]) : [])).filter((l) => l.length >= 3);
   if (loops && !loops.length) loops = null;
   if (!pts.length && loops) pts.push(...loops[0].slice(0, MAX_STROKE_PTS));
   if (!pts.length) return null;
   const f = Number.isFinite(+raw.f) && raw.f !== null && raw.f !== '' ? Math.round(clamp(raw.f, 0, 99999, 0)) : null; // a stroke may belong to one frame only
-  return { c: hex6(raw.c, '#000000'), w: r3(clamp(raw.w, 0.002, 0.6, 0.03)), a: clamp(raw.a, 0.02, 1, 1), fill: Boolean(raw.fill || loops), ...(BRUSHES.some(([b]) => b === raw.b) && raw.b !== 'round' ? { b: raw.b } : {}), ...(loops ? { loops } : {}), ...(f === null ? {} : { f }), pts };
+  const seg = Number.isFinite(+raw.g) && raw.g !== null && raw.g !== '' ? Math.round(clamp(raw.g, 0, 7, 0)) : 0; // and to one piece of a part that is drawn in pieces (the thigh and the shin of a leg)
+  return { c: hex6(raw.c, '#000000'), w: r3(clamp(raw.w, 0.002, 0.6, 0.03)), a: clamp(raw.a, 0.02, 1, 1), fill: Boolean(raw.fill || loops), ...(BRUSHES.some(([b]) => b === raw.b) && raw.b !== 'round' ? { b: raw.b } : {}), ...(loops ? { loops } : {}), ...(f === null ? {} : { f }), ...(seg ? { g: seg } : {}), ...(pts.length > 1 && pts[0].length > 2 && (raw.tp | 0) & 3 ? { tp: (raw.tp | 0) & 3 } : {}), pts };
 }
 export function cleanInk(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.strokes)) return null;
