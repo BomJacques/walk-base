@@ -154,7 +154,11 @@ dch('head.pitch', 'head', 'Nod', { ...deg, min: -60, max: 70 }, (u, g, p) => -0.
 dch('head.yaw', 'head', 'Turn', deg, (u, g) => -0.4 * dTopYaw(g));
 dch('head.roll', 'head', 'Side tilt', deg, (u, g) => -0.4 * dTopRoll(g));
 dch('jaw.open', 'jaw', 'Mouth open', { ...deg, min: 0, max: 45 }, () => 0);
+dch('jaw.yaw', 'jaw', 'Side to side (chewing)', { ...deg, min: -25, max: 25 }, () => 0);
+dch('jaw.thrust', 'jaw', 'Forward and back (under or over bite)', { ...dlen, min: -0.05, max: 0.05 }, () => 0);
+dch('neck.stretch', 'neck', 'Stretch (longer and shorter)', { unit: '×', to: (v) => v, from: (v) => v, min: -0.25, max: 0.5, step: 0.01 }, () => 0);
 dsided('ear.flop', 'ear', 'Flop', { ...deg, min: -45, max: 60 }, (u, g, p) => rad(p.dogEar) * Math.sin(TAU * 2 * (u - 0.25)));
+dsided('ear.turn', 'ear', 'Swivel (forward and back)', { ...deg, min: -40, max: 40 }, () => 0);
 // Tail: three joints. The wag lags a little more along the tail, so it whips instead of swinging stiffly.
 [['tail1', 'Tail base', 0.5, 0], ['tail2', 'Tail middle', 0.7, 0.06], ['tail3', 'Tail tip', 1, 0.12]].forEach(([id, name, amt, lag]) => {
   dch(`${id}.yaw`, id, `${name}: wag`, { ...deg, min: -60, max: 60 }, (u, g, p) => rad(p.dogWag) * amt * Math.sin(TAU * 2 * (u - lag)));

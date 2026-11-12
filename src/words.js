@@ -11,7 +11,7 @@ const SPECIAL = {
 const BIPED_ONLY = ['dogTilt', 'dogArmSwing'];
 const BIRD_ONLY = ['dogHeadHold', 'dogWingOpen', 'dogFlap', 'dogFlapRate', 'dogFlapFrames', 'dogFlight', 'dogFlightHeight'];
 const EARS = ['dogEar', 'dEar', 'dEarW'];
-const NEW_BODY = ['dLegF', 'dLegH', 'dSnout', 'dPaw', 'dTorso', 'dLimb', 'dNeckW', 'dTailW']; // for the animals on the dog's rig, not the snake, spider and crab
+const NEW_BODY = ['dLegF', 'dLegH', 'dSnout', 'dJaw', 'dJawW', 'dPaw', 'dTorso', 'dLimb', 'dNeckW', 'dTailW']; // for the animals on the dog's rig, not the snake, spider and crab
 const QUAD_ONLY = ['dogShoulder'];
 const NONE = ['dogGait', 'dogFlex', 'dogArch', 'dogCurl', 'dogTwist', 'dogHeadAngle', 'dogHeadNod', 'dogTailAngle', 'dogWag', 'dogNeckAngle', 'dogNeckSegs', 'dogNeckCurve', 'dogNeckWave', 'dogNeckSway', 'dogElbowOut', 'dogWidth', 'dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift'];
 /** Controls to leave out, by figure. */

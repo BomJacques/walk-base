@@ -754,6 +754,14 @@ for (const fig of ['hose', 'dog', 'theropod', 'crab']) {
   for (const [fx, fy] of [[0.5, 0.5], [0.5, 0.6], [0.45, 0.8], [0.5, 0.75], [0.55, 0.85], [0.4, 0.55], [0.6, 0.55]]) { if (await ev(() => window.__walkBase.S.sel)) break; await page.mouse.click(b2.x + b2.width * fx, b2.y + b2.height * fy); await wait(200); } // a thin body takes a few tries to hit
   const s = await ev(() => window.__walkBase.S.sel); check(fig + ': the little figure picks a part', !!s && errors.length === 0, [s, errors]);
 }
+// the jaw: its own part to draw on (the little figure opens its mouth so it can be seen and tapped), and its own controls
+for (const fig of ['dog', 'horse', 'theropod']) {
+  await ev((f) => { const w = window.__walkBase; w.setFigure(f); w.S.design = {}; w.selectPart({ part: 'dog.jaw', side: null }, { openTab: false }); w.setTab('Draw'); w.render(); }, fig); await wait(450);
+  const jb = await ev(() => { const w = window.__walkBase; w.S.draw.mode = 'part'; w.render(); const shots = w.S.last.shapes.filter((s) => s.part === 'dog.jaw').length; return { part: w.S.sel?.part, shots }; });
+  check(fig + ': the jaw is a part that can be drawn on', jb.part === 'dog.jaw' && jb.shots > 0, jb);
+}
+await ev(() => { const w = window.__walkBase; w.setFigure('dog'); w.selectPart({ part: 'dog.jaw', side: null }, { openTab: false }); w.setTab('Parts'); w.render(); }); await wait(350);
+const jawTxt = await ev(() => document.body.innerText); check('the jaw has its own controls: open, side to side and forward and back', /Mouth open/.test(jawTxt) && /Side to side \(chewing\)/.test(jawTxt) && /Forward and back \(under or over bite\)/.test(jawTxt));
 // hold a finger on a part on the stage
 await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.design = {}; w.S.draw.mode = 'whole'; w.selectPart(null, { openTab: false }); w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(400);
 const clientOf2 = (key) => ev((k) => { const w = window.__walkBase; const f = w.S.last.frames[k][0].fr; const m = w.S.map; return { x: m.left + (m.x0 + (f.cx / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (f.cy / m.fch) * m.zh) / m.d }; }, key);

@@ -5,7 +5,7 @@ import { DOG_GAITS, speciesOf } from './dogdefaults.js';
 import { makeEvaluator } from './motion.js';
 import { paramsAt } from './automation.js';
 import { poseCrawler } from './crawler.js';
-import { add, sub, mul, norm, apply, mm, Rpitch, seg, ik3 } from './rig3.js';
+import { add, sub, mul, norm, apply, mm, Rpitch, Ryaw, seg, ik3 } from './rig3.js';
 
 const TAU = Math.PI * 2;
 const wrap = (u) => u - Math.floor(u);
@@ -181,7 +181,7 @@ export function poseDog(params, motion, u, extra = null) {
   const neckBase = add(add(j3, apply(R3, [0.04, 0.05, 0])), [holdShift, 0, 0]);
   let Rn = mm(R3, seg(c('neck.yaw'), c('neck.pitch') - rad(p.dogNeckAngle), c('neck.roll')));
   // The neck is one bone or several. With several, each carries on from the one before with its share of the curve and a wave that runs up the neck as the animal walks.
-  const nSegs = clamp(Math.round(p.dogNeckSegs ?? 1), 1, 12); const segLen = (L.neck * sc('dNeck')) / nSegs;
+  const nSegs = clamp(Math.round(p.dogNeckSegs ?? 1), 1, 12); const segLen = (L.neck * sc('dNeck') * (1 + c('neck.stretch'))) / nSegs;
   const neck = [neckBase]; let Rk = Rn;
   for (let i = 0; i < nSegs; i++) {
     if (i > 0) Rk = mm(Rk, seg(rad(p.dogNeckSway || 0) * Math.sin(TAU * uw - i * 0.6 + 1.2), rad(p.dogNeckCurve || 0) / nSegs + rad(p.dogNeckWave || 0) * Math.sin(TAU * uw - i * 0.7), 0));
@@ -193,13 +193,13 @@ export function poseDog(params, motion, u, extra = null) {
   const headC = add(neckTop, apply(Rh, [L.skull * 0.5 * hs, 0, 0]));
   const snoutK = sc('dSnout'); const noseTip = add(neckTop, apply(Rh, [(L.skull + L.snout * snoutK) * hs, -0.02 * hs, 0]));
   const hinge = add(neckTop, apply(Rh, [L.skull * 0.45 * hs, -0.05 * hs, 0]));
-  const Rj = mm(Rh, Rpitch(c('jaw.open')));
-  const jawEnd = add(hinge, apply(Rj, [L.jaw * hs * snoutK, 0, 0]));
+  const Rj = mm(mm(Rh, Ryaw(c('jaw.yaw'))), Rpitch(c('jaw.open'))); // the jaw swings sideways, then drops
+  const jawEnd = add(add(hinge, apply(Rh, [c('jaw.thrust') * hs, 0, 0])), apply(Rj, [L.jaw * hs * snoutK * sc('dJaw'), 0, 0]));
   const ears = {};
   for (const side of ['R', 'L']) {
     const s = side === 'R' ? 1 : -1;
     const root = add(neckTop, apply(Rh, [L.skull * 0.3 * hs, 0.07 * hs, s * 0.07 * hs]));
-    const Re = mm(Rh, Rpitch(c(`ear.flop.${side}`)));
+    const Re = mm(mm(Rh, Ryaw(c(`ear.turn.${side}`))), Rpitch(c(`ear.flop.${side}`)));
     ears[side] = { root, tip: add(root, apply(Re, [-0.02, -L.ear * sc('dEar'), s * 0.04])) };
   }
 

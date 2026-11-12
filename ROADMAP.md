@@ -637,3 +637,7 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 
 ## Done (2026-11-12): more body controls for the animals
 - Nine proportions on the dog's rig: separate front and hind leg length (the stance travel and the stand heights use each pair's own length, so the back tilts and every paw is still reached and planted within 0.8 to 1.3), snout length, paw size, and drawn thickness of the body, legs, neck and tail plus ear width (`lookOf` in dogdefaults.js). Not done: a wing span and feather control for the birds, the pterodactyl's membrane, a snout width, thickness per leg, the same for the crawlers.
+
+## Done (2026-11-12): jaw controls and more part controls
+
+Jaw length and Jaw depth (Body > Proportions); Mouth open, Side to side and Forward and back for the jaw, Swivel for each ear, and Stretch for the neck (Parts tab). The jaw is a part to draw on: the Draw tab's little figure opens its mouth so it can be seen and tapped. Still open: a tongue and teeth as parts, a mouth for the snake, spider and crab beyond opening, bird wing span, snout width.

@@ -41,3 +41,16 @@ test('the new controls are for the animals on the dog rig, worded for each, and 
   assert.equal(wordsFor('bird')('Front leg length'), 'Wing length'); assert.equal(wordsFor('theropod')('Front leg length'), 'Arm length'); assert.equal(wordsFor('plesiosaur')('Hind leg length'), 'Rear flipper length'); assert.equal(wordsFor('theropod')('Paw size'), 'Foot size');
   for (const f of ['sauropod', 'ceratopsian', 'theropod', 'bird', 'lizard']) assert.equal(wordsFor(f).hides(ctl('dEarW')), true, `${f} has no ear width`); assert.equal(wordsFor('dog').hides(ctl('dEarW')), false);
 });
+
+test('jaw controls: length, depth, thrust, side to side, and the ear swivel and neck stretch move the right points', async () => {
+  const { CHANNEL_BY_ID } = await import('../src/motion.js');
+  for (const id of ['dJaw', 'dJawW']) { const c = ctl(id); assert.ok(c && c.min < 1 && c.max > 1, id); }
+  for (const id of ['dog.jaw.yaw', 'dog.jaw.thrust', 'dog.ear.turn.R', 'dog.ear.turn.L', 'dog.neck.stretch']) assert.ok(CHANNEL_BY_ID[id], id);
+  const base = poseDog(mk('dog'), {}, 0.2); const long = poseDog(mk('dog', { dJaw: 2 }), {}, 0.2);
+  assert.ok(d3(long.jawEnd, long.hinge) > d3(base.jawEnd, base.hinge) * 1.8); assert.equal(d3(long.noseTip, long.neckTop).toFixed(6), d3(base.noseTip, base.neckTop).toFixed(6));
+  const run = (motion) => poseDog(mk('dog'), motion, 0.2);
+  const shut = run({}); const side = run({ 'dog.jaw.yaw': { amount: 1, offset: 0.3, phase: 0, freq: 1 } }); const out = run({ 'dog.jaw.thrust': { amount: 1, offset: 0.04, phase: 0, freq: 1 } });
+  assert.ok(Math.abs(side.jawEnd[2] - shut.jawEnd[2]) > 0.02, 'the jaw swings sideways'); assert.ok(d3(out.jawEnd, shut.jawEnd) > 0.02, 'the jaw thrusts');
+  const turn = run({ 'dog.ear.turn.R': { amount: 1, offset: 0.4, phase: 0, freq: 1 } }); assert.ok(d3(turn.ears.R.tip, shut.ears.R.tip) > 0.005); assert.equal(d3(turn.ears.L.tip, shut.ears.L.tip) < 1e-9, true);
+  const str = run({ 'dog.neck.stretch': { amount: 1, offset: 0.4, phase: 0, freq: 1 } }); assert.ok(d3(str.neckTop, str.neckBase) > d3(shut.neckTop, shut.neckBase) * 1.3);
+});

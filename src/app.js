@@ -1847,7 +1847,7 @@ function paintPicker() {
   const cv = pickerCv; if (!cv || !cv.isConnected || inkItem()) return; const actor = inkActor(); const fig = actor ? actor.fig : figKey(); const people = fig === 'human' || fig === 'hose';
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
   const base = actor ? { ...actor.p, proportions: actor.r } : { ...P() };
-  const params = { ...base, motion: {}, attach: [], scene: null, speech: null, perf: null, sampled: null, design: actor ? actor.design || null : S.design[figKey()] || null, ...(people ? TPOSE : {}) };
+  const params = { ...base, motion: people ? {} : { 'dog.jaw.open': { amount: 1, offset: 0.4, phase: 0, freq: 1 } }, attach: [], scene: null, speech: null, perf: null, sampled: null, design: actor ? actor.design || null : S.design[figKey()] || null, ...(people ? TPOSE : {}) };
   const st = { ...S.s, style: 'mannequin', shadowMode: 'off', camYaw: people ? -90 : 0, camPitch: fig === 'snake' ? 72 : 0, showArcs: false, onionBefore: 0, onionAfter: 0, lineBoil: 0, lineOffset: 0, showScene: false };
   const sel = S.draw.mode === 'part' ? (actor ? parseKey(S.draw.actorKey) : S.sel) : null;
   try { pickerInfo = drawScene(g, params, st, cv.width, cv.height, 0, { selection: sel }); } catch { pickerInfo = null; }

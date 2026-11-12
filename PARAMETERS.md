@@ -125,6 +125,8 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Ear width | dog | × | 0.4 to 2.5 | 1 | How broad the ears are drawn. |
 | Front leg length | dog | × | 0.8 to 1.3 | 1 | Scale of the front legs only, on top of Leg length. Longer front legs raise the shoulders and tip the back down toward the hips. |
 | Hind leg length | dog | × | 0.8 to 1.3 | 1 | Scale of the hind legs only, on top of Leg length. Longer hind legs raise the hips and tip the back down toward the head. |
+| Jaw length | dog | × | 0.3 to 2.5 | 1 | Length of the lower jaw on its own, from its hinge. Longer than the snout is an underbite; shorter is an overbite. |
+| Jaw depth | dog | × | 0.4 to 2.5 | 1 | How deep and thick the lower jaw is drawn. |
 | Snout length | dog | × | 0.4 to 2.2 | 1 | Scale of the snout and the jaw, from the eyes forward. |
 | Paw size | dog | × | 0.5 to 2.2 | 1 | How long the paws are. |
 | Chest and belly depth | dog | × | 0.6 to 1.8 | 1 | How deep and thick the body is drawn. |

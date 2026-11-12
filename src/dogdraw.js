@@ -36,7 +36,8 @@ function buildHoseAnimal(pz, cam, st) {
   const NT0 = S(pz.noseTip); const toward = NT0.d >= HC.d; // is the nose nearer the camera than the head?
   if (bird) tube([add(pz.neckTop, apply(pz.Rh, [0.2 * hs, 0, 0])), pz.noseTip], [0.055 * hs, 0.012 * hs], 'dog.head', null, 'body', '#f0b030', 0, null, HC.d + (toward ? 0.0003 : -0.0003));
   else tube([add(pz.headC, mul(sub(pz.noseTip, pz.headC), 0.3)), add(pz.headC, mul(sub(pz.noseTip, pz.headC), 0.65)), pz.noseTip], [0.098 * hs, 0.085 * hs, 0.07 * hs], 'dog.head', null, 'body', pale, 0, null, HC.d + (toward ? 0.0003 : -0.0003));
-  tube([pz.hinge, pz.jawEnd], [0.04 * hs, 0.03 * hs], 'dog.jaw', null, 'body', bird ? '#f0b030' : pale, 0, null, HC.d - 0.0005);
+  const jw = pz.params.proportions?.dJawW ?? 1;
+  tube([pz.hinge, pz.jawEnd], [0.04 * hs * jw, 0.03 * hs * jw], 'dog.jaw', null, 'body', bird ? '#f0b030' : pale, 0, null, HC.d - 0.0005);
   const NT = S(pz.noseTip); let fx = NT.x - HC.x; let fy = NT.y - HC.y; const fl = Math.hypot(fx, fy) || 1; fx /= fl; fy /= fl;
   for (const s of [1, -1]) {
     const E = S(add(pz.headC, apply(pz.Rh, [0.035 * hs, 0.045 * hs, s * 0.115 * hs]))); if (E.d <= HC.d - 0.0001) continue; // on the side of the ball, clear of the muzzle
@@ -94,6 +95,7 @@ export function buildDogShapes(pz, cam, st = {}) {
   { const nk = pz.neck || [pz.neckBase, pz.neckTop]; const n = nk.length - 1; for (let i = 0; i < n; i++) capsule(nk[i], nk[i + 1], (0.09 - 0.025 * (i / n)) * NK, (0.09 - 0.025 * ((i + 1) / n)) * NK, 'dog.neck', null, 'body'); }
 
   // Head: a skull and a tapering snout, with the jaw under it.
+  const jw = pz.params.proportions?.dJawW ?? 1;
   const skullC = pz.headC;
   const skull = [];
   for (let i = 0; i < 20; i++) {
@@ -105,8 +107,8 @@ export function buildDogShapes(pz, cam, st = {}) {
   const snoutStart = add(pz.neckTop, apply(pz.Rh, [0.22 * hs, 0, 0])); const SN = K.snout ?? 1; // a horse's muzzle is deep
   const A = S(snoutStart); const B = S(pz.noseTip);
   shapes.push({ pts: hull([...skull, ...circlePts(A, 0.06 * SN * hs * sc), ...circlePts(B, 0.035 * SN * hs * sc)]), depth: S(skullC).d, part: 'dog.head', side: null, role: 'body' });
-  if (SN > 1) { const J0 = S(pz.hinge); const J1 = S(pz.jawEnd); shapes.push({ pts: hull([...circlePts(J0, 0.05 * hs * sc), ...circlePts(J1, 0.032 * hs * sc)]), depth: S(skullC).d - 0.0005, part: 'dog.jaw', side: null, role: 'body' }); } // tucked behind the muzzle: it shows when the mouth opens
-  else capsule(pz.hinge, pz.jawEnd, 0.04 * hs, 0.022 * hs, 'dog.jaw', null, 'body');
+  if (SN > 1) { const J0 = S(pz.hinge); const J1 = S(pz.jawEnd); shapes.push({ pts: hull([...circlePts(J0, 0.05 * hs * sc * jw), ...circlePts(J1, 0.032 * hs * sc * jw)]), depth: S(skullC).d - 0.0005, part: 'dog.jaw', side: null, role: 'body' }); } // tucked behind the muzzle: it shows when the mouth opens
+  else capsule(pz.hinge, pz.jawEnd, 0.04 * hs * jw, 0.022 * hs * jw, 'dog.jaw', null, 'body');
   const hc = S(skullC);
   const eyes = [1, -1].map((s) => S(add(pz.neckTop, apply(pz.Rh, [0.17 * hs, 0.05 * hs, s * 0.07 * hs]))));
   const face = { eyes: eyes.filter((e) => e.d > hc.d - 0.0001), nose: null, noseBase: null, dot: B, c: hc };

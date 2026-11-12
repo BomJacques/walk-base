@@ -137,6 +137,8 @@ const RAW_CONTROLS = [
   n('r', 'dEarW', 'Body', 'Dog proportions', 'Ear width', '×', 0.4, 2.5, 0.01, 'How broad the ears are drawn.'),
   n('r', 'dLegF', 'Body', 'Dog proportions', 'Front leg length', '×', 0.8, 1.3, 0.01, 'Scale of the front legs only, on top of Leg length. Longer front legs raise the shoulders and tip the back down toward the hips.'),
   n('r', 'dLegH', 'Body', 'Dog proportions', 'Hind leg length', '×', 0.8, 1.3, 0.01, 'Scale of the hind legs only, on top of Leg length. Longer hind legs raise the hips and tip the back down toward the head.'),
+  n('r', 'dJaw', 'Body', 'Dog proportions', 'Jaw length', '×', 0.3, 2.5, 0.01, 'Length of the lower jaw on its own, from its hinge. Longer than the snout is an underbite; shorter is an overbite.'),
+  n('r', 'dJawW', 'Body', 'Dog proportions', 'Jaw depth', '×', 0.4, 2.5, 0.01, 'How deep and thick the lower jaw is drawn.'),
   n('r', 'dSnout', 'Body', 'Dog proportions', 'Snout length', '×', 0.4, 2.2, 0.01, 'Scale of the snout and the jaw, from the eyes forward.'),
   n('r', 'dPaw', 'Body', 'Dog proportions', 'Paw size', '×', 0.5, 2.2, 0.01, 'How long the paws are.'),
   n('r', 'dTorso', 'Body', 'Dog proportions', 'Chest and belly depth', '×', 0.6, 1.8, 0.01, 'How deep and thick the body is drawn.'),
