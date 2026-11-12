@@ -804,6 +804,24 @@ check('opening it again shows the tools', (await page.locator('[data-testid="too
 await q('viewbar-grip').click(); await q('viewbar-grip').click(); await wait(200); // two quick taps fold and open it again, and put it back in its corner
 const vb4 = await vbox();
 check('two quick taps on the grip put the bar back in its corner', Math.abs(vb4.x - vb0.x) < 3 && Math.abs(vb4.y - vb0.y) < 3, [vb0, vb4]);
+// ---- brushes
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.S.design = {}; w.S.attach.human = []; w.S.scene.actors = []; w.S.s.style = 'mannequin'; w.S.s.shadowMode = 'off'; w.S.s.camYaw = -25; w.S.s.camPitch = 0; Object.assign(w.S.draw, { mode: 'part', tool: 'pen', scope: 'all', target: { kind: 'fig' }, size: 10, opacity: 1, brush: 'round', color: '#d93a3a' }); w.selectPart({ part: 'spine.upper', side: null }, { openTab: false }); w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(400);
+const brushIds = ['round', 'marker', 'calligraphy', 'taper', 'pencil', 'chalk', 'soft', 'dotted', 'dashed'];
+check('the pen has a choice of brushes, with a sample of the one chosen', (await page.locator('[data-testid^="draw-brush-"]:not([data-testid="draw-brush-preview"])').count()) === brushIds.length && (await q('draw-brush-preview').count()) === 1);
+const torsoFr = await ev(() => { const w = window.__walkBase; const f = w.inkFrame('spine.upper'); return [w.fromUV(f, 0.2, 0.3), w.fromUV(f, 0.5, 0.7), w.fromUV(f, 0.8, 0.3)]; });
+const brushShots = {};
+for (const id of brushIds) {
+  await ev(() => { const w = window.__walkBase; w.S.design = {}; w.render(); }); await q('draw-brush-' + id).click(); await wait(200);
+  const prev = await ev(() => { const c = document.querySelector('[data-testid="draw-brush-preview"]'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 250 || d[i + 1] < 250) n++; return n; });
+  await dragPath(torsoFr); await wait(250);
+  const b = await ev(() => window.__walkBase.designOf()['spine.upper']?.ink?.strokes[0]?.b ?? 'round');
+  brushShots[id] = await stageShot();
+  check('the ' + id + ' brush marks the stroke with its name, shows in the sample and paints', b === id && prev > 200 && (id === 'round' || brushShots[id] !== brushShots.round), [b, prev]);
+}
+check('the brushes all look different from each other', new Set(Object.values(brushShots)).size === brushIds.length);
+const again = await stageShot(); await ev(() => { const w = window.__walkBase; w.render(); }); await wait(200);
+check('and a textured brush is the same every time it is drawn', (await stageShot()) === again);
+await ev(() => { const w = window.__walkBase; w.S.draw.brush = 'round'; w.S.design = {}; w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

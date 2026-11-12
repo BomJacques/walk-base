@@ -92,3 +92,9 @@ test('a part committed with nothing drawn is kept (a blank part), and a scene fi
   const sc = cleanScene({ actors: [{ id: 'a1', fig: 'human', p: {}, design: { head: { ink: { strokes: [{ c: '#ff0000', pts: [[0.5, 0.5], [0.6, 0.5]] }] } }, junk: 5 } }, { id: 'a2', fig: 'human', p: {} }] }, ['human'], defaults);
   assert.equal(sc.actors[0].design.head.ink.strokes.length, 1); assert.equal(sc.actors[0].design.head.ink.strokes[0].c, '#ff0000'); assert.equal('design' in sc.actors[1], false);
 });
+
+test('a stroke keeps the brush it names, and a round or unknown one is left plain', async () => {
+  const { cleanStroke, BRUSHES } = await import('../src/design.js'); const pts = [[0.1, 0.1], [0.2, 0.2]];
+  assert.equal(BRUSHES.length, 9); for (const [id] of BRUSHES) assert.equal(cleanStroke({ pts, b: id }).b, id === 'round' ? undefined : id);
+  assert.equal(cleanStroke({ pts, b: 'laser' }).b, undefined);
+});

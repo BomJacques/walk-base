@@ -28,6 +28,7 @@ import { PHYS_MODES } from './propphys.js';
 import { cleanShadow } from './shadow.js';
 import { itemUVFrame } from './attach.js';
 import { paintStrokes, floodRegion, simplifyLoop, loopSize } from './ink.js';
+import { BRUSHES } from './design.js';
 import { decodePicture, videoSheet, isVideo, PICTURE_ACCEPT, PICTURE_VIDEO_ACCEPT } from './pictures.js';
 import { partKey, newSkin, newPart, isPlain, cleanDesign, cellFor, toUV, fromUV, uvToCell, cellToUV, atlasLayout, atlasSkin, MAX_STROKES, MAX_STROKE_PTS, strokeShows, cleanInk, BLENDS as SKIN_BLENDS } from './design.js';
 import { packCharacter, readCharacter } from './character.js';
@@ -51,7 +52,7 @@ let PADMODE = 'play'; // what a tap on a pad does: play | store | clear
 let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
 const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
 const S = {
-  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', target: { kind: 'fig' }, actorKey: null }, // the Draw tab: what the pen does
+  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', brush: 'round', target: { kind: 'fig' }, actorKey: null }, // the Draw tab: what the pen does
   design: {}, // each figure's design: { figure: { part key: its own look and skin } }
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, stageOnly: false,
@@ -1960,7 +1961,7 @@ function inkMove(e, toFrame) {
   const fr = inkFrame(key); if (!fr) return;
   if (!g.cur || g.cur.key !== key || g.cur.stroke.pts.length >= MAX_STROKE_PTS - 1) { // a new stroke: at the start, on moving into another part, or when one has got too long
     if (inkOf(key).strokes.length >= MAX_STROKES) { setMessage('That part has as many strokes as it can hold. Clear some or use the eraser.'); return; }
-    const stroke = { c: D.color, w: Math.round(inkRel(fr) * 1000) / 1000, a: D.opacity, fill: g.tool === 'fill', ...(D.scope === 'frame' ? { f: S.frame } : {}), pts: [] };
+    const stroke = { c: D.color, w: Math.round(inkRel(fr) * 1000) / 1000, a: D.opacity, fill: g.tool === 'fill', ...(g.tool === 'pen' && D.brush !== 'round' ? { b: D.brush } : {}), ...(D.scope === 'frame' ? { f: S.frame } : {}), pts: [] };
     if (g.cur && g.last && g.tool === 'pen') stroke.pts.push(toUV(fr, g.last.x, g.last.y)); // carry the line across, so there is no gap where it crosses from one part to the next
     inkOf(key).strokes.push(stroke); g.adds.push({ key, stroke }); g.cur = { key, stroke };
   }
@@ -2038,6 +2039,17 @@ function paintDrawGuides(g, info, fcw) {
   else for (const sh of (actor ? (info.sceneHits || []).find((h2) => h2.id === actor.id)?.shapes : info.shapes) || []) { if (sh.attach || !sh.part || sh.hidden || sh.pts.length < 3) continue; trace(sh.pts, selKey && partKey(sh.part, sh.side) === selKey); }
   g.restore();
 }
+const refreshBrushPreview = () => { const old = document.querySelector('[data-testid="draw-brush-preview"]'); if (old) old.replaceWith(brushPreview()); };
+/** A sample line in the brush, colour, size and opacity chosen. */
+function brushPreview() {
+  const cv = h('canvas', { class: 'brushprev', width: 480, height: 90, role: 'img', 'aria-label': 'A sample of the brush', testid: 'draw-brush-preview' });
+  setTimeout(() => {
+    if (!cv.isConnected) return; const g = cv.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height); const D = S.draw;
+    const pts = Array.from({ length: 40 }, (_, i) => { const t = i / 39; return [0.06 + 0.88 * t, 0.5 + 0.28 * Math.sin(t * Math.PI * 2.2)]; });
+    paintStrokes(g, [{ c: D.color, w: (D.size * 2) / 100, a: D.opacity, fill: false, ...(D.brush !== 'round' ? { b: D.brush } : {}), pts }], (u, v) => [u * cv.width, v * cv.height], 100, 0, 0.6);
+  }, 0);
+  return cv;
+}
 function drawSection() {
   const host = h('div', { class: 'design', testid: 'draw-section' }); const { slider, seg, check } = designWidgets(); const D = S.draw; const item = inkItem(); const actor = inkActor(); const d = inkMap();
   const list = inkPartKeys(); const sel = inkSelKey(); const partMode = D.mode === 'part' || Boolean(item);
@@ -2058,8 +2070,10 @@ function drawSection() {
     !item && partMode && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Tap a part on the little figure, or in the list, or hold a finger on it on the stage.') : null));
   host.append(h('section', { class: 'group', testid: 'draw-pen' }, h('h3', null, 'Pen'),
     seg('Tool', [['pen', 'Pen'], ['bucket', 'Bucket fill'], ['fill', 'Filled shape'], ['eraser', 'Eraser'], ['pick', 'Pick part']], D.tool, (v) => { D.tool = v; redraw(); }, 'draw-tool'),
-    h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('div', { class: 'swatches' }, INK_COLOURS.map((c) => h('button', { type: 'button', class: 'swatch', style: `background:${c}`, 'aria-label': `Colour ${c}`, 'aria-pressed': String(D.color === c), testid: `draw-swatch-${c.slice(1)}`, onClick: () => { D.color = c; renderPanel(); } })), h('input', { type: 'color', class: 'color', value: D.color, 'aria-label': 'Pen colour', testid: 'draw-color', onInput: (e) => { D.color = e.target.value; } }))),
-    slider('Size', () => D.size, (v) => { D.size = v; }, 1, 60, 1, 'draw-size'), slider('Opacity', () => D.opacity, (v) => { D.opacity = v; }, 0.05, 1, 0.01, 'draw-opacity'),
+    D.tool === 'pen' ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Brush' }, BRUSHES.map(([id, label]) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(D.brush === id), testid: `draw-brush-${id}`, onClick: () => { D.brush = id; renderPanel(); } }, label))) : null,
+    D.tool === 'pen' ? brushPreview() : null,
+    h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('div', { class: 'swatches' }, INK_COLOURS.map((c) => h('button', { type: 'button', class: 'swatch', style: `background:${c}`, 'aria-label': `Colour ${c}`, 'aria-pressed': String(D.color === c), testid: `draw-swatch-${c.slice(1)}`, onClick: () => { D.color = c; renderPanel(); } })), h('input', { type: 'color', class: 'color', value: D.color, 'aria-label': 'Pen colour', testid: 'draw-color', onInput: (e) => { D.color = e.target.value; refreshBrushPreview(); } }))),
+    slider('Size', () => D.size, (v) => { D.size = v; refreshBrushPreview(); }, 1, 60, 1, 'draw-size'), slider('Opacity', () => D.opacity, (v) => { D.opacity = v; refreshBrushPreview(); }, 0.05, 1, 0.01, 'draw-opacity'),
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-undo', disabled: !inkUndo.length, onClick: inkUndoStep }, 'Undo'),
       partMode ? h('button', { type: 'button', class: 'btn', testid: 'draw-clear-part', disabled: !cur?.ink?.strokes.length, onClick: () => inkClear([sel]) }, 'Clear this part') : null,
       h('button', { type: 'button', class: 'btn', testid: 'draw-clear-all', disabled: !total, onClick: () => inkClear(Object.keys(d)) }, 'Clear all drawing'))));

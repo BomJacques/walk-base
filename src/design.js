@@ -21,6 +21,8 @@ export const newPart = () => ({ fill: '', line: '', lineW: 1, opacity: 1, visibl
  * ink: { replace, strokes: [{ c: colour, w: width as a fraction of the part's size, a: opacity, fill: a closed filled shape, pts: [[u, v], ...] }] }
  * With replace, the drawing stands in for the part's own shape.
  */
+/** The brushes: [id, name]. A stroke that names none is round. */
+export const BRUSHES = [['round', 'Round'], ['marker', 'Marker'], ['calligraphy', 'Calligraphy'], ['taper', 'Brush pen'], ['pencil', 'Pencil'], ['chalk', 'Chalk'], ['soft', 'Soft'], ['dotted', 'Dotted'], ['dashed', 'Dashed']];
 export const MAX_STROKES = 300; export const MAX_STROKE_PTS = 500;
 const r3 = (v) => Math.round(v * 1000) / 1000;
 export function cleanStroke(raw) {
@@ -32,7 +34,7 @@ export function cleanStroke(raw) {
   if (!pts.length && loops) pts.push(...loops[0].slice(0, MAX_STROKE_PTS));
   if (!pts.length) return null;
   const f = Number.isFinite(+raw.f) && raw.f !== null && raw.f !== '' ? Math.round(clamp(raw.f, 0, 99999, 0)) : null; // a stroke may belong to one frame only
-  return { c: hex6(raw.c, '#000000'), w: r3(clamp(raw.w, 0.002, 0.6, 0.03)), a: clamp(raw.a, 0.02, 1, 1), fill: Boolean(raw.fill || loops), ...(loops ? { loops } : {}), ...(f === null ? {} : { f }), pts };
+  return { c: hex6(raw.c, '#000000'), w: r3(clamp(raw.w, 0.002, 0.6, 0.03)), a: clamp(raw.a, 0.02, 1, 1), fill: Boolean(raw.fill || loops), ...(BRUSHES.some(([b]) => b === raw.b) && raw.b !== 'round' ? { b: raw.b } : {}), ...(loops ? { loops } : {}), ...(f === null ? {} : { f }), pts };
 }
 export function cleanInk(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.strokes)) return null;

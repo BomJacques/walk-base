@@ -483,3 +483,4 @@ select, select option, select optgroup { background-color: var(--panel-2); color
 .viewbar.min { flex-wrap: nowrap; }
 .viewbar.min > :not(.vgrip):not(.vmin) { display: none; }
 .viewbar .vmin { min-width: var(--target, 44px); padding: 0 4px; }
+.brushprev { display: block; width: 100%; max-width: 280px; aspect-ratio: 480 / 90; margin: 4px 0; border: 1px solid var(--line); border-radius: var(--r); background: #fff; }
