@@ -822,6 +822,24 @@ check('the brushes all look different from each other', new Set(Object.values(br
 const again = await stageShot(); await ev(() => { const w = window.__walkBase; w.render(); }); await wait(200);
 check('and a textured brush is the same every time it is drawn', (await stageShot()) === again);
 await ev(() => { const w = window.__walkBase; w.S.draw.brush = 'round'; w.S.design = {}; w.setTab('Gait'); w.render(); });
+// ---- more body controls for the animals
+const bodyIds = ['dEarW', 'dLegF', 'dLegH', 'dSnout', 'dPaw', 'dTorso', 'dLimb', 'dNeckW', 'dTailW'];
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('dog'); w.S.r = {}; w.S.s.style = 'mannequin'; w.S.s.shadowMode = 'off'; w.S.s.camYaw = 0; w.S.s.camPitch = 0; w.setTab('Gait'); w.setFrame(5); w.render(); }); await wait(400);
+let have = 0; for (const id of bodyIds) have += await q('rng-' + id).count();
+check('the dog has the nine new body controls', have === bodyIds.length, have);
+const sliderSet = (id, v) => ev(([id, v]) => { const e = document.querySelector('[data-testid="rng-' + id + '"]'); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, [id, v]);
+const dogBase = await stageShot(); const dogShots = new Set([dogBase]);
+for (const [id, v] of [['dLegF', 1.25], ['dLegH', 1.25], ['dSnout', 1.8], ['dPaw', 1.8], ['dTorso', 1.5], ['dLimb', 1.6], ['dNeckW', 1.6], ['dTailW', 1.8], ['dEarW', 1.8]]) {
+  await sliderSet(id, v); await wait(250); const s = await stageShot(); check('the ' + id + ' slider changes the drawing', s !== dogBase && !dogShots.has(s) && (await ev((k) => window.__walkBase.S.r[k], id)) === v);
+  dogShots.add(s); await ev((k) => { window.__walkBase.S.r = {}; window.__walkBase.render(); }, id); await sliderSet(id, 1); await wait(100); await ev(() => { window.__walkBase.S.r = {}; window.__walkBase.render(); });
+}
+check('with no errors', errors.length === 0, errors);
+await ev(() => { const w = window.__walkBase; w.setFigure('spider'); w.setTab('Gait'); w.render(); }); await wait(300);
+let spiderHas = 0; for (const id of bodyIds) spiderHas += await q('rng-' + id).count();
+check('a spider does not show them, and a bird words them for wings', spiderHas === 0);
+await ev(() => { const w = window.__walkBase; w.setFigure('bird'); w.setTab('Gait'); w.render(); }); await wait(300);
+check('a bird has them, worded for wings', (await q('rng-dLegF').count()) === 1 && /Wing length/.test(await page.locator('.row:has([data-testid="rng-dLegF"])').first().innerText()));
+await ev(() => { const w = window.__walkBase; w.S.r = {}; w.setFigure('human'); w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

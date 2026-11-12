@@ -122,6 +122,15 @@ Generated from `walkbase/src/controls.js`. Lengths are in leg lengths for the hu
 | Body thickness | dog | × | 0.3 to 3.96 | 1 | How thick the body and limbs of a snake, spider or crab are, as a multiple of what they were. |
 | Tail length | dog | × | 0.18 to 4.5 | 1 | Scale of the tail. |
 | Ear length | dog | × | 0.24 to 4.5 | 1 | Scale of the ears. |
+| Ear width | dog | × | 0.4 to 2.5 | 1 | How broad the ears are drawn. |
+| Front leg length | dog | × | 0.8 to 1.3 | 1 | Scale of the front legs only, on top of Leg length. Longer front legs raise the shoulders and tip the back down toward the hips. |
+| Hind leg length | dog | × | 0.8 to 1.3 | 1 | Scale of the hind legs only, on top of Leg length. Longer hind legs raise the hips and tip the back down toward the head. |
+| Snout length | dog | × | 0.4 to 2.2 | 1 | Scale of the snout and the jaw, from the eyes forward. |
+| Paw size | dog | × | 0.5 to 2.2 | 1 | How long the paws are. |
+| Chest and belly depth | dog | × | 0.6 to 1.8 | 1 | How deep and thick the body is drawn. |
+| Leg thickness | dog | × | 0.5 to 2 | 1 | How thick the legs are drawn. |
+| Neck thickness | dog | × | 0.5 to 2 | 1 | How thick the neck is drawn. |
+| Tail thickness | dog | × | 0.4 to 2.5 | 1 | How thick the tail is drawn. |
 
 ## Speech
 

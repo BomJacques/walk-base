@@ -2,15 +2,16 @@
 import { SPECIES, kindOf } from './dogdefaults.js';
 
 const SPECIAL = {
-  theropod: [['Front legs', 'Arms'], ['Hind legs', 'Legs'], ['Front leg and elbow', 'Arm and elbow'], ['Front paw', 'Hand and claws'], ['Hind leg and knee', 'Leg and knee'], ['Hind paw', 'Foot']],
+  theropod: [['Front leg length', 'Arm length'], ['Hind leg length', 'Leg length'], ['Front legs', 'Arms'], ['Hind legs', 'Legs'], ['Front leg and elbow', 'Arm and elbow'], ['Front paw', 'Hand and claws'], ['Hind leg and knee', 'Leg and knee'], ['Hind paw', 'Foot']],
   snake: [['Spine bend', 'Wave height'], ['Neck raise', 'Rear up'], ['Stride', 'Wavelength'], ['Body bounce', 'Ripple'], ['Body length', 'Length']],
   crab: [['Tail wag', 'Claw snap'], ['Body bounce', 'Bob']],
-  plesiosaur: [['Front legs', 'Front flippers'], ['Hind legs', 'Rear flippers'], ['Front leg and elbow', 'Flipper and elbow'], ['Hind leg and knee', 'Rear flipper and knee'], ['Front paw', 'Flipper tip'], ['Hind paw', 'Flipper tip'], ['Wings open', 'Flippers out'], ['Wing beat', 'Flipper beat'], ['In flight', 'Swimming'], ['Flight height', 'Swim depth'], ['Frames per wing beat', 'Frames per flipper beat'], ['Bird: ', ''], ['Open the wings first.', 'Put the flippers out first.']],
-  bird: [['Front legs', 'Wings'], ['Hind legs', 'Legs'], ['Front leg and elbow', 'Wing and elbow'], ['Front paw', 'Wing tip'], ['Hind leg and knee', 'Leg and knee'], ['Hind paw', 'Foot']],
+  plesiosaur: [['Front leg length', 'Front flipper length'], ['Hind leg length', 'Rear flipper length'], ['Front legs', 'Front flippers'], ['Hind legs', 'Rear flippers'], ['Front leg and elbow', 'Flipper and elbow'], ['Hind leg and knee', 'Rear flipper and knee'], ['Front paw', 'Flipper tip'], ['Hind paw', 'Flipper tip'], ['Wings open', 'Flippers out'], ['Wing beat', 'Flipper beat'], ['In flight', 'Swimming'], ['Flight height', 'Swim depth'], ['Frames per wing beat', 'Frames per flipper beat'], ['Bird: ', ''], ['Open the wings first.', 'Put the flippers out first.']],
+  bird: [['Front leg length', 'Wing length'], ['Hind leg length', 'Leg length'], ['Front legs', 'Wings'], ['Hind legs', 'Legs'], ['Front leg and elbow', 'Wing and elbow'], ['Front paw', 'Wing tip'], ['Hind leg and knee', 'Leg and knee'], ['Hind paw', 'Foot']],
 };
 const BIPED_ONLY = ['dogTilt', 'dogArmSwing'];
 const BIRD_ONLY = ['dogHeadHold', 'dogWingOpen', 'dogFlap', 'dogFlapRate', 'dogFlapFrames', 'dogFlight', 'dogFlightHeight'];
-const EARS = ['dogEar', 'dEar'];
+const EARS = ['dogEar', 'dEar', 'dEarW'];
+const NEW_BODY = ['dLegF', 'dLegH', 'dSnout', 'dPaw', 'dTorso', 'dLimb', 'dNeckW', 'dTailW']; // for the animals on the dog's rig, not the snake, spider and crab
 const QUAD_ONLY = ['dogShoulder'];
 const NONE = ['dogGait', 'dogFlex', 'dogArch', 'dogCurl', 'dogTwist', 'dogHeadAngle', 'dogHeadNod', 'dogTailAngle', 'dogWag', 'dogNeckAngle', 'dogNeckSegs', 'dogNeckCurve', 'dogNeckWave', 'dogNeckSway', 'dogElbowOut', 'dogWidth', 'dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift'];
 /** Controls to leave out, by figure. */
@@ -23,9 +24,9 @@ const HIDE = {
   horse: new Set([...BIPED_ONLY, ...BIRD_ONLY]),
   lizard: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY]),
   plesiosaur: new Set([...BIPED_ONLY, ...EARS, 'dogHeadHold']),
-  snake: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogFlex', 'dogNeckAngle'].includes(k)), 'dogEar', 'dEar', 'dNeck', 'dLeg', 'dHead']),
-  spider: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift'].includes(k)), 'dNeck', 'dTail']),
-  crab: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift', 'dogWag'].includes(k)), 'dNeck', 'dTail']),
+  snake: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogFlex', 'dogNeckAngle'].includes(k)), 'dogEar', 'dEar', 'dNeck', 'dLeg', 'dHead', ...NEW_BODY]),
+  spider: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift'].includes(k)), 'dNeck', 'dTail', ...NEW_BODY]),
+  crab: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift', 'dogWag'].includes(k)), 'dNeck', 'dTail', ...NEW_BODY]),
 };
 /** Rubber hose settings that are only for the person: the animals have no gloves, shorts or pie eyes. */
 const HOSE_PERSON = new Set(['hoseEars', 'hoseEyes', 'hoseShorts', 'hoseGlove', 'hoseSquash', 'hoseTail']);

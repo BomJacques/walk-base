@@ -122,3 +122,9 @@ export const SPECIES = Object.freeze(ALL_SPECIES);
 /** The figure whose bones, words and movements this one uses: 'bird' for the rubber hose bird. */
 export const kindOf = (name) => SPECIES[name]?.like || name;
 export const speciesOf = (p) => SPECIES[p?.dogSpecies] || SPECIES.dog;
+
+/** How thick each part is drawn for this animal: the species' own look, times the thickness sliders (chest and belly, leg, neck and tail). */
+export function lookOf(p) {
+  const k = speciesOf(p).look; const r = p?.proportions || {};
+  return { ...k, body: k.body * (r.dTorso ?? 1), leg: k.leg * (r.dLimb ?? 1), neck: k.neck * (r.dNeckW ?? 1), tail: k.tail * (r.dTailW ?? 1) };
+}

@@ -634,3 +634,6 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 
 ## Done (2026-11-12): brushes
 - Nine brushes for the Draw pen (src/ink.js `brushStroke`, names in design.js `BRUSHES`), a `b` on each stroke. Not done: pressure and tilt from a pencil (a stroke has no width along it except the brush pen's taper), brush spacing and angle controls, brushes for the filled shape.
+
+## Done (2026-11-12): more body controls for the animals
+- Nine proportions on the dog's rig: separate front and hind leg length (the stance travel and the stand heights use each pair's own length, so the back tilts and every paw is still reached and planted within 0.8 to 1.3), snout length, paw size, and drawn thickness of the body, legs, neck and tail plus ear width (`lookOf` in dogdefaults.js). Not done: a wing span and feather control for the birds, the pterodactyl's membrane, a snout width, thickness per leg, the same for the crawlers.

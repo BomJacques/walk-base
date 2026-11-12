@@ -96,23 +96,23 @@ export function runPawPath(w, duty, D, lift) {
 
 /** Ground a planted paw covers. Limited to what the legs can span, so a very long stride on short legs shortens its steps instead of tearing the leg off. */
 export function stanceTravel(p, sc, duty = p.dogDuty) {
-  const L = bonesOf(p); const leg = sc('dLeg'); const { hock, pastern } = speciesOf(p).lean;
-  const hind = 0.88 * (L.thigh + L.shin) * leg - L.meta * leg * Math.sin(hock);
-  const dmax = 2 * (speciesOf(p).legs === 2 ? hind : Math.min(hind, 0.88 * (L.upper + L.fore) * leg - L.pastern * leg * Math.sin(pastern)));
+  const L = bonesOf(p); const legH = sc('dLeg') * sc('dLegH'); const legF = sc('dLeg') * sc('dLegF'); const { hock, pastern } = speciesOf(p).lean;
+  const hind = 0.88 * (L.thigh + L.shin) * legH - L.meta * legH * Math.sin(hock);
+  const dmax = 2 * (speciesOf(p).legs === 2 ? hind : Math.min(hind, 0.88 * (L.upper + L.fore) * legF - L.pastern * legF * Math.sin(pastern)));
   return Math.min(p.dogStride * duty, Math.max(0.05, dmax));
 }
 
 /** Body height at which the hind hips and the shoulders keep every planted paw within reach. */
 export function standHeights(p, sc) {
-  const L = bonesOf(p); const leg = sc('dLeg'); const { hock: HOCK_LEAN, pastern: PASTERN_LEAN } = speciesOf(p).lean;
+  const L = bonesOf(p); const legH = sc('dLeg') * sc('dLegH'); const legF = sc('dLeg') * sc('dLegF'); const { hock: HOCK_LEAN, pastern: PASTERN_LEAN } = speciesOf(p).lean;
   const D = stanceTravel(p, sc);
-  const hockY = L.paw + L.meta * leg * Math.cos(HOCK_LEAN);
-  const hockDx = L.meta * leg * Math.sin(HOCK_LEAN);
-  const reachH = 0.95 * (L.thigh + L.shin) * leg;
+  const hockY = L.paw + L.meta * legH * Math.cos(HOCK_LEAN);
+  const hockDx = L.meta * legH * Math.sin(HOCK_LEAN);
+  const reachH = 0.95 * (L.thigh + L.shin) * legH;
   const hip = hockY + Math.sqrt(Math.max(0.01, reachH ** 2 - (D / 2 + hockDx) ** 2));
-  const wristY = L.paw + L.pastern * leg * Math.cos(PASTERN_LEAN);
-  const wristDx = L.pastern * leg * Math.sin(PASTERN_LEAN);
-  const reachF = 0.95 * (L.upper + L.fore) * leg;
+  const wristY = L.paw + L.pastern * legF * Math.cos(PASTERN_LEAN);
+  const wristDx = L.pastern * legF * Math.sin(PASTERN_LEAN);
+  const reachF = 0.95 * (L.upper + L.fore) * legF;
   const shoulder = wristY + Math.sqrt(Math.max(0.01, reachF ** 2 - (D / 2 + wristDx) ** 2));
   return { hip, shoulder };
 }
@@ -191,10 +191,10 @@ export function poseDog(params, motion, u, extra = null) {
   const hs = sc('dHead');
   const Rh = mm(Rn, seg(c('head.yaw'), c('head.pitch') + rad(p.dogHeadAngle), c('head.roll')));
   const headC = add(neckTop, apply(Rh, [L.skull * 0.5 * hs, 0, 0]));
-  const noseTip = add(neckTop, apply(Rh, [(L.skull + L.snout) * hs, -0.02 * hs, 0]));
+  const snoutK = sc('dSnout'); const noseTip = add(neckTop, apply(Rh, [(L.skull + L.snout * snoutK) * hs, -0.02 * hs, 0]));
   const hinge = add(neckTop, apply(Rh, [L.skull * 0.45 * hs, -0.05 * hs, 0]));
   const Rj = mm(Rh, Rpitch(c('jaw.open')));
-  const jawEnd = add(hinge, apply(Rj, [L.jaw * hs, 0, 0]));
+  const jawEnd = add(hinge, apply(Rj, [L.jaw * hs * snoutK, 0, 0]));
   const ears = {};
   for (const side of ['R', 'L']) {
     const s = side === 'R' ? 1 : -1;
@@ -216,16 +216,16 @@ export function poseDog(params, motion, u, extra = null) {
   const legs = {};
   for (const leg4 of ['HR', 'HL', 'FR', 'FL']) {
     const front = leg4[0] === 'F'; const side = leg4[1]; const s = side === 'R' ? 1 : -1;
-    const k = (id) => c(`${front ? 'f' : 'h'}${id}.${side}`);
+    const k = (id) => c(`${front ? 'f' : 'h'}${id}.${side}`); const lg = leg * sc(front ? 'dLegF' : 'dLegH'); // the front legs and the hind legs can be different lengths
     const g = pawGait(p, leg4); const w = wrap(uw - g.ph); const Dp = g.duty === p.dogDuty ? D : stanceTravel(p, sc, g.duty);
     const f = p.dogGait === 'gallop' ? gallopPawPath(w, g.duty, Dp, g.lift, front) : p.dogGait === 'run' ? runPawPath(w, g.duty, Dp, g.lift) : pawPath(w, g.duty, Dp, g.lift);
     const ang = front ? PASTERN_LEAN : HOCK_LEAN;
-    const bone = (front ? L.pastern : L.meta) * leg;
+    const bone = (front ? L.pastern : L.meta) * lg;
     const pitch = f.theta + k('paw.pitch') + (tG[leg4]?.slope ?? 0);
     const lean = ang - 0.6 * pitch;
     const pawC = [(front ? shoulderRestX : 0) + f.x + k('paw.x'), L.paw + f.y + k('paw.y') + (tG[leg4]?.y ?? 0), s * k('paw.z')];
     const targetWalk = add(pawC, [-bone * Math.sin(lean), bone * Math.cos(lean), 0]);
-    const target = !front && fl > 0 ? mixv(targetWalk, add(P, apply(Rp, [-0.32 * leg, -0.2 * leg, s * 0.05])), fl) : targetWalk;
+    const target = !front && fl > 0 ? mixv(targetWalk, add(P, apply(Rp, [-0.32 * lg, -0.2 * lg, s * 0.05])), fl) : targetWalk;
     // Front leg: the shoulder blade is a bone of its own. Its top rides on the ribs by the withers (it slides and drops there),
     // it swings about that point, and the shoulder joint hangs from its lower end. The upper arm starts at that joint.
     let top = null; let root;
@@ -240,7 +240,7 @@ export function poseDog(params, motion, u, extra = null) {
     } else root = add(P, apply(Rp, [0, -0.02, s * L.hipWidth]));
     const out = k('leg.out');
     const pole = front ? norm([-Math.cos(out), 0, s * Math.sin(out)]) : norm([Math.cos(out), 0, s * Math.sin(out)]);
-    const l1 = (front ? L.upper : L.thigh) * leg; const l2 = (front ? L.fore : L.shin) * leg;
+    const l1 = (front ? L.upper : L.thigh) * lg; const l2 = (front ? L.fore : L.shin) * lg;
     if ((front && sp.front !== 'leg') || (!front && sp.hind === 'wing')) {
       // An arm, a wing or a flipper hangs free: it is placed, not planted. Arms swing a little against the legs; a wing or flipper folds or spreads and beats (a hind one a quarter beat behind).
       const ar = front ? sp.armRest : (sp.hindRest || sp.armRest); const off = [k('paw.x'), k('paw.y'), s * k('paw.z')]; let reach = Math.min((l1 + l2) * 0.93, 0.98 * (l1 + l2) - Math.hypot(...off)); // the paw offsets (how far apart the paws are) move the goal too, so they come out of the reach
@@ -256,15 +256,15 @@ export function poseDog(params, motion, u, extra = null) {
       const goal = add(add(root, apply(front ? R3 : Rp, loc)), off);
       const arm = ik3(root, goal, l1, l2, pole);
       const dir0 = norm(sub(arm.ankle, arm.knee)); const dir = lag ? norm([dir0[0], dir0[1] - lag, dir0[2]]) : dir0;
-      const hand = add(arm.ankle, mul(dir, (front ? L.pastern : L.meta) * leg * handScale));
-      legs[leg4] = { front, side, s, top, root, mid: arm.knee, wrist: arm.ankle, paw: hand, toe: add(hand, mul(dir, L.pawLen * 0.6)), reached: arm.reached, stance: false, w: 0, theta: 0, free: true };
+      const hand = add(arm.ankle, mul(dir, (front ? L.pastern : L.meta) * lg * handScale));
+      legs[leg4] = { front, side, s, top, root, mid: arm.knee, wrist: arm.ankle, paw: hand, toe: add(hand, mul(dir, L.pawLen * 0.6 * sc('dPaw'))), reached: arm.reached, stance: false, w: 0, theta: 0, free: true };
       continue;
     }
     const ik = ik3(root, target, l1, l2, pole);
-    let pawF = pawC; let toe = add(pawC, [Math.cos(pitch) * L.pawLen, Math.sin(pitch) * L.pawLen, 0]);
+    let pawF = pawC; let toe = add(pawC, [Math.cos(pitch) * L.pawLen * sc('dPaw'), Math.sin(pitch) * L.pawLen * sc('dPaw'), 0]);
     if (!front && fl > 0) { // tucked: the foot trails back under the tail
-      pawF = mixv(pawC, add(ik.ankle, apply(Rp, [-0.09 * leg, -0.09 * leg, 0])), fl);
-      toe = mixv(toe, add(pawF, apply(Rp, [-0.1 * leg, -0.03 * leg, 0])), fl);
+      pawF = mixv(pawC, add(ik.ankle, apply(Rp, [-0.09 * lg, -0.09 * lg, 0])), fl);
+      toe = mixv(toe, add(pawF, apply(Rp, [-0.1 * lg, -0.03 * lg, 0])), fl);
     }
     legs[leg4] = { front, side, s, top, root, mid: ik.knee, wrist: ik.ankle, paw: pawF, toe, reached: ik.reached, stance: f.stance && fl < 0.5, w, theta: pitch };
   }

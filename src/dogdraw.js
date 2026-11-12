@@ -2,7 +2,7 @@
 import { add, sub, mul, norm, apply } from './rig3.js';
 import { hull, circlePts, TAU } from './geom.js';
 import { pawGait, poseDog, legsOf, bonesOf, DOGB } from './dog3.js';
-import { speciesOf, kindOf } from './dogdefaults.js';
+import { speciesOf, kindOf, lookOf } from './dogdefaults.js';
 import { hosePath, tubePoly, wobble, taperRadii } from './hoseshape.js';
 import { capsuleFacets, slabFacets, ellipsoidFacets, chainFacets, withFacets } from './lowpoly.js';
 import { buildCrawlerShapes } from './crawldraw.js';
@@ -13,7 +13,7 @@ const mixHex = (a, b, t) => { const pa = parseInt(a.slice(1), 16); const pb = pa
  * the body is a sausage, the head a ball with a pale muzzle (or a beak) and a round eye. The colours are the rubber hose ones in the View tab.
  */
 function buildHoseAnimal(pz, cam, st) {
-  const shapes = []; const p = pz.params; const sp = speciesOf(p); const K = sp.look; const bird = kindOf(p.dogSpecies) === 'bird';
+  const shapes = []; const p = pz.params; const sp = speciesOf(p); const K = lookOf(p); const bird = kindOf(p.dogSpecies) === 'bird';
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]); const sc = cam.scale;
   const hs = (p.proportions?.dHead ?? 1) * (bonesOf(p).skull / DOGB.skull);
   const limbK = st.hoseLimb ?? 1; const bend = Math.max(0, Math.min(1, st.hoseBend ?? 1)); const taper = st.hoseTaper ?? 0; const belly = st.hoseBelly ?? 1;
@@ -72,7 +72,7 @@ export function buildDogShapes(pz, cam, st = {}) {
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
   const sc = cam.scale;
   const hs = (pz.params.proportions?.dHead ?? 1) * (bonesOf(pz.params).skull / DOGB.skull); // head drawn in proportion to this species' skull
-  const sp = speciesOf(pz.params); const K = sp.look; const bird = kindOf(pz.params.dogSpecies) === 'bird' && !sp.membrane; const cera = pz.params.dogSpecies === 'ceratopsian';
+  const sp = speciesOf(pz.params); const K = lookOf(pz.params); const earW = pz.params.proportions?.dEarW ?? 1; const bird = kindOf(pz.params.dogSpecies) === 'bird' && !sp.membrane; const cera = pz.params.dogSpecies === 'ceratopsian';
   const capsule = (a, b, ra, rb, part, side, role) => {
     const A = S(a); const B = S(b);
     const sh = { pts: hull([...circlePts(A, ra * sc), ...circlePts(B, rb * sc)]), depth: (A.d + B.d) / 2, part, side, role }; shapes.push(sh);
@@ -113,7 +113,7 @@ export function buildDogShapes(pz, cam, st = {}) {
 
   for (const side of ['R', 'L']) {
     const role = side === 'R' ? 'near' : 'far';
-    capsule(pz.ears[side].root, pz.ears[side].tip, 0.045 * (K.ear ?? 1), 0.03 * (K.ear ?? 1) * (K.ear ? 0.5 : 1), 'dog.ear', side, role);
+    capsule(pz.ears[side].root, pz.ears[side].tip, 0.045 * (K.ear ?? 1), 0.03 * (K.ear ?? 1) * (K.ear ? 0.5 : 1) * earW, 'dog.ear', side, role);
   }
   for (let k = 0; k < 3; k++) capsule(pz.tail[k], pz.tail[k + 1], (0.035 - k * 0.008) * K.tail, (0.03 - k * 0.009) * K.tail, `dog.tail${k + 1}`, null, 'body');
   if (bird) { // a tail fan: a wedge of feathers spreading out from the last joint
