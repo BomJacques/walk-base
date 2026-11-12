@@ -2702,7 +2702,10 @@ function build() {
   const vb = (name, label, id, fn, attrs = {}) => h('button', { type: 'button', class: `btn vb icon${id === 'fit' ? '' : ' cam'}`, testid: id, 'aria-label': label, title: label, onClick: fn, ...attrs }, icon(name), h('span', { class: 'sr' }, label));
   const views = [['Side', 0, 0, 'view-side'], ['¾ front', -40, 12, 'view-34'], ['Front', -90, 0, 'view-front'], ['Back', 90, 0, 'view-back'], ['Top', 0, 80, 'view-top']];
   const viewMenu = menuButton({ label: 'View', testid: 'view-menu', className: 'btn vb cam', title: 'Camera view', items: () => views.map(([l, y, p, id]) => ({ label: l, testid: id, radio: true, checked: S.s.camYaw === y && S.s.camPitch === p, onClick: () => setView(y, p) })) });
-  const viewbar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': 'Camera' },
+  // The camera bar can be moved off the picture and folded away to one small button, and remembers where it was.
+  const vbGrip = h('button', { type: 'button', class: 'btn vb vgrip', testid: 'viewbar-grip', 'aria-label': 'Move the camera bar: drag it, or use the arrow keys. Double-click to put it back.', title: 'Drag to move (double-click to reset)' }, icon('grip'));
+  const vbMin = h('button', { type: 'button', class: 'btn vb vmin', testid: 'viewbar-min', onClick: () => { VB.min = !VB.min; placeViewbar(); saveViewbar(); } });
+  const viewbar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': 'Camera' }, vbGrip, vbMin,
     vb('select', 'Select: tap to select, drag to move what you touch. Two fingers pan and zoom.', 'tool-select', () => { S.tool = 'select'; refreshViewbar(); }, { 'data-tool': 'select' }),
     vb('orbit', 'Orbit', 'tool-orbit', () => { S.tool = 'orbit'; refreshViewbar(); }, { 'data-tool': 'orbit' }),
     vb('pan', 'Pan', 'tool-pan', () => { S.tool = 'pan'; refreshViewbar(); }, { 'data-tool': 'pan' }),
@@ -2712,6 +2715,23 @@ function build() {
     vb('spin', 'Spin', 'turntable', () => { S.s.autoOrbit = !S.s.autoOrbit; refreshViewbar(); save(); }, { 'aria-pressed': 'false' }),
     vb('face', 'Head view', 'head-view', () => { S.s.focus = S.s.focus === 'head' ? 'body' : 'head'; S.zoom = 1; S.panX = S.panY = 0; refreshViewbar(); if (S.tab === 'Speech') renderPanel(); render(); save(); }, { 'aria-pressed': 'false' }),
     vb('fit', 'Fit', 'fit', () => { S.zoom = 1; S.panX = S.panY = 0; render(); }));
+  const placeViewbar = () => {
+    const wr = wrapEl?.getBoundingClientRect(); viewbar.classList.toggle('min', VB.min);
+    vbMin.replaceChildren(icon(VB.min ? 'orbit' : 'minus'), h('span', { class: 'sr' }, VB.min ? 'Show the camera tools' : 'Fold the camera tools away')); vbMin.title = VB.min ? 'Show the camera tools' : 'Fold the camera tools away'; vbMin.setAttribute('aria-label', vbMin.title); vbMin.setAttribute('aria-expanded', String(!VB.min));
+    if (!wr || !wr.width) return;
+    if (VB.x == null) { viewbar.style.left = ''; viewbar.style.top = ''; viewbar.style.maxWidth = ''; return; }
+    const bw = viewbar.offsetWidth || 40; const bh = viewbar.offsetHeight || 36; VB.x = Math.max(0, Math.min(wr.width - Math.min(bw, 44), VB.x)); VB.y = Math.max(0, Math.min(wr.height - Math.min(bh, 36), VB.y));
+    viewbar.style.left = `${VB.x}px`; viewbar.style.top = `${VB.y}px`; viewbar.style.maxWidth = `${Math.max(60, wr.width - VB.x - 8)}px`;
+  };
+  let vbDrag = null;
+  vbGrip.addEventListener('pointerdown', (e) => { if (e.button) return; e.preventDefault(); vbGrip.setPointerCapture(e.pointerId); const r = viewbar.getBoundingClientRect(); vbDrag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top }; });
+  vbGrip.addEventListener('pointermove', (e) => { if (!vbDrag || e.pointerId !== vbDrag.id) return; const wr = wrapEl.getBoundingClientRect(); VB.x = e.clientX - wr.left - vbDrag.dx; VB.y = e.clientY - wr.top - vbDrag.dy; placeViewbar(); });
+  const vbEnd = (e) => { if (vbDrag && e.pointerId === vbDrag.id) { vbDrag = null; saveViewbar(); } };
+  vbGrip.addEventListener('pointerup', vbEnd); vbGrip.addEventListener('pointercancel', vbEnd);
+  vbGrip.addEventListener('dblclick', () => { VB.x = null; VB.y = null; placeViewbar(); saveViewbar(); });
+  vbGrip.addEventListener('keydown', (e) => { const d = { ArrowLeft: [-12, 0], ArrowRight: [12, 0], ArrowUp: [0, -12], ArrowDown: [0, 12] }[e.key]; if (!d) return; e.preventDefault(); const wr = wrapEl.getBoundingClientRect(); const r = viewbar.getBoundingClientRect(); VB.x = (VB.x ?? r.left - wr.left) + d[0]; VB.y = (VB.y ?? r.top - wr.top) + d[1]; placeViewbar(); saveViewbar(); });
+  window.addEventListener('resize', placeViewbar); requestAnimationFrame(placeViewbar); setTimeout(placeViewbar, 300);
+  window.__placeViewbar = placeViewbar;
   const back = h('button', { type: 'button', class: 'btn back', testid: 'stage-back', onClick: () => { S.stageOnly = false; document.body.classList.remove('stage-only'); render(); } }, 'Show controls');
   wrapEl = h('section', { class: 'stage-wrap' }, stage, hud, viewbar, back);
   frameCanvas = document.createElement('canvas');
@@ -2742,6 +2762,10 @@ function build() {
 
 // ---------- resizable animation window ----------
 const LAYOUT_KEY = 'walkbase.layout';
+const VB_KEY = 'walkbase.viewbar';
+/** Where the camera bar sits on the stage and whether it is folded away: { min, x, y }, x and y null for the corner it starts in. */
+const VB = (() => { try { const r = JSON.parse(localStorage.getItem(VB_KEY) || 'null'); if (r && typeof r === 'object') return { min: Boolean(r.min), x: Number.isFinite(r.x) ? r.x : null, y: Number.isFinite(r.y) ? r.y : null }; } catch { /* none kept */ } return { min: false, x: null, y: null }; })();
+const saveViewbar = () => { try { localStorage.setItem(VB_KEY, JSON.stringify(VB)); } catch { /* not kept */ } };
 const LAYOUT = { panelW: 390, stageH: null, density: 'auto', theme: 'auto', resume: false, hud: false, arcSym: 'alt', expandAll: false, rows: 'auto', collapsed: {} };
 /** Slider rows: compact (label, track and number on one line), roomy (the label above a full-width track, easier to drag), or automatic (compact, roomy on a phone). */
 // A wide panel (an iPad in portrait) sets the slider rows out in two columns.

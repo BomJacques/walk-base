@@ -1,6 +1,8 @@
 // Line icons on a 16 pixel grid. They take their colour from the text around them.
 // Each entry: [stroke paths, filled paths].
 const ICONS = {
+  grip: ['', 'M5 3h2v2H5zM9 3h2v2H9zM5 7h2v2H5zM9 7h2v2H9zM5 11h2v2H5zM9 11h2v2H9z'],
+  minus: ['M4 8h8', ''],
   undo: ['M6.5 3 3 6.5 6.5 10M3 6.5h6.2a3.3 3.3 0 0 1 0 6.6H6', ''],
   redo: ['M9.5 3 13 6.5 9.5 10M13 6.5H6.8a3.3 3.3 0 0 0 0 6.6H10', ''],
   first: ['M3.5 3.5v9', 'M12.5 3.8v8.4L6 8z'],

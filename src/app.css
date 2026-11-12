@@ -478,3 +478,8 @@ select, select option, select optgroup { background-color: var(--panel-2); color
 .uvprev { display: block; width: 100%; max-width: 280px; height: auto; aspect-ratio: 1; border: 1px solid var(--line); border-radius: var(--r); margin: 4px 0; background: var(--ctl); }
 
 .tpose { display: block; width: 100%; max-width: 260px; aspect-ratio: 440 / 520; margin: 4px auto; border: 1px solid var(--line); border-radius: var(--r); background: #fff; cursor: pointer; touch-action: none; }
+.viewbar .vgrip { cursor: grab; touch-action: none; min-width: 28px; padding: 0 4px; opacity: .75; }
+.viewbar .vgrip:active { cursor: grabbing; }
+.viewbar.min { flex-wrap: nowrap; }
+.viewbar.min > :not(.vgrip):not(.vmin) { display: none; }
+.viewbar .vmin { min-width: 30px; padding: 0 4px; }

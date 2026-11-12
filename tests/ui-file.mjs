@@ -784,6 +784,26 @@ const half = await ev(() => window.__walkBase.designOf().head.ink.strokes.filter
 check('the bucket stops at a line drawn across the part: it fills one side only', half.length === 1 && uvArea(half[0].loops[0]) < wholeA * 0.75 && uvArea(half[0].loops[0]) > wholeA * 0.2, [wholeA, half.map((s) => s.loops.map(uvArea))]);
 check('and the fill goes under the line, not over it', (await ev(() => window.__walkBase.designOf().head.ink.strokes.map((s) => s.fill).join())) === 'true,false');
 await ev(() => { const w = window.__walkBase; w.S.design = {}; w.S.draw.mode = 'part'; w.S.draw.tool = 'pen'; w.setTab('Gait'); w.render(); });
+// ---- the camera bar can be moved and folded away
+await ev(() => { const w = window.__walkBase; w.setTab('Gait'); w.render(); }); await wait(300);
+const vbox = () => page.locator('.viewbar').boundingBox();
+const vb0 = await vbox();
+check('the camera bar has a grip and a fold-away button', (await q('viewbar-grip').count()) === 1 && (await q('viewbar-min').count()) === 1 && vb0.width > 200);
+const gb = await q('viewbar-grip').boundingBox();
+await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2); await page.mouse.down(); await page.mouse.move(gb.x + 300, gb.y + 220, { steps: 8 }); await page.mouse.up(); await wait(200);
+const vb1 = await vbox();
+check('dragging the grip moves the bar over the stage', vb1.x > vb0.x + 200 && vb1.y > vb0.y + 150, [vb0, vb1]);
+await q('viewbar-min').click(); await wait(200);
+const vb2 = await vbox();
+check('folding it away leaves one small button where it was, and hides the tools', vb2.width < 120 && (await page.locator('[data-testid="tool-orbit"]:visible').count()) === 0 && Math.abs(vb2.x - vb1.x) < 3);
+await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(500);
+const vb3 = await vbox();
+check('the place and the folded state are remembered', vb3.width < 120 && Math.abs(vb3.x - vb2.x) < 3 && Math.abs(vb3.y - vb2.y) < 3, [vb2, vb3]);
+await q('viewbar-min').click(); await wait(200);
+check('opening it again shows the tools', (await page.locator('[data-testid="tool-orbit"]:visible').count()) === 1);
+await q('viewbar-grip').dblclick(); await wait(200);
+const vb4 = await vbox();
+check('double-clicking the grip puts the bar back in its corner', Math.abs(vb4.x - vb0.x) < 3 && Math.abs(vb4.y - vb0.y) < 3, [vb0, vb4]);
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);
