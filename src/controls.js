@@ -320,6 +320,19 @@ export const PRESETS = {
   Stomp: { stepLength: 0.7, duty: 0.6, footLift: 0.22, bob: 0.11, heelStrike: 30, heelDown: 0.07, liftPeak: 0.3, swingReach: 0.95, legExtend: 0.985, armSwing: 22, lean: 4, cycleFrames: 22, torsoSway: 3 },
   Sneak: { stepLength: 0.5, duty: 0.72, footLift: 0.22, bob: 0.03, lean: 12, armSwing: 6, cycleFrames: 40, heelStrike: 3, headBob: 0.9, legExtend: 0.9, liftPeak: 0.55, heelDown: 0.3, torsoSway: 0.6 },
   Strut: { stepLength: 0.8, duty: 0.58, footLift: 0.15, bob: 0.09, lean: -2, armSwing: 30, headBob: 0.7, pelvisRoll: 7, pelvisYaw: 12, sway: 0.05, torsoSway: 3, shoulderCounter: 14, toeOut: 12, cycleFrames: 28 },
+  // Robot: straight stiff legs, flat feet that never roll, hips that do not bob or twist, arms held at a right angle, the head locked, and on twos so it steps from pose to pose.
+  Robot: { stepLength: 0.55, duty: 0.6, legExtend: 0.995, heelStrike: 0, toeOff: 0, swingToe: 0, heelDown: 0.04, heelUp: 0.85, footLift: 0.16, liftPeak: 0.5, swingReach: 0, bob: 0.008, downPhase: 0.1, armSwing: 18, elbowBase: 80, elbowSwing: 0, armLag: 0, pelvisYaw: 0, pelvisRoll: 0, pelvisPitch: 0, sway: 0, torsoSway: 0, shoulderCounter: 0, headBob: 1, headNod: 0, headKeep: 1, lean: 0, noiseAmount: 0, cycleFrames: 28, exposure: 2 },
+  // Skip: a step and a hop on each side, so the rhythm is long-short, the body leaves the ground, and the arms swing high.
+  Skip: { stepLength: 0.8, duty: 0.4, footLift: 0.34, liftPeak: 0.45, bob: 0.13, downPhase: 0.2, legExtend: 0.98, armSwing: 50, elbowBase: 40, elbowSwing: 25, lean: 3, headNod: 3, headBob: 0.5, pelvisRoll: 3, torsoSway: 2, asymTiming: 0.07, asymLift: 0.5, asymDuty: -0.04, heelStrike: 6, toeOff: 30, cycleFrames: 20 },
+  // Tiptoe: up on the balls of the feet, short light steps, the heel never lands.
+  Tiptoe: { stepLength: 0.4, duty: 0.58, heelStrike: 0, toeOff: 60, swingToe: 25, heelDown: 0.04, heelUp: 0.35, footLift: 0.18, bob: 0.025, lean: -2, armSwing: 6, elbowBase: 20, elbowSwing: 6, headBob: 0.9, legExtend: 0.97, cycleFrames: 30, torsoSway: 0.6 },
+  // Catwalk: one foot in front of the other on a single line, hips swinging, shoulders quiet, chin level.
+  Catwalk: { stepLength: 0.75, duty: 0.55, stepWidth: 0, toeOut: 0, pelvisRoll: 10, pelvisYaw: 20, sway: 0.03, shoulderCounter: 6, armSwing: 10, elbowBase: 25, bob: 0.06, lean: -4, chestOut: 8, headBob: 1, headKeep: 1, footLift: 0.12, heelStrike: 12, cycleFrames: 30 },
+  // Zombie: dragging feet, arms held out in front, head lolling to one side.
+  Zombie: { stepLength: 0.45, duty: 0.7, footLift: 0.05, armCarry: 40, armSwing: 4, elbowBase: 5, elbowSwing: 0, lean: 10, headTilt: 10, headTurn: 8, asymLift: -0.3, asymDuty: -0.05, bob: 0.03, heelStrike: 2, toeOff: 8, cycleFrames: 44, noiseAmount: 0.3, torsoSway: 4, sideLean: 4 },
+  // Drunk: a wide uneven stagger, the body rocking about and the arms flung.
+  Drunk: { stepLength: 0.55, duty: 0.62, stepWidth: 0.2, sway: 0.1, sideLean: 6, noiseAmount: 0.7, noiseSpeed: 1, torsoSway: 7, pelvisRoll: 8, armSwing: 22, headNod: 5, lean: 3, footLift: 0.14, asymTiming: 0.03, kneeOut: 5, toeOut: 20, cycleFrames: 36 },
+  'Power walk': { stepLength: 1.0, duty: 0.52, armSwing: 48, elbowBase: 85, elbowSwing: 10, lean: 5, footLift: 0.14, bob: 0.06, heelStrike: 20, pelvisYaw: 8, shoulderCounter: 12, torsoSway: 1.5, cycleFrames: 17 },
   Waddle: { stepLength: 0.5, duty: 0.64, bob: 0.06, pelvisRoll: 9, sway: 0.07, torsoSway: 5, toeOut: 22, stepWidth: 0.12, armSwing: 10, armOut: 14, lean: 2, cycleFrames: 34, headNod: 4 },
   Tired: { stepLength: 0.5, bob: 0.05, footLift: 0.05, lean: 11, armSwing: 8, duty: 0.68, cycleFrames: 32, headNod: 4, headBob: 0, heelStrike: 6, toeOff: 20, legExtend: 0.95 },
   'Carrying a bag': { carry: 0.9, stepLength: 0.66, bob: 0.06, duty: 0.63, cycleFrames: 28, lean: 3, armSwing: 20, sway: 0.045, weight: 0.4, asymTiming: 0.02 },
@@ -351,6 +364,10 @@ export const PRESETS_DOG = {
   Gallop: { dogGait: 'gallop', dogStride: 2.6, dogDuty: 0.22, dogLift: 0.38, dogBob: 0.2, dogFlex: 3, dogArch: 0, dogCurl: 18, dogTwist: 2, dogShoulder: 0.07, dogWidth: 0.07, dogHeadNod: 6, dogEar: 18, dogTailAngle: 10, dogWag: 6, cycleFrames: 12 },
   Sniffing: { dogStride: 0.55, dogLift: 0.08, dogNeckAngle: 15, dogHeadAngle: 55, dogTailAngle: 8, dogWag: 8, cycleFrames: 32, dogBob: 0.015 },
   Limp: { dogStride: 0.7, dogLift: 0.1, dogDuty: 0.7, dogAsymDuty: -0.14, dogAsymLift: -0.5, dogAsymTiming: 0.04, dogBob: 0.03, dogNeckAngle: 44, dogHeadAngle: 40, dogWag: 4, cycleFrames: 28 },
+  // Robot: even, mechanical steps, a rigid back and a level head, on twos.
+  Robot: { dogStride: 0.8, dogDuty: 0.6, dogLift: 0.12, dogBob: 0, dogFlex: 0, dogArch: 0, dogTwist: 0, dogShoulder: 0, dogNeckAngle: 30, dogHeadAngle: 30, dogWag: 0, dogEar: 0, cycleFrames: 24, exposure: 2 },
+  // Bounding along: all four feet leave the ground together, the back flexing like a springing cat or a deer.
+  Skip: { dogGait: 'gallop', dogStride: 1.5, dogDuty: 0.34, dogLift: 0.3, dogBob: 0.14, dogFlex: 2, dogCurl: 12, dogShoulder: 0.05, dogHeadNod: 5, dogTailAngle: 14, dogWag: 14, cycleFrames: 18 },
   Heavy: { weight: 0.8, dogStride: 0.75, dogDuty: 0.72, dogLift: 0.09, dogBob: 0.04, cycleFrames: 36 },
   Light: { weight: -0.6, dogStride: 1.05, dogDuty: 0.6, dogLift: 0.17, dogBob: 0.04, cycleFrames: 20 },
   Uphill: { dogStride: 0.85, dogLift: 0.17, dogBob: 0.04, dogDuty: 0.64, terrain: 'slope', terrainGrade: 12, dogNeckAngle: 46, dogHeadAngle: 30, cycleFrames: 24 },

@@ -120,6 +120,54 @@ for (const id of ['reach', 'pickup', 'trip']) {
   const ok = await ev(() => { const w = window.__walkBase; const pf = w.P().perf; w.setFrame(Math.min(20, pf.T - 1)); return Object.keys(w.S.lanes).length >= 4 && pf.T >= 72; });
   check(`${id} adds lanes and extends the performance`, ok);
 }
+// ---- several takes over lanes that already exist, a slider that is held, punching in and out, and muting a lane
+{
+  await ev(() => { const w = window.__walkBase; w.S.lanes = {}; w.S.perfLen = 0; w.S.punch = null; w.S.ver++; w.setTab('Gait'); w.setFrame(0); w.render(); });
+  await q('tab-Auto').click(); await q('rec-mode-touch').click(); await q('tab-Gait').click();
+  if (!(await ev(() => window.__walkBase.S.armed))) await q('rec').click();
+  const takeOn = async (sel, vals) => {
+    await ev(() => window.__walkBase.setFrame(0)); await q('play').click(); await page.waitForTimeout(250);
+    await ev(async ({ sel, vals }) => { const el = document.querySelector(sel); el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); for (const v of vals) { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })); await new Promise((r) => setTimeout(r, 300)); } el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); await new Promise((r) => setTimeout(r, 250)); }, { sel, vals });
+    await q('play').click(); await page.waitForTimeout(150);
+  };
+  const laneVals = (id) => ev((id) => (window.__walkBase.S.lanes['p:' + id]?.pts || []).map((p) => +p.v.toFixed(2)), id);
+  await takeOn('[data-testid="rng-stepLength"]', [0.3, 0.5]);
+  await takeOn('[data-testid="rng-stepLength"]', [0.9, 0.4]);
+  const second = await laneVals('stepLength'); check('a second take over the same slider replaces the first', second.includes(0.9) && second.includes(0.4) && second.filter((v) => v === 0.3).length <= 1, second); // at most the one point from before this take began
+  await takeOn('[data-testid="rng-armSwing"]', [10, 40]);
+  await takeOn('[data-testid="rng-stepLength"]', [0.35, 0.7]);
+  const lanes4 = await ev(() => Object.keys(window.__walkBase.S.lanes).sort());
+  const third = await laneVals('stepLength');
+  check('after four takes on two sliders both are automated', lanes4.includes('p:stepLength') && lanes4.includes('p:armSwing'), lanes4);
+  check('and the newest take is the one that is kept', third.includes(0.7) && third.includes(0.35) && Math.abs(third.at(-1) - 0.78) < 1e-9, third); // the lane held its old value until this take began, then followed it
+  check('the base values were never changed by any take', await ev(() => Math.abs(window.__walkBase.S.p.stepLength - 0.78) < 1e-9));
+  // a slider that is held is not reset by the lane that drives it (an iPad does not focus a slider it is touching)
+  await ev(() => { const w = window.__walkBase; w.setFrame(20); });
+  const kept = await ev(async () => { const el = document.querySelector('[data-testid="rng-stepLength"]'); el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); el.value = '1.2'; await new Promise((r) => setTimeout(r, 60)); window.__walkBase.setFrame(30); window.__walkBase.setFrame(31); const v = Number(el.value); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); return v; });
+  check('a slider you are holding is left where your finger put it', Math.abs(kept - 1.2) < 1e-6, kept);
+  // punch in and out
+  await ev(() => { const w = window.__walkBase; w.S.lanes = {}; w.S.punch = null; w.S.ver++; w.setFrame(0); }); await q('tab-Auto').click();
+  await q('punch-on').check(); await page.locator('[data-testid="punch-a"]').fill('21'); await page.locator('[data-testid="punch-a"]').dispatchEvent('change');
+  await page.locator('[data-testid="punch-b"]').fill('45'); await page.locator('[data-testid="punch-b"]').dispatchEvent('change');
+  check('punch in and out keeps its two frames', await ev(() => { const p = window.__walkBase.S.punch; return p.on && p.a === 21 && p.b === 45; }), await ev(() => window.__walkBase.S.punch));
+  await q('tab-Gait').click(); await q('play').click(); await page.waitForTimeout(150);
+  check('a take that punches in starts at the first frame', await ev(() => window.__walkBase.S.recording && window.__walkBase.S.frame >= 20), await ev(() => window.__walkBase.S.frame));
+  await ev(async () => { const el = document.querySelector('[data-testid="rng-stepLength"]'); el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); el.value = '0.4'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForTimeout(1800);
+  const out = await ev(() => ({ playing: window.__walkBase.S.playing, frame: window.__walkBase.S.frame, rec: window.__walkBase.S.recording, lane: (window.__walkBase.S.lanes['p:stepLength']?.pts || []).map((p) => p.t) }));
+  await ev(() => document.querySelector('[data-testid="rng-stepLength"]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  check('and stops by itself at the last frame', !out.playing && !out.rec && out.frame <= 45, out);
+  check('only the punched span was written', out.lane.length >= 2 && Math.min(...out.lane) >= 18 && Math.max(...out.lane) <= 50, out.lane);
+  await ev(() => { window.__walkBase.S.punch = null; });
+  // mute a lane: it stays in the list but the walk ignores it, and unmuting brings it back
+  await ev(() => { const w = window.__walkBase; w.S.lanes = { 'p:stepLength': { pts: [{ t: 0, v: 0.3 }, { t: 40, v: 0.3 }], interp: 'smooth' } }; w.S.perfLen = 48; w.S.ver++; w.setTab('Auto'); w.setFrame(20); w.render(); }); await page.waitForTimeout(250);
+  const at = () => ev(() => window.__walkBase.nowValues().p.stepLength);
+  check('a lane drives the walk', Math.abs((await at()) - 0.3) < 1e-6, await at());
+  await q('tab-Auto').click(); await q('lane-mute-p:stepLength').click(); await page.waitForTimeout(150);
+  check('a muted lane is ignored but kept', Math.abs((await at()) - 0.78) < 1e-6 && (await ev(() => window.__walkBase.S.lanes['p:stepLength'].mute === true)), await at());
+  await q('lane-mute-p:stepLength').click(); await page.waitForTimeout(150);
+  check('and unmuting brings it back', Math.abs((await at()) - 0.3) < 1e-6, await at());
+}
 check('no page errors', errors.length === 0, errors.slice(0, 3));
 await browser.close();
 process.exit(fails ? 1 : 0);

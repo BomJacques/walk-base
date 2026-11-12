@@ -161,6 +161,7 @@ CLIPS.dog = [...CLIPS.dog, ...DOG_MOVES];
 /** The movements are shown in these groups, in this order. */
 export const CLIP_GROUPS = [
   ['Pace', ['turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'begin', 'stop', 'jog', 'run', 'sprint', 'slow', 'speedup', 'slowdown', 'limp', 'nolimp', 'takeoff', 'land', 'trip']],
+  ['Weight', ['float', 'hang', 'dangle', 'climb']],
   ['Posture', ['sit', 'down', 'beg', 'kneel', 'crouch', 'standup', 'bow', 'stretch', 'playbow', 'headdown', 'rollover']],
   ['Action', ['stumble', 'slip', 'stagger', 'duck', 'punch', 'jump', 'drop', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff', 'peck', 'roar', 'lunge', 'rearup', 'toss']],
   ['Mood', ['gettired', 'perkup', 'cheerup', 'getangry', 'gosneaky']],

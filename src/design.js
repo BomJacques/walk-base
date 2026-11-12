@@ -29,9 +29,9 @@ export const MAX_STROKES = 300; export const MAX_STROKE_PTS = 500;
 const r3 = (v) => Math.round(v * 1000) / 1000;
 export function cleanStroke(raw) {
   if (!raw || typeof raw !== 'object' || !(Array.isArray(raw.pts) || Array.isArray(raw.loops))) return null;
-  const pts = []; for (const q of (Array.isArray(raw.pts) ? raw.pts : []).slice(0, MAX_STROKE_PTS)) { if (Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])) pts.push(q.length > 2 && Number.isFinite(+q[2]) && q[2] !== null && q[2] !== '' ? [r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5)), Math.round(clamp(q[2], 0, 1, 0.5) * 100) / 100] : [r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5))]); }
+  const pts = []; for (const q of (Array.isArray(raw.pts) ? raw.pts : []).slice(0, MAX_STROKE_PTS)) { if (Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])) pts.push(q.length > 2 && Number.isFinite(+q[2]) && q[2] !== null && q[2] !== '' ? [r3(clamp(q[0], -12, 13, 0.5)), r3(clamp(q[1], -12, 13, 0.5)), Math.round(clamp(q[2], 0, 1, 0.5) * 100) / 100] : [r3(clamp(q[0], -12, 13, 0.5)), r3(clamp(q[1], -12, 13, 0.5))]); }
   let loops = null;
-  if (Array.isArray(raw.loops)) loops = raw.loops.slice(0, 8).map((l) => (Array.isArray(l) ? l.slice(0, 400).filter((q) => Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])).map((q) => [r3(clamp(q[0], -3, 4, 0.5)), r3(clamp(q[1], -3, 4, 0.5))]) : [])).filter((l) => l.length >= 3);
+  if (Array.isArray(raw.loops)) loops = raw.loops.slice(0, 8).map((l) => (Array.isArray(l) ? l.slice(0, 400).filter((q) => Array.isArray(q) && Number.isFinite(+q[0]) && Number.isFinite(+q[1])).map((q) => [r3(clamp(q[0], -12, 13, 0.5)), r3(clamp(q[1], -12, 13, 0.5))]) : [])).filter((l) => l.length >= 3);
   if (loops && !loops.length) loops = null;
   if (!pts.length && loops) pts.push(...loops[0].slice(0, MAX_STROKE_PTS));
   if (!pts.length) return null;

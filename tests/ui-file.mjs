@@ -640,7 +640,7 @@ const a1 = await clientOf('head'); const a2 = await clientOf(body.k);
 await ev(() => { window.__walkBase.S.draw.size = 4; });
 await page.mouse.move(a1.x, a1.y); await page.mouse.down(); await page.mouse.move((a1.x + a2.x) / 2, (a1.y + a2.y) / 2, { steps: 10 }); await page.mouse.move(a2.x, a2.y, { steps: 10 }); await page.mouse.up(); await wait(250);
 const whole = await ev(() => Object.entries(window.__walkBase.designOf()).filter(([, p]) => p.ink).map(([k, p]) => [k, p.ink.strokes.length]));
-check('drawing the whole figure splits a line between the parts it crosses', whole.length >= 2 && whole.some(([k]) => k === 'head'), whole);
+check('drawing the whole figure keeps a line on the part it started on, however far it runs', whole.length === 1 && whole[0][0] === 'head' && whole[0][1] === 2, whole); // the head had one line already, and the drag added just one more
 const allRep = () => ev(() => Object.values(window.__walkBase.designOf()).filter((p) => p.ink).every((p) => p.ink.replace));
 check('a line drawn across the figure commits every part it touched, and the button offers to uncommit them', (await allRep()) === true && /^Uncommit all/.test(await q('draw-commit-all').innerText()));
 await q('draw-commit-all').click(); await wait(200);
@@ -1008,6 +1008,20 @@ if (name === 'chromium') {
   const rows = []; for (let f = 0; f < 12; f++) { await ev((f) => { window.__walkBase.setFrame(f); window.__walkBase.render(); }, f); await wait(60); rows.push(await ev(() => { const fr = window.__walkBase.S.last.frames['leg.L'] || []; return fr.map((p) => [p.fr.L, p.fr.W]); })); }
   const steady = [0, 1].every((i) => { const L = rows.map((r) => r[i]?.[0]); const W = rows.map((r) => r[i]?.[1]); return L.every((v) => v && Math.abs(v - L[0]) < L[0] * 0.25) && W.every((v) => v && Math.abs(v - W[0]) < W[0] * 0.35); });
   check('each piece of a leg keeps its size through the whole walk', steady, rows.map((r) => r.map((p) => p.map(Math.round).join('x')).join(' | ')));
+}
+// ---- whole figure: one line stays on the part it started on, across other limbs and out past the outline
+{
+  await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.draw.target = { kind: 'fig' }; w.S.draw.mode = 'whole'; w.S.draw.tool = 'pen'; w.S.draw.color = '#d93a3a'; w.S.draw.size = 4; w.S.draw.scope = 'all'; w.S.draw.guides = false; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.S.rot = 0; w.setFigure('human'); w.selectPart(null, { openTab: false }); w.setTab('Draw'); w.setFrame(0); w.render(); }); await wait(500);
+  const pt = await ev(() => { const w = window.__walkBase; const m = w.S.map; const fs0 = Object.entries(w.S.last.frames).filter(([k]) => k !== 'head').map(([, v]) => v[0].fr).sort((x, y) => y.L * y.W - x.L * x.W); const f = fs0[0]; const px = (x, y) => ({ x: m.left + (m.x0 + (x / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (y / m.fch) * m.zh) / m.d }); return { c: px(f.cx, f.cy), far: px(f.cx + 900, f.cy + 40) }; });
+  const sbox = await q('stage').boundingBox(); const farX = Math.min(pt.far.x, sbox.x + sbox.width - 6);
+  await page.mouse.move(pt.c.x, pt.c.y); await page.mouse.down(); await page.mouse.move((pt.c.x + farX) / 2, pt.c.y + 10, { steps: 12 }); await page.mouse.move(farX, pt.c.y + 20, { steps: 12 }); await page.mouse.up(); await wait(300);
+  const all = await ev(() => { const d = window.__walkBase.designOf(); return Object.entries(d).map(([k, p]) => [k, (p.ink?.strokes || []).length, (p.ink?.strokes || []).map((s) => s.pts.length)]).filter((r) => r[1]); });
+  check('a line drawn across the whole figure is one stroke on one part', all.length === 1 && all[0][1] === 1, all);
+  check('and it runs on past the outline to the end of the drag', all.length === 1 && all[0][2][0] > 20, all);
+  // started in empty space it still draws, on the nearest part
+  await ev(() => { window.__walkBase.S.design = {}; window.__walkBase.render(); }); await wait(200);
+  const ex = sbox.x + sbox.width * 0.9; const ey = sbox.y + sbox.height * 0.5; await page.mouse.move(ex, ey); await page.mouse.down(); await page.mouse.move(ex + 15, ey + 20, { steps: 6 }); await page.mouse.move(ex + 30, ey + 30, { steps: 6 }); await page.mouse.up(); await wait(300);
+  const n2 = await ev(() => Object.values(window.__walkBase.designOf()).reduce((t, p) => t + (p.ink?.strokes?.length || 0), 0)); check('a line started in empty space is still drawn', n2 === 1, n2);
 }
 check('with no errors', errors.length === 0, errors);
 // ---- a pencil keeps drawing when a palm touches down, and a pause before moving still draws

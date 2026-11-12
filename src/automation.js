@@ -31,6 +31,8 @@ export function laneValue(lane, t, fallback) {
   return lane.interp === 'linear' ? a.v + (b.v - a.v) * x : a.v + (b.v - a.v) * smooth(x);
 }
 
+/** The lanes that are switched on: a muted lane stays in the list but does nothing, so it can be brought back. */
+export const unmuted = (lanes) => (lanes && Object.values(lanes).some((l) => l?.mute) ? Object.fromEntries(Object.entries(lanes).filter(([, l]) => !l?.mute)) : lanes);
 export const hasLanes = (lanes) => Boolean(lanes && Object.values(lanes).some((l) => l.pts?.length));
 
 /** Gait parameters at frame t. `live` holds values being recorded right now, which win over the lane. */

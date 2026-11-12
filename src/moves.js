@@ -53,12 +53,24 @@ function dropBuild({ root, feet, hold, air, impact, recover, kill = [], h0 = 0.7
 const ramp = (names, to, D, from = 0, end = 0.85) => Object.fromEntries(names.map((n) => [P(n), at(D, [[0, 0], [end, to(n)]])]));
 
 // ------------------------------------------------------------------------------------------------ human
-const H_WALK = ['stepLength', 'footLift', 'bob', 'armSwing', 'elbowSwing', 'sway', 'pelvisYaw', 'shoulderCounter', 'torsoSway', 'heelStrike', 'toeOff', 'swingToe'];
+const H_WALK = ['stepLength', 'footLift', 'bob', 'armSwing', 'elbowSwing', 'sway', 'pelvisYaw', 'shoulderCounter', 'torsoSway', 'heelStrike', 'toeOff', 'swingToe', 'headBob'];
 /** Every channel the sitting, crouching and ducking movements touch, so a stand up can return all of them to neutral. */
 const H_STATE = ['pelvis.y', 'pelvis.x', 'pelvis.pitch', 'spine1.pitch', 'spine2.pitch', 'spine3.pitch', 'neck.pitch', 'head.pitch', ...BASE_ARMS, 'foot.x.R', 'foot.x.L', 'foot.y.R', 'foot.y.L'];
 
 const seated = { 'pelvis.x': -0.22, 'pelvis.y': -0.52, 'spine1.pitch': 0.04, 'spine2.pitch': 0.04, 'spine3.pitch': 0.02, 'arm.pitch.R': 0.45, 'arm.pitch.L': 0.45, 'elbow.flex.R': 0.8, 'elbow.flex.L': 0.8 };
 const crouched = { 'pelvis.y': -0.38, 'pelvis.x': -0.18, 'spine1.pitch': 0.5, 'spine2.pitch': 0.4, 'spine3.pitch': 0.25, 'neck.pitch': -0.35, 'arm.pitch.R': 0.5, 'arm.pitch.L': 0.5, 'elbow.flex.R': 0.5, 'elbow.flex.L': 0.5 };
+
+/** Hanging by the hands: the arms straight overhead, the body dropped under the hands, the legs hanging with the feet off the ground, the head tipped back. Only channels that Stand up puts back. */
+const HUNG = { 'arm.pitch.R': 2.3, 'arm.pitch.L': 2.3, 'elbow.flex.R': 0.05, 'elbow.flex.L': 0.05, 'pelvis.y': 0.5, 'foot.y.R': 0.22, 'foot.y.L': 0.22, 'spine1.pitch': -0.04, 'neck.pitch': 0.1, 'head.pitch': 0.12 };
+/** Weightless drift: lifted, arms out and up, legs trailing, turning slowly one way and the other, then sinking back. */
+function floatPoses(b, D, k) {
+  const up = 0.42 * k;
+  const drift = (s) => ({
+    'pelvis.y': up + 0.02 * s, 'pelvis.pitch': 0.14 * s * k, 'pelvis.roll': -0.1 * s * k, 'spine1.roll': 0.08 * s * k, 'spine2.pitch': -0.05 * s, 'head.roll': -0.06 * s, 'head.pitch': 0.08, 'neck.pitch': 0.06,
+    'arm.pitch.R': 0.9 + 0.3 * s, 'arm.pitch.L': 0.9 - 0.3 * s, 'elbow.flex.R': 0.5 + 0.2 * s, 'elbow.flex.L': 0.5 - 0.2 * s, 'foot.y.R': up - 0.2 + 0.1 * s, 'foot.y.L': up - 0.2 - 0.1 * s, 'foot.x.R': -0.12 + 0.05 * s, 'foot.x.L': -0.12 - 0.05 * s,
+  });
+  return poseBuild([[0.2, drift(0)], [0.38, drift(1)], [0.58, drift(-1)], [0.76, drift(0.6)], [0.9, { ...drift(0), 'pelvis.y': 0.04, 'foot.y.R': 0.03, 'foot.y.L': 0.03 }]], { kill: BASE_ARMS })(b, D, 1);
+}
 
 export const HUMAN_MOVES = [
   {
@@ -201,6 +213,47 @@ export const HUMAN_MOVES = [
       ...Object.fromEntries(['stepLength', 'footLift', 'bob', 'armSwing', 'elbowBase', 'elbowSwing', 'lean', 'duty', 'downPhase'].map((n) => [P(n), at(D, [[0, b[n]], [0.8, b[n]]])])),
     }),
     resetsParams: ['stepLength', 'footLift', 'bob', 'armSwing', 'elbowBase', 'elbowSwing', 'lean', 'duty', 'downPhase'],
+  },
+  {
+    id: 'float', label: 'Float', frames: 96, ends: 'drifts down and stands',
+    help: 'Weightless: the walk stops, the body lifts off the ground, the arms drift out and up, the legs trail behind and the whole figure turns slowly as if in water or in space. It sinks back and stands at the end. Strength sets how high it rises.',
+    build: (b, D, k = 1) => ({ ...floatPoses(b, D, k), [CADENCE]: at(D, [[0, 1], [0.12, 0], [0.88, 0], [1, 1]]), [P('headBob')]: at(D, [[0, b.headBob], [0.15, 0], [0.85, 0], [1, b.headBob]]) }),
+  },
+  {
+    id: 'hang', label: 'Hang', frames: 64, ends: 'stays hanging',
+    help: 'Reaches up, jumps and takes hold of something overhead, then hangs by the arms: the body drops under the hands, the shoulders rise, the legs hang straight with the feet off the ground and the head tips back. Stand up to let go and land. Dangle swings the legs.',
+    build: (b, D, k = 1) => ({ ...poseBuild([[0.22, { 'arm.pitch.R': 2.2, 'arm.pitch.L': 2.2, 'elbow.flex.R': 0.15, 'elbow.flex.L': 0.15, 'pelvis.y': -0.04 }], [0.46, { ...HUNG, 'pelvis.y': 0.56, 'foot.y.R': 0.4, 'foot.y.L': 0.4 }], [0.7, { ...HUNG, 'pelvis.y': 0.52, 'foot.y.R': 0.3, 'foot.y.L': 0.3 }], [1, HUNG]], { kill: BASE_ARMS, stay: true })(b, D, k), [CADENCE]: at(D, [[0, 1], [0.12, 0], [1, 0]]), [P('headBob')]: at(D, [[0, b.headBob], [0.3, 0], [1, 0]]) }),
+  },
+  {
+    id: 'dangle', label: 'Dangle', frames: 96, ends: 'stays hanging',
+    help: 'Hanging by the hands with the legs swinging like a pendulum: the legs swing forward and back out of step with each other, the body tips a little and the swing dies down as it goes on. It starts from standing or from Hang.',
+    build: (b, D, k = 1) => {
+      const keys = [[0.2, { 'arm.pitch.R': 2.2, 'arm.pitch.L': 2.2, 'elbow.flex.R': 0.15, 'elbow.flex.L': 0.15 }], [0.34, { ...HUNG }]];
+      const n = 5;
+      for (let i = 0; i < n; i++) {
+        const f = 0.34 + ((i + 1) / n) * 0.62; const a = (1 - i / (n + 1)) * k * (i % 2 ? -1 : 1);
+        keys.push([f, { ...HUNG, 'foot.x.R': 0.3 * a, 'foot.x.L': -0.3 * a, 'pelvis.pitch': 0.06 * a, 'foot.y.R': HUNG['foot.y.R'] + 0.05 * Math.abs(a), 'foot.y.L': HUNG['foot.y.L'] + 0.05 * Math.abs(a) }]);
+      }
+      keys.push([1, { ...HUNG }]);
+      return { ...poseBuild(keys, { kill: BASE_ARMS, stay: true })(b, D, 1), [CADENCE]: at(D, [[0, 1], [0.1, 0], [1, 0]]), [P('headBob')]: at(D, [[0, b.headBob], [0.2, 0], [1, 0]]) };
+    },
+  },
+  {
+    id: 'climb', label: 'Climb', frames: 96, ends: 'stays hanging on the wall',
+    help: 'Hand over hand up a rope, ladder or wall: each arm reaches high in turn, the opposite foot lifts to the next hold, and the body pulls in close and leans toward the climb. It ends hanging by the hands; Stand up to step off.',
+    build: (b, D, k = 1) => {
+      const keys = [[0.1, { 'arm.pitch.R': 1.5, 'arm.pitch.L': 1.5, 'spine1.pitch': 0.08, 'elbow.flex.R': 0.8, 'elbow.flex.L': 0.8 }]];
+      const n = 4;
+      for (let i = 0; i < n; i++) {
+        const f0 = 0.16 + i * 0.19; const R = i % 2 === 0;
+        const a = R ? { 'arm.pitch.R': 2.3, 'arm.pitch.L': 1.2, 'elbow.flex.R': 0.1, 'elbow.flex.L': 1.3 } : { 'arm.pitch.R': 1.2, 'arm.pitch.L': 2.3, 'elbow.flex.R': 1.3, 'elbow.flex.L': 0.1 };
+        const p0 = 0.1 + i * 0.1; const stance = (v) => v - 0.2; const lifted = (v) => v + 0.1;
+        keys.push([f0, { ...a, 'spine1.pitch': 0.1, 'pelvis.y': p0, 'foot.y.R': R ? stance(p0) : lifted(p0), 'foot.y.L': R ? lifted(p0) : stance(p0), 'foot.x.R': R ? 0 : 0.14, 'foot.x.L': R ? 0.14 : 0, 'head.pitch': -0.12 }]);
+        keys.push([f0 + 0.09, { ...a, 'spine1.pitch': 0.12, 'pelvis.y': p0 + 0.08, 'foot.y.R': R ? stance(p0 + 0.08) : lifted(p0) + 0.04, 'foot.y.L': R ? lifted(p0) + 0.04 : stance(p0 + 0.08), 'foot.x.R': R ? 0 : 0.14, 'foot.x.L': R ? 0.14 : 0, 'head.pitch': -0.16 }]);
+      }
+      keys.push([1, { ...HUNG, 'spine1.pitch': 0.06 }]);
+      return { ...poseBuild(keys, { kill: BASE_ARMS, stay: true })(b, D, k), [CADENCE]: at(D, [[0, 1], [0.08, 0], [1, 0]]), [P('headBob')]: at(D, [[0, b.headBob], [0.15, 0], [1, 0]]) };
+    },
   },
 ];
 

@@ -1,6 +1,6 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
 import { DEFAULTS, cycleFrames, cycleTravel, foot, sideGait, gaitSummary, supportStats } from './rig.js';
-import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, paramsAt, motionAt, integrate, Recorder, laneValue } from './automation.js';
+import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, unmuted, paramsAt, motionAt, integrate, Recorder, laneValue } from './automation.js';
 import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
@@ -84,10 +84,10 @@ function perfData() {
   if (!hasLanes(S.lanes) && T === n) return null;
   const key = `${S.ver}|${T}|${JSON.stringify(S.p)}`;
   if (perfCache?.key !== key) { const dog = S.p.rig === 'dog';
-    const s = integrate(S.p, S.lanes, T, n, dog ? null : contact);
-    perfCache = { key, T, u: s.u, x: s.x, px: s.px, pz: s.pz, path: s.path, plants: dog ? dogPlants(S.p, S.lanes, T, s) : s.plants }; }
+    const s = integrate(S.p, unmuted(S.lanes), T, n, dog ? null : contact);
+    perfCache = { key, T, u: s.u, x: s.x, px: s.px, pz: s.pz, path: s.path, plants: dog ? dogPlants(S.p, unmuted(S.lanes), T, s) : s.plants }; }
   const live = rec.liveValues();
-  return { ...perfCache, lanes: S.lanes, live: Object.keys(live).length ? live : null };
+  return { ...perfCache, lanes: unmuted(S.lanes), live: Object.keys(live).length ? live : null };
 }
 /** The parameters every drawing and export reads: gait, proportions and the motion you have changed. */
 const P = () => ({ ...S.p, proportions: S.r, motion: S.motion, attach: S.source === 'sampled' ? [] : (S.attach[figKey()] || []), design: S.source === 'sampled' ? null : (S.design[figKey()] || null), speech: S.source === 'sampled' ? null : S.speech, scene: S.source === 'sampled' ? null : S.scene, perf: S.source === 'sampled' ? null : perfData(), sampled: S.source === 'sampled' ? sampledSummary() : null });
@@ -182,7 +182,7 @@ function cleanLanes(raw) {
   for (const [t, l] of Object.entries(raw || {})) {
     if (!validTarget(t) || !Array.isArray(l?.pts)) continue;
     const pts = l.pts.filter((q) => Number.isFinite(Number(q.t)) && Number.isFinite(Number(q.v))).map((q) => ({ t: Math.max(0, Math.round(Number(q.t))), v: Number(q.v) })).sort((a, b) => a.t - b.t);
-    if (pts.length) out[t] = { pts, interp: l.interp === 'linear' ? 'linear' : 'smooth' };
+    if (pts.length) out[t] = { pts, interp: l.interp === 'linear' ? 'linear' : 'smooth', ...(l.mute ? { mute: true } : {}) };
   }
   return out;
 }
@@ -1216,6 +1216,7 @@ function tick(t) {
         if (S.recording) { pause(); paint(); return; } // a take ends at the end of the performance instead of looping
         nf = 0;
       }
+      if (S.recording && S.punch?.on && nf > S.punch.b - 1) { S.frame = Math.max(0, S.punch.b - 1); pause(); paint(); return; } // and a take that punches out stops where it is told to
       S.frame = nf;
       if (S.recording) rec.tick(nf);
       if (PADRUN) { padStep(); n = cycleFrames(P()).frames.length; if (S.frame >= n) S.frame = 0; } // a blend to a pad moves on one frame; the cycle may have changed length
@@ -1231,6 +1232,7 @@ function play() {
     const n = Math.max(2, Math.round(S.p.cycleFrames));
     if (S.perfLen <= 0) { S.perfLen = n * 6; S.ver++; buildStrip(); save(); }
     if (S.frame >= cycleFrames(P()).frames.length - 1) S.frame = 0;
+    if (S.punch?.on) S.frame = Math.max(0, Math.min(cycleFrames(P()).frames.length - 1, S.punch.a - 1)); // a take that punches in starts where it is told to
     rec.setMode(S.recMode); S.recording = true;
   }
   S.playing = true; last = performance.now(); acc = 0; setPlayButton(); raf = requestAnimationFrame(tick);
@@ -1286,21 +1288,21 @@ function refreshAutomated() {
     const lane = S.lanes[el.dataset.target];
     const box = el.closest('.row, .mini');
     box?.classList.toggle('auto', Boolean(lane?.pts?.length));
-    if (!lane?.pts?.length || el === document.activeElement || !el._show) return;
-    const v = el._show(laneValue(lane, S.frame, el._base()));
+    if (!lane?.pts?.length || lane.mute || el === document.activeElement || el._held || !el._show) return;
+    const v = el._show(rec.live[el.dataset.target] ?? laneValue(lane, S.frame, el._base())); // a control being recorded shows what is being recorded
     if (el.type === 'range' || el.type === 'number') el.value = +Number(v).toFixed(4);
   });
 }
 /** Wire a slider/number pair so that, while a take is running, it records instead of changing the base value. */
 function recordable(rng, num, targets, readStored, writeStored, apply) {
   const stored = () => writeStored(Number(rng.value));
-  rng.addEventListener('pointerdown', () => { if (recOn()) for (const t of targets()) rec.touch(t, S.frame, stored()); });
+  rng.addEventListener('pointerdown', () => { rng._held = num._held = true; if (recOn()) for (const t of targets()) rec.touch(t, S.frame, stored()); });
   rng.addEventListener('input', () => {
     const v = stored();
     if (recOn()) { for (const t of targets()) rec.set(t, S.frame, v); num.value = +Number(rng.value).toFixed(4); render(); return; }
     apply(v); num.value = +Number(rng.value).toFixed(4);
   });
-  const up = () => { if (recOn()) for (const t of targets()) rec.release(t, S.frame); };
+  const up = () => { rng._held = num._held = false; if (recOn()) for (const t of targets()) rec.release(t, S.frame); };
   rng.addEventListener('pointerup', up); rng.addEventListener('pointercancel', up); rng.addEventListener('blur', up);
   num.addEventListener('change', () => {
     const v = writeStored(Number(num.value));
@@ -1540,6 +1542,8 @@ function autoSection() {
 
   host.append(h('section', { class: 'group' }, h('h3', null, 'Record by hand'),
     h('p', { class: 'hint' }, 'Press Rec, then Play, and move any gait slider or a part\'s Amount or Offset while it plays. Your moves are written as automation, like recording a synth knob. Touch: it records while you hold and glides back when you let go. Latch: it records from your first touch and holds the last value until you stop.'),
+    h('div', { class: 'btnrow' }, h('label', { class: 'chk', title: 'Record only between two frames: the take starts at the first and stops at the second, and the rest of the performance is left as it is.' }, h('input', { type: 'checkbox', checked: Boolean(S.punch?.on), testid: 'punch-on', onChange: (e) => { S.punch = { ...(S.punch || { a: 1, b: Math.min(T, 48) }), on: e.target.checked }; renderPanel(); } }), h('span', null, 'Punch in and out')),
+      ...(S.punch?.on ? [numField('From frame', S.punch.a, 1, T, (v) => { S.punch.a = Math.max(1, Math.min(T, Math.round(v) || 1)); S.punch.b = Math.max(S.punch.a + 1, S.punch.b); renderPanel(); }, 'punch-a'), numField('To frame', S.punch.b, 2, T, (v) => { S.punch.b = Math.max(S.punch.a + 1, Math.min(T, Math.round(v) || T)); renderPanel(); }, 'punch-b'), h('button', { type: 'button', class: 'btn', testid: 'punch-here', onClick: () => { S.punch.a = S.frame + 1; S.punch.b = Math.max(S.punch.a + 1, S.punch.b); renderPanel(); } }, 'From playhead')] : [])),
     h('div', { class: 'btnrow' }, seg([['touch', 'Touch'], ['latch', 'Latch']], S.recMode, (m) => { S.recMode = m; rec.setMode(S.armed ? m : 'off'); renderPanel(); }, 'rec-mode'),
       h('button', { type: 'button', class: 'btn primary', testid: 'rec-arm', 'aria-pressed': String(S.armed), onClick: () => { setArmed(!S.armed); } }, S.armed ? 'Armed: press Play' : 'Arm recording'))));
 
@@ -1576,7 +1580,8 @@ function autoSection() {
   const byGroup = new Map();
   for (const t of targets) { const g = laneGroup(t); if (!byGroup.has(g)) byGroup.set(g, []); byGroup.get(g).push(t); }
   const laneRow = (t) => h('div', { class: 'laneitem', testid: `lane-${t}` },
-    h('span', { class: 'lname' }, targetLabel(t), h('small', null, ` ${S.lanes[t].pts.length} points`)),
+    h('span', { class: 'lname' }, targetLabel(t), h('small', null, ` ${S.lanes[t].pts.length} points${S.lanes[t].mute ? ', muted' : ''}`)),
+    h('button', { type: 'button', class: 'btn tiny', 'aria-pressed': String(Boolean(S.lanes[t].mute)), 'aria-label': `Mute ${targetLabel(t)}`, title: 'Switch this lane off without losing it', testid: `lane-mute-${t}`, onClick: () => { S.lanes[t] = { ...S.lanes[t], mute: !S.lanes[t].mute }; if (!S.lanes[t].mute) delete S.lanes[t].mute; S.ver++; buildStrip(); renderPanel(); render(); save(); } }, S.lanes[t].mute ? 'Muted' : 'Mute'),
     h('button', { type: 'button', class: 'btn tiny', testid: `lane-edit-${t}`, onClick: () => openLaneEditor(t) }, 'Edit'),
     h('button', { type: 'button', class: 'btn tiny', 'aria-label': `Clear ${targetLabel(t)}`, testid: `lane-clear-${t}`, onClick: () => { delete S.lanes[t]; S.ver++; if (laneEd?.target === t) closeEditor(); markCustom(); buildStrip(); renderPanel(); render(); save(); } }, 'Clear'));
   if (!targets.length) host.append(h('section', { class: 'group' }, h('h3', null, 'Automation lanes (0)'), h('p', { class: 'hint' }, 'Nothing is automated yet.')));
@@ -1895,6 +1900,12 @@ function inkFrame(key, q = null, seg = null) {
   const fs = (inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; if (!fs?.length) return null; const i = seg ?? (q ? inkSegIndex(key, q) : 0); return (fs[Math.min(i, fs.length - 1)] || fs[0]).fr;
 }
 /** The key of the part under a point of the picture, or null. */
+/** The part whose outline is nearest the point: where a line that starts in empty space belongs. */
+function inkNearestPart(q) {
+  let best = null; let bd = Infinity;
+  for (const sh of inkShapes()) { if (sh.pts.length < 2) continue; for (let i = 0; i < sh.pts.length; i++) { const a = sh.pts[i]; const b = sh.pts[(i + 1) % sh.pts.length]; const dx = b[0] - a[0]; const dy = b[1] - a[1]; const l2 = dx * dx + dy * dy; const t = l2 ? Math.max(0, Math.min(1, ((q.x - a[0]) * dx + (q.y - a[1]) * dy) / l2)) : 0; const d = Math.hypot(q.x - (a[0] + dx * t), q.y - (a[1] + dy * t)); if (d < bd) { bd = d; best = sh; } } }
+  return best ? partKey(best.part, best.side) : null;
+}
 function inkPartAt(q) { if (inkItem()) return 'item'; const hit = pickPart(inkShapes(), q.x, q.y); return hit ? partKey(hit.part, hit.side) : null; }
 function inkSelKey() { if (inkItem()) return 'item'; if (inkActor()) return S.draw.actorKey || null; return S.sel ? partKey(S.sel.part, S.sel.side) : null; }
 /** The drawing of a part, made if there is none. The first line on a part commits it: its own shape turns off and only the drawing shows (unless drawing frame by frame, when the other frames would be left empty). Uncommit brings it back. */
@@ -2001,8 +2012,9 @@ function inkMove(e, toFrame, quiet = false) {
   const D = S.draw; const under = inkWhole() ? inkPartAt(q) : inkSelKey();
   if (g.tool === 'eraser') { inkErase(g, q, under); S.ver++; render(); return; }
   if (g.tool === 'move') { inkDragMove(g, q, under); return; }
-  const key = g.tool === 'fill' || g.tool === 'shape' ? (g.key ||= under) : under; if (!key) return;
-  const seg = g.tool === 'fill' || g.tool === 'shape' ? (g.seg ??= inkSegIndex(key, q)) : inkSegIndex(key, q);
+  // a line belongs to the one part (and piece) it was started on, even when it runs over another limb or out past the outline; started in empty space it belongs to the nearest part
+  const key = g.tool === 'pen' || g.tool === 'fill' || g.tool === 'shape' ? (g.key ||= under || (inkWhole() ? inkNearestPart(q) : null)) : under; if (!key) return;
+  const seg = g.tool === 'pen' || g.tool === 'fill' || g.tool === 'shape' ? (g.seg ??= inkSegIndex(key, q)) : inkSegIndex(key, q);
   const fr = inkFrame(key, null, seg); if (!fr) return;
   if (g.tool === 'shape') { // a line, oval or box dragged out from where the finger went down: the one stroke is made again at each move
     g.q0 ||= q;
