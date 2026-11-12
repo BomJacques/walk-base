@@ -2703,32 +2703,30 @@ function build() {
   const views = [['Side', 0, 0, 'view-side'], ['¾ front', -40, 12, 'view-34'], ['Front', -90, 0, 'view-front'], ['Back', 90, 0, 'view-back'], ['Top', 0, 80, 'view-top']];
   const viewMenu = menuButton({ label: 'View', testid: 'view-menu', className: 'btn vb cam', title: 'Camera view', items: () => views.map(([l, y, p, id]) => ({ label: l, testid: id, radio: true, checked: S.s.camYaw === y && S.s.camPitch === p, onClick: () => setView(y, p) })) });
   // The camera bar can be moved off the picture and folded away to one small button, and remembers where it was.
-  const vbGrip = h('button', { type: 'button', class: 'btn vb vgrip', testid: 'viewbar-grip', 'aria-label': 'Move the camera bar: drag it, or use the arrow keys. Double-click to put it back.', title: 'Drag to move (double-click to reset)' }, icon('grip'));
-  const vbMin = h('button', { type: 'button', class: 'btn vb vmin', testid: 'viewbar-min', onClick: () => { VB.min = !VB.min; placeViewbar(); saveViewbar(); } });
-  const viewbar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': 'Camera' }, vbGrip, vbMin,
+  const vbGrip = h('button', { type: 'button', class: 'btn vb vgrip', testid: 'viewbar-grip' });
+  const viewbar = h('div', { class: 'viewbar', role: 'toolbar', 'aria-label': 'Camera' }, vbGrip,
     vb('select', 'Select: tap to select, drag to move what you touch. Two fingers pan and zoom.', 'tool-select', () => { S.tool = 'select'; refreshViewbar(); }, { 'data-tool': 'select' }),
     vb('orbit', 'Orbit', 'tool-orbit', () => { S.tool = 'orbit'; refreshViewbar(); }, { 'data-tool': 'orbit' }),
     vb('pan', 'Pan', 'tool-pan', () => { S.tool = 'pan'; refreshViewbar(); }, { 'data-tool': 'pan' }),
     h('span', { class: 'vsep cam', role: 'presentation' }), viewMenu,
     ...views.map(([l, y, p, id]) => h('button', { type: 'button', class: 'btn vb cam qv', testid: `qv-${id.slice(5)}`, 'data-yaw': y, 'data-pitch': p, 'aria-label': `${l} view`, title: `${l} view`, 'aria-pressed': 'false', onClick: () => setView(y, p) }, { 'Side': 'Side', '¾ front': '¾', Front: 'Front', Back: 'Back', Top: 'Top' }[l])),
-    h('span', { class: 'vsep cam', role: 'presentation' }),
     vb('spin', 'Spin', 'turntable', () => { S.s.autoOrbit = !S.s.autoOrbit; refreshViewbar(); save(); }, { 'aria-pressed': 'false' }),
     vb('face', 'Head view', 'head-view', () => { S.s.focus = S.s.focus === 'head' ? 'body' : 'head'; S.zoom = 1; S.panX = S.panY = 0; refreshViewbar(); if (S.tab === 'Speech') renderPanel(); render(); save(); }, { 'aria-pressed': 'false' }),
     vb('fit', 'Fit', 'fit', () => { S.zoom = 1; S.panX = S.panY = 0; render(); }));
   const placeViewbar = () => {
     const wr = wrapEl?.getBoundingClientRect(); viewbar.classList.toggle('min', VB.min);
-    vbMin.replaceChildren(icon(VB.min ? 'orbit' : 'minus'), h('span', { class: 'sr' }, VB.min ? 'Show the camera tools' : 'Fold the camera tools away')); vbMin.title = VB.min ? 'Show the camera tools' : 'Fold the camera tools away'; vbMin.setAttribute('aria-label', vbMin.title); vbMin.setAttribute('aria-expanded', String(!VB.min));
+    vbGrip.replaceChildren(icon(VB.min ? 'orbit' : 'grip')); vbGrip.title = VB.min ? 'Show the camera tools (drag to move)' : 'Fold the camera tools away (drag to move)'; vbGrip.setAttribute('aria-label', `${VB.min ? 'Show' : 'Fold away'} the camera tools. Drag to move the bar, or use the arrow keys.`); vbGrip.setAttribute('aria-expanded', String(!VB.min));
     if (!wr || !wr.width) return;
     if (VB.x == null) { viewbar.style.left = ''; viewbar.style.top = ''; viewbar.style.maxWidth = ''; return; }
     const bw = viewbar.offsetWidth || 40; const bh = viewbar.offsetHeight || 36; VB.x = Math.max(0, Math.min(wr.width - Math.min(bw, 44), VB.x)); VB.y = Math.max(0, Math.min(wr.height - Math.min(bh, 36), VB.y));
     viewbar.style.left = `${VB.x}px`; viewbar.style.top = `${VB.y}px`; viewbar.style.maxWidth = `${Math.max(60, wr.width - VB.x - 8)}px`;
   };
-  let vbDrag = null;
-  vbGrip.addEventListener('pointerdown', (e) => { if (e.button) return; e.preventDefault(); vbGrip.setPointerCapture(e.pointerId); const r = viewbar.getBoundingClientRect(); vbDrag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top }; });
-  vbGrip.addEventListener('pointermove', (e) => { if (!vbDrag || e.pointerId !== vbDrag.id) return; const wr = wrapEl.getBoundingClientRect(); VB.x = e.clientX - wr.left - vbDrag.dx; VB.y = e.clientY - wr.top - vbDrag.dy; placeViewbar(); });
-  const vbEnd = (e) => { if (vbDrag && e.pointerId === vbDrag.id) { vbDrag = null; saveViewbar(); } };
+  let vbDrag = null; let vbTap = 0;
+  vbGrip.addEventListener('pointerdown', (e) => { if (e.button) return; e.preventDefault(); vbGrip.setPointerCapture(e.pointerId); const r = viewbar.getBoundingClientRect(); vbDrag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false }; });
+  vbGrip.addEventListener('pointermove', (e) => { if (!vbDrag || e.pointerId !== vbDrag.id) return; if (!vbDrag.moved && Math.hypot(e.clientX - vbDrag.x0, e.clientY - vbDrag.y0) < 5) return; vbDrag.moved = true; const wr = wrapEl.getBoundingClientRect(); VB.x = e.clientX - wr.left - vbDrag.dx; VB.y = e.clientY - wr.top - vbDrag.dy; placeViewbar(); });
+  const vbEnd = (e) => { if (vbDrag && e.pointerId === vbDrag.id) { const was = vbDrag; vbDrag = null; if (!was.moved && e.type === 'pointerup') { VB.min = !VB.min; const now = performance.now(); if (now - vbTap < 400) { VB.x = null; VB.y = null; } vbTap = now; } placeViewbar(); saveViewbar(); } }; // a tap folds the bar away or opens it; a drag moves it
+  vbGrip.addEventListener('click', (e) => { if (e.detail === 0) { VB.min = !VB.min; placeViewbar(); saveViewbar(); } }); // from the keyboard
   vbGrip.addEventListener('pointerup', vbEnd); vbGrip.addEventListener('pointercancel', vbEnd);
-  vbGrip.addEventListener('dblclick', () => { VB.x = null; VB.y = null; placeViewbar(); saveViewbar(); });
   vbGrip.addEventListener('keydown', (e) => { const d = { ArrowLeft: [-12, 0], ArrowRight: [12, 0], ArrowUp: [0, -12], ArrowDown: [0, 12] }[e.key]; if (!d) return; e.preventDefault(); const wr = wrapEl.getBoundingClientRect(); const r = viewbar.getBoundingClientRect(); VB.x = (VB.x ?? r.left - wr.left) + d[0]; VB.y = (VB.y ?? r.top - wr.top) + d[1]; placeViewbar(); saveViewbar(); });
   window.addEventListener('resize', placeViewbar); requestAnimationFrame(placeViewbar); setTimeout(placeViewbar, 300);
   window.__placeViewbar = placeViewbar;
