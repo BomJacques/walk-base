@@ -376,9 +376,9 @@ export const PRESETS_SPECIES = {
     'Fast glide': sp('snake', { dogStride: 3.2, dogFlex: 36, dogNeckAngle: 12, dogBob: 0.012, cycleFrames: 14, camYaw: -25, camPitch: 55 }),
   },
   spider: {
-    Walk: sp('spider', { dogStride: 0.7, dogDuty: 0.62, dogLift: 0.22, dogBob: 0.012, cycleFrames: 24, camYaw: -35, camPitch: 18 }),
-    Scuttle: sp('spider', { dogStride: 1.4, dogDuty: 0.5, dogLift: 0.3, dogBob: 0.02, cycleFrames: 12, camYaw: -35, camPitch: 18 }),
-    Creep: sp('spider', { dogStride: 0.3, dogDuty: 0.75, dogLift: 0.15, dogBob: 0.006, cycleFrames: 40, camYaw: -35, camPitch: 18 }),
+    Walk: sp('spider', { dogStride: 0.7, dogDuty: 0.72, dogLift: 0.22, dogBob: 0.012, cycleFrames: 24, camYaw: -35, camPitch: 18 }),
+    Scuttle: sp('spider', { dogStride: 1.15, dogDuty: 0.6, dogLift: 0.3, dogBob: 0.02, cycleFrames: 12, camYaw: -35, camPitch: 18 }),
+    Creep: sp('spider', { dogStride: 0.3, dogDuty: 0.8, dogLift: 0.15, dogBob: 0.006, cycleFrames: 40, camYaw: -35, camPitch: 18 }),
   },
   crab: {
     Sidle: sp('crab', { dogStride: 0.6, dogDuty: 0.62, dogLift: 0.18, dogBob: 0.01, dogWag: 14, cycleFrames: 24, camYaw: -70, camPitch: 12 }),

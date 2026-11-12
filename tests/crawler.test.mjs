@@ -70,7 +70,7 @@ for (const [fig, name] of [['spider', 'Walk'], ['spider', 'Scuttle'], ['crab', '
       const a = poseDog(p, {}, i / T, { worldX: (i / T) * p.dogStride }); const b = poseDog(p, {}, (i + 1) / T, { worldX: ((i + 1) / T) * p.dogStride });
       if (a.legs[k].stance && b.legs[k].stance) close(a.pelvisX + a.legs[k].paw[0], b.pelvisX + b.legs[k].paw[0], `${k} slides at ${i}`, 1e-6);
     }
-    const down = (k, i) => sets.get(k)[i]; let alt = 0; for (let i = 0; i < T; i++) if (down('FR', i) !== down('FL', i)) alt++; assert.ok(alt > T * 0.3, 'the two sides are not in step');
+    const down = (k, i) => sets.get(k)[i]; let alt = 0; for (let i = 0; i < T; i++) if (down('FR', i) !== down('FL', i)) alt++; assert.ok(alt > T * 0.2, 'the two sides are not in step');
     const a = poseDog(p, {}, 0); const b = poseDog(p, {}, 1 - 1e-9); for (const k of LEG_KEYS) for (let n = 0; n < 3; n++) close(a.legs[k].paw[n], b.legs[k].paw[n], `${k} loops`, 1e-3);
   });
 }
@@ -102,4 +102,32 @@ test('every walk of the three poses, finite, through the whole cycle, with a key
     const p = mk(f, Object.keys(PRESETS_SPECIES[f])[0]); assert.ok(poseFor(p, 3));
     const clips = clipsForFigure(f); assert.ok(clips.some((c) => c.id === 'stop') && clips.some((c) => c.id === 'turnright'), `${f} can stop and turn`);
   }
+});
+
+test('a spider steps one leg at a time, in turn along each side from the back to the front, the far side half a cycle behind', () => {
+  for (const name of ['Walk', 'Creep', 'Scuttle']) {
+    const p = mk('spider', name); const N = 240; const lift = {}; const down = {};
+    for (const k of LEG_KEYS) { lift[k] = []; down[k] = []; }
+    let prev = null; let worstAir = 0; let leastPlantedSide = 8;
+    for (let i = 0; i <= N; i++) {
+      const z = poseDog(p, {}, (i % N) / N, { worldX: ((i % N) / N) * p.dogStride }); const cur = {}; let air = 0; const planted = { R: 0, L: 0 };
+      for (const k of LEG_KEYS) { cur[k] = z.legs[k].stance; if (!cur[k]) air++; else planted[k[1]]++; }
+      if (i < N) { worstAir = Math.max(worstAir, air); leastPlantedSide = Math.min(leastPlantedSide, planted.R, planted.L); }
+      if (prev && i > 0) for (const k of LEG_KEYS) { if (prev[k] && !cur[k]) lift[k].push(i / N); if (!prev[k] && cur[k]) down[k].push(i / N); }
+      prev = cur;
+    }
+    for (const k of LEG_KEYS) assert.equal(lift[k].length, 1, `${name}: ${k} lifts once a cycle`);
+    for (const side of ['R', 'L']) {
+      const t = ['F', 'A', 'B', 'H'].map((c) => lift[c + side][0]); // front, second, third, rear
+      const order = [3, 2, 1, 0].map((i) => t[i]); const rel = order.map((v) => (v - order[0] + 1) % 1);
+      for (let i = 1; i < 4; i++) assert.ok(rel[i] > rel[i - 1] + 0.05, `${name} ${side}: legs lift one after another from the rear forward (${rel.map((v) => v.toFixed(2))})`);
+    }
+    const dRL = ((lift.FL[0] - lift.FR[0]) + 1) % 1; assert.ok(Math.abs(dRL - 0.5) < 0.06, `${name}: the far side is half a cycle behind (${dRL.toFixed(2)})`);
+    assert.ok(worstAir <= 4, `${name}: never more than four feet in the air (${worstAir})`); assert.ok(leastPlantedSide >= 2, `${name}: at least two feet down on each side (${leastPlantedSide})`);
+  }
+});
+test('a crab still walks on two sets of four taking turns', () => {
+  const p = mk('crab', 'Sidle'); const N = 48; let differ = 0;
+  for (let i = 0; i < N; i++) { const l = poseDog(p, {}, i / N, { worldX: (i / N) * p.dogStride }).legs; const a = ['FR', 'BR', 'AL', 'HL'].map((k) => l[k].stance); const b = ['FL', 'BL', 'AR', 'HR'].map((k) => l[k].stance); assert.ok(a.every((v) => v === a[0]) && b.every((v) => v === b[0]), `one set moves together at ${i}`); if (a[0] !== b[0]) differ++; }
+  assert.ok(differ > 0, 'and the two sets are not in step');
 });

@@ -58,7 +58,9 @@ function eightLegs(p, sc, uw, o) {
   const femur = B.upper * leg; const tibia = B.fore * leg; const tars = Math.max(0.03, B.pastern * leg);
   LEG_KEYS.forEach((key, idx) => {
     const j = Math.floor(idx / 2); const side = key[1]; const s = side === 'R' ? 1 : -1; const grp = (j + (side === 'L' ? 1 : 0)) % 2; const asym = side === 'L' ? p.dogAsymTiming || 0 : 0;
-    const w = wrap(uw - grp * 0.5 - asym); const f = step(w, clamp(p.dogDuty + (side === 'L' ? p.dogAsymDuty || 0 : 0), 0.15, 0.9), D0, p.dogLift * (side === 'L' ? Math.max(0, 1 + (p.dogAsymLift || 0)) : 1));
+    // Two sets of four taking turns (a crab), or a wave: each leg lifts on its own, one after another from the back of a side to the front, and the other side half a cycle behind (a spider).
+    const lag = o.wave ? (3 - j) * clamp(1 - p.dogDuty, 0.12, 0.25) + (side === 'L' ? 0.5 : 0) : grp * 0.5;
+    const w = wrap(uw - lag - asym); const f = step(w, clamp(p.dogDuty + (side === 'L' ? p.dogAsymDuty || 0 : 0), 0.15, 0.9), D0, p.dogLift * (side === 'L' ? Math.max(0, 1 + (p.dogAsymLift || 0)) : 1));
     const { root, rest } = o.slot(j, s);
     const foot = [rest[0] + f.x, f.y + B.paw, rest[2]]; const ankle = add(foot, [0, tars * 0.9, o.ankleOut * s * (o.axis === 'z' ? 1 : 0)]);
     const ik = ik3(root, ankle, femur, tibia, norm(o.pole(j, s)));
@@ -67,13 +69,13 @@ function eightLegs(p, sc, uw, o) {
   return legs;
 }
 
-/** A spider: a round body on eight legs that splay out sideways, the knees held high, walking on alternate sets of four. */
+/** A spider: a round body on eight legs that splay out sideways, the knees held high, each leg stepping in its turn along each side. */
 function spider(p, sc, c, uw, extra) {
   const B = speciesOf(p).bones; const leg = sc('dLeg'); const body = sc('dBody'); const girth = sc('dGirth'); const wx = extra?.worldX ?? uw * p.dogStride;
   const reach = (B.upper + B.fore) * leg; const Hb = 0.5 * reach + B.paw + 0.05; const bob = p.dogBob * Math.cos(TAU * 2 * uw); const Cc = [c('pelvis.x'), Hb + bob + c('pelvis.y'), c('pelvis.z')];
   const abdL = B.spine[0] * body; const thoL = B.spine[2] * body; const span = [0.62, 0.78, 0.8, 0.68]; const xs = [0.5, 0.26, -0.04, -0.34]; const rx = [0.5, 0.3, -0.02, -0.3];
   const slot = (j, s) => ({ root: add(Cc, [thoL * (0.42 - 0.3 * j) * 0.8, 0.02, s * 0.05 * girth]), rest: [Cc[0] + xs[j] * reach * 0.6 + rx[j] * 0, 0, s * span[j] * reach * 0.95] });
-  const legs = eightLegs(p, sc, uw, { slot, pole: (j, s) => [0.15, 1, s * 0.45], ankleOut: 0.06, axis: 'z' });
+  const legs = eightLegs(p, sc, uw, { slot, pole: (j, s) => [0.15, 1, s * 0.45], ankleOut: 0.06, axis: 'z', wave: true });
   const head = add(Cc, [thoL * 0.55, 0.0, 0]); const nose = add(Cc, [thoL * 0.75, -0.02, 0]); const abd = add(Cc, [-abdL * 0.55, 0.04 * girth, 0]);
   return dressed(p, { kind: 'spider', u: uw, pelvisX: wx, centreX: 0, pelvis: abd, j1: add(Cc, [-abdL * 0.1, 0.02, 0]), j2: Cc, j3: add(Cc, [thoL * 0.3, 0, 0]), neck: [Cc, add(Cc, [thoL * 0.3, 0, 0])], headC: head, noseTip: nose, hinge: head, jawEnd: add(nose, [0.02, -0.05 - 0.1 * clamp(c('jaw.open'), 0, 1), 0]),
     tail: [abd, abd, abd, abd], legs, body: { abdomen: abd, abdL, thorax: Cc, thoL, girth, eyes: [-1, 1].flatMap((sg) => [[0.1, 0.07, 0.04], [0.14, 0.055, 0.075]].map(([x, y, z]) => add(Cc, [thoL * (0.55 + x), y * 1.0, sg * z]))) } });

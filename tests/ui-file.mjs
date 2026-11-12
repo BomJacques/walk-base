@@ -738,6 +738,52 @@ check('and what is drawn on it shows, and walks with the figure', (await stageSh
 await q('draw-commit-all').click(); await wait(250);
 check('Uncommit all brings the stock figure back, and parts with nothing drawn are forgotten', (await ev(() => { const d = window.__walkBase.designOf(); return Object.keys(d).join(); })) === 'head');
 await ev(() => { const w = window.__walkBase; w.S.design = {}; w.S.draw.mode = 'part'; w.setTab('Gait'); w.render(); });
+// ---- the little figure to pick a part on, hold to pick on the stage, and the bucket
+await ev(() => { const w = window.__walkBase; w.pause(); w.setFigure('human'); w.S.design = {}; w.S.attach.human = []; w.S.scene.actors = []; w.S.s.style = 'mannequin'; w.S.s.shadowMode = 'off'; w.S.s.camYaw = -25; w.S.s.camPitch = 0; Object.assign(w.S.draw, { mode: 'whole', tool: 'pen', scope: 'all', target: { kind: 'fig' }, size: 4 }); w.selectPart(null, { openTab: false }); w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(500);
+check('the Draw tab has a little figure to pick a part on', (await q('draw-tpose').count()) === 1);
+await q('draw-tpose').scrollIntoViewIfNeeded(); const tb = await q('draw-tpose').boundingBox();
+await page.mouse.click(tb.x + tb.width * 0.5, tb.y + tb.height * 0.18); await wait(300);
+check('tapping its head chooses the head, and switches to drawing on one part', (await ev(() => window.__walkBase.S.sel?.part)) === 'head' && (await ev(() => window.__walkBase.S.draw.mode)) === 'part');
+await q('draw-tpose').scrollIntoViewIfNeeded(); const tb2 = await q('draw-tpose').boundingBox();
+await page.mouse.click(tb2.x + tb2.width * 0.2, tb2.y + tb2.height * 0.3); await wait(300);
+const armSel = await ev(() => window.__walkBase.S.sel);
+check('tapping an outstretched arm chooses the arm (a T pose, so they can be reached)', armSel && /arm|girdle|shoulder/.test(armSel.part), armSel);
+for (const fig of ['hose', 'dog', 'theropod', 'crab']) {
+  await ev((f) => { const w = window.__walkBase; w.setFigure(f); w.selectPart(null, { openTab: false }); w.setTab('Draw'); w.render(); }, fig); await wait(450);
+  await q('draw-tpose').scrollIntoViewIfNeeded(); const b2 = await q('draw-tpose').boundingBox();
+  for (const [fx, fy] of [[0.5, 0.5], [0.5, 0.6], [0.45, 0.8], [0.5, 0.75], [0.55, 0.85], [0.4, 0.55], [0.6, 0.55]]) { if (await ev(() => window.__walkBase.S.sel)) break; await page.mouse.click(b2.x + b2.width * fx, b2.y + b2.height * fy); await wait(200); } // a thin body takes a few tries to hit
+  const s = await ev(() => window.__walkBase.S.sel); check(fig + ': the little figure picks a part', !!s && errors.length === 0, [s, errors]);
+}
+// hold a finger on a part on the stage
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.design = {}; w.S.draw.mode = 'whole'; w.selectPart(null, { openTab: false }); w.setTab('Draw'); w.setFrame(4); w.render(); }); await wait(400);
+const clientOf2 = (key) => ev((k) => { const w = window.__walkBase; const f = w.S.last.frames[k][0].fr; const m = w.S.map; return { x: m.left + (m.x0 + (f.cx / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (f.cy / m.fch) * m.zh) / m.d }; }, key);
+const hh = await clientOf2('head'); await page.mouse.move(hh.x, hh.y); await page.mouse.down(); await wait(750); await page.mouse.up(); await wait(300);
+check('holding a finger on a part on the stage picks it, and draws nothing', (await ev(() => window.__walkBase.S.sel?.part)) === 'head' && (await ev(() => window.__walkBase.S.draw.mode)) === 'part' && (await ev(() => Object.keys(window.__walkBase.designOf()).length)) === 0);
+// a quick tap draws a dot
+await q('draw-tool-pen').click(); const hh1 = await clientOf2('head'); await page.mouse.move(hh1.x, hh1.y); await page.mouse.down(); await page.mouse.up(); await wait(300);
+check('a quick tap with the pen makes a dot', (await ev(() => window.__walkBase.designOf().head?.ink?.strokes[0]?.pts.length)) === 1);
+await q('draw-undo').click(); await wait(150);
+// the bucket
+await ev(() => { const w = window.__walkBase; w.S.design = {}; w.render(); }); await q('draw-tool-bucket').click(); await wait(200);
+const hh2 = await clientOf2('head'); const shotBefore = await stageShot();
+await page.mouse.click(hh2.x, hh2.y); await wait(350);
+const fill1 = await ev(() => window.__walkBase.designOf().head?.ink?.strokes);
+const uvArea = (loop) => { let a = 0; for (let k = 0; k < loop.length; k++) { const q2 = loop[(k + 1) % loop.length]; a += loop[k][0] * q2[1] - q2[0] * loop[k][1]; } return Math.abs(a / 2); };
+check('the bucket fills the whole part when nothing divides it', fill1 && fill1.length === 1 && fill1[0].fill === true && fill1[0].loops.length >= 1 && uvArea(fill1[0].loops[0]) > 0.4 && (await stageShot()) !== shotBefore, fill1 && fill1[0].loops.map(uvArea));
+const wholeA = uvArea(fill1[0].loops[0]);
+await q('draw-undo').click(); await wait(200);
+check('and Undo takes the fill away', (await ev(() => window.__walkBase.designOf().head)) === undefined);
+// a line right across the head, then the bucket on one side of it
+await q('draw-tool-pen').click(); await ev(() => { window.__walkBase.S.draw.size = 6; });
+const fr = await ev(() => { const w = window.__walkBase; const f = w.inkFrame('head'); const a = w.fromUV(f, 0.5, -0.25); const b = w.fromUV(f, 0.5, 1.25); return [a, b]; });
+await dragPath([fr[0], fr[1]]);
+await q('draw-tool-bucket').click(); await wait(150);
+const frH = await ev(() => { const w = window.__walkBase; const f = w.inkFrame('head'); return w.fromUV(f, 0.25, 0.5); });
+const cl = await clientAt(frH[0], frH[1]); await page.mouse.click(cl.x, cl.y); await wait(350);
+const half = await ev(() => window.__walkBase.designOf().head.ink.strokes.filter((s) => s.fill));
+check('the bucket stops at a line drawn across the part: it fills one side only', half.length === 1 && uvArea(half[0].loops[0]) < wholeA * 0.75 && uvArea(half[0].loops[0]) > wholeA * 0.2, [wholeA, half.map((s) => s.loops.map(uvArea))]);
+check('and the fill goes under the line, not over it', (await ev(() => window.__walkBase.designOf().head.ink.strokes.map((s) => s.fill).join())) === 'true,false');
+await ev(() => { const w = window.__walkBase; w.S.design = {}; w.S.draw.mode = 'part'; w.S.draw.tool = 'pen'; w.setTab('Gait'); w.render(); });
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

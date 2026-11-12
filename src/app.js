@@ -27,6 +27,7 @@ import { PROP_KINDS, PROP_BY_ID, newProp, newActor, cleanScene, EMPTY_SCENE } fr
 import { PHYS_MODES } from './propphys.js';
 import { cleanShadow } from './shadow.js';
 import { itemUVFrame } from './attach.js';
+import { paintStrokes, floodRegion, simplifyLoop, loopSize } from './ink.js';
 import { decodePicture, videoSheet, isVideo, PICTURE_ACCEPT, PICTURE_VIDEO_ACCEPT } from './pictures.js';
 import { partKey, newSkin, newPart, isPlain, cleanDesign, cellFor, toUV, fromUV, uvToCell, cellToUV, atlasLayout, atlasSkin, MAX_STROKES, MAX_STROKE_PTS, strokeShows, cleanInk, BLENDS as SKIN_BLENDS } from './design.js';
 import { packCharacter, readCharacter } from './character.js';
@@ -1005,7 +1006,7 @@ function paint() {
   const zw = fw * S.zoom; const zh = fh * S.zoom;
   const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
   if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
-  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
+  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
   stage.style.cursor = S.tab === 'Draw' ? 'crosshair' : '';
   if (S.tab === 'Draw' && S.draw.guides) paintDrawGuides(frameCanvas.getContext('2d'), info, fcw);
   const x0 = (cw - zw) / 2 + S.panX * d; const y0 = (ch - zh) / 2 + S.panY * d;
@@ -1836,6 +1837,24 @@ function designWidgets() {
 }
 
 // ---------- the draw tab: draw a part on its own, the whole figure, another figure in the scene, or an attachment ----------
+/** The plain pose the little figure stands in: the people with their arms straight out (a T), the animals as they are. */
+const TPOSE = { armOut: 85, armSwing: 0, elbowBase: 0, elbowSwing: 0, shoulderCounter: 0, asymArm: 0, lean: 0, headNod: 0, bob: 0, torsoSway: 0, pelvisRoll: 0, sway: 0, stepLength: 0.22, armCarry: 0 };
+let pickerCv = null; let pickerInfo = null;
+const parseKey = (k) => { const m = /^(.*)\.(R|L)$/.exec(k || ''); return k ? (m ? { part: m[1], side: m[2] } : { part: k, side: null }) : null; };
+/** Draws the little figure (with what has been drawn on it) and shades the part being drawn on. */
+function paintPicker() {
+  const cv = pickerCv; if (!cv || !cv.isConnected || inkItem()) return; const actor = inkActor(); const fig = actor ? actor.fig : figKey(); const people = fig === 'human' || fig === 'hose';
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
+  const base = actor ? { ...actor.p, proportions: actor.r } : { ...P() };
+  const params = { ...base, motion: {}, attach: [], scene: null, speech: null, perf: null, sampled: null, design: actor ? actor.design || null : S.design[figKey()] || null, ...(people ? TPOSE : {}) };
+  const st = { ...S.s, style: 'mannequin', shadowMode: 'off', camYaw: people ? -90 : 0, camPitch: fig === 'snake' ? 72 : 0, showArcs: false, onionBefore: 0, onionAfter: 0, lineBoil: 0, lineOffset: 0, showScene: false };
+  const sel = S.draw.mode === 'part' ? (actor ? parseKey(S.draw.actorKey) : S.sel) : null;
+  try { pickerInfo = drawScene(g, params, st, cv.width, cv.height, 0, { selection: sel }); } catch { pickerInfo = null; }
+}
+function pickerTap(e) {
+  const cv = pickerCv; if (!cv || !pickerInfo) return; const r = cv.getBoundingClientRect(); const x = ((e.clientX - r.left) * cv.width) / r.width; const y = ((e.clientY - r.top) * cv.height) / r.height;
+  const hit = pickPart((pickerInfo.shapes || []).filter((s) => !s.attach && s.part), x, y); if (hit) inkPickPart(hit);
+}
 const INK_COLOURS = ['#1b1b1f', '#ffffff', '#d93a3a', '#f08a24', '#f2cf3a', '#3fae5b', '#3a7bd9', '#8a4fd0', '#8a5a3a', '#f1c9a5'];
 let inkGesture = null; let inkUndo = []; let lastInkSig = '';
 /** What the pen draws on: { kind: 'fig' } the main figure, { kind: 'actor', id } another figure in the scene, { kind: 'attach', id } one attachment. One that is gone falls back to the figure. */
@@ -1871,13 +1890,67 @@ function inkSelKey() { if (inkItem()) return 'item'; if (inkActor()) return S.dr
 const inkOf = (key) => { const p = (inkMap()[key] ||= newPart()); return (p.ink ||= { replace: S.draw.scope !== 'frame', strokes: [] }); };
 function inkTidy(key) { const d = inkMap(); const p = d[key]; if (!p) return; if (p.ink && !p.ink.strokes.length && !(p.ink.blank && p.ink.replace)) p.ink = null; if (!inkItem() && isPlain(p)) delete d[key]; }
 const inkRel = (fr) => (S.draw.size * (S.map.fcw / S.map.zw)) / Math.max(1, (fr.L + fr.W) / 2);
+let inkPress = null;
+/** The pointer is down on the stage in the Draw tab. Nothing is drawn yet: moving starts a line, lifting is a tap (a dot, a bucket fill), and holding still picks the part under the finger. */
 function inkDown(e, toFrame) {
   const q = toFrame(e.clientX, e.clientY); if (!q || !S.last?.frames) return false;
   pause();
-  if (S.draw.tool === 'pick') { if (inkItem()) return true; const hit = pickPart(inkShapes(), q.x, q.y); if (hit) { if (inkActor()) { S.draw.actorKey = partKey(hit.part, hit.side); renderPanel(); render(); } else selectPart(hit, { openTab: false }); } return true; }
-  if (!inkWhole() && !inkSelKey()) { setMessage('Choose a part first: tap one in the list, or use Pick part.'); return true; }
-  inkGesture = { id: e.pointerId, tid: inkTid(), tool: S.draw.tool, adds: [], dels: [], cur: null, key: null, last: null };
-  inkMove(e, toFrame); return true;
+  if (S.draw.tool === 'pick') { if (inkItem()) return true; const hit = pickPart(inkShapes(), q.x, q.y); if (hit) inkPickPart(hit); return true; }
+  inkPress = { id: e.pointerId, x: e.clientX, y: e.clientY, e0: { clientX: e.clientX, clientY: e.clientY }, q, fired: false, timer: setTimeout(inkHoldPick, 480) };
+  return true;
+}
+/** Chooses a part to draw on: from the stage, the list or the little figure. */
+function inkPickPart(hit) {
+  S.draw.mode = 'part';
+  if (inkActor()) { S.draw.actorKey = partKey(hit.part, hit.side); renderPanel(); render(); } else selectPart(hit, { openTab: false });
+}
+function inkHoldPick() {
+  const p = inkPress; if (!p || inkGesture) return; p.fired = true; if (inkItem()) return;
+  const hit = pickPart(inkShapes(), p.q.x, p.q.y); if (!hit) { setMessage('Nothing there to pick.'); return; }
+  inkPickPart(hit); setMessage(`Picked the ${wd(partLabel(hit.part, hit.side))}. Draw on it alone; choose Whole figure to draw across.`); try { navigator.vibrate?.(15); } catch { /* no vibration here */ }
+}
+function inkBegin(e0, toFrame) {
+  if (!inkWhole() && !inkSelKey()) { setMessage('Choose a part first: tap one on the little figure or in the list, or hold a finger on it on the stage.'); return false; }
+  inkGesture = { id: inkPress?.id ?? 0, tid: inkTid(), tool: S.draw.tool, adds: [], dels: [], cur: null, key: null, last: null }; inkMove(e0, toFrame); return true;
+}
+/** The pointer moved while down: past a few pixels it is a line (or an eraser stroke). */
+function inkMoveEvent(e, toFrame) {
+  if (inkGesture) { inkMove(e, toFrame); return; }
+  const p = inkPress; if (!p || p.fired || Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) return;
+  clearTimeout(p.timer); if (S.draw.tool === 'bucket') return; // a bucket is a tap
+  if (inkBegin(p.e0, toFrame)) inkMove(e, toFrame);
+}
+function inkRelease(e, toFrame) {
+  const p = inkPress; inkPress = null; if (p) clearTimeout(p.timer);
+  if (inkGesture) { inkEnd(); return; }
+  if (!p || p.fired) return; // held: it picked a part, and drew nothing
+  if (S.draw.tool === 'bucket') { inkBucket(toFrame(p.x, p.y)); return; }
+  if (inkBegin(p.e0, toFrame)) inkEnd(); // a tap: a dot, or the eraser at that point
+}
+/** The bucket: fills the region of the part the tap is in, bounded by the lines already drawn and by the edge of the part. Holes (a closed ring of lines inside) stay empty. */
+function inkBucket(q) {
+  if (!q) return;
+  const key = inkWhole() ? inkPartAt(q) : inkSelKey(); if (!key) { setMessage(inkWhole() ? 'Tap on a part of the figure to fill it.' : 'Choose a part first.'); return; }
+  const fr = inkFrame(key); if (!fr) return; const D = S.draw;
+  const polys = inkItem() ? [[[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v))] : ((inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key] || []).map((f) => f.pts);
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; for (const p of polys) for (const [x, y] of p) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (!(x1 > x0 && y1 > y0)) return;
+  const sc = 320 / Math.max(x1 - x0, y1 - y0); const w = Math.ceil((x1 - x0) * sc) + 2; const h = Math.ceil((y1 - y0) * sc) + 2;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d', { willReadFrequently: true });
+  g.setTransform(sc, 0, 0, sc, -x0 * sc + 1, -y0 * sc + 1); g.fillStyle = '#fff'; for (const p of polys) { g.beginPath(); p.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.fill(); }
+  const ink0 = inkMap()[key]?.ink; const bars = (ink0?.strokes || []).filter((s) => !s.fill).map((s) => ({ ...s, c: '#000000', a: 1 }));
+  paintStrokes(g, bars, (u, v) => fromUV(fr, u, v), (fr.L + fr.W) / 2, S.frame, 2 / sc); // the lines drawn so far are walls, at least two pixels thick
+  const px = g.getImageData(0, 0, w, h).data; const allowed = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) allowed[i] = px[i * 4 + 3] > 128 && px[i * 4] > 170 ? 1 : 0;
+  const sx = Math.round((q.x - x0) * sc + 1); const sy = Math.round((q.y - y0) * sc + 1); let reg = null;
+  for (let r = 0; r <= 4 && !reg; r++) for (let dy = -r; dy <= r && !reg; dy++) for (let dx = -r; dx <= r && !reg; dx++) if (Math.max(Math.abs(dx), Math.abs(dy)) === r) reg = floodRegion(allowed, w, h, sx + dx, sy + dy);
+  if (!reg) { setMessage('Tap inside the part, away from a line.'); return; }
+  const loops = reg.loops.filter((l) => loopSize(l) >= 4).sort((a, b) => loopSize(b) - loopSize(a)).slice(0, 8).map((l) => simplifyLoop(l, 0.8).map(([x, y]) => { const [u, v] = toUV(fr, x0 + (x - 1) / sc, y0 + (y - 1) / sc); return [Math.round(u * 1000) / 1000, Math.round(v * 1000) / 1000]; })).filter((l) => l.length >= 3);
+  if (!loops.length) { setMessage('Nothing to fill there.'); return; }
+  const ink = inkOf(key); if (ink.strokes.length >= MAX_STROKES) { setMessage('That part has as many strokes as it can hold. Clear some or use the eraser.'); return; }
+  const stroke = { c: D.color, w: 0.01, a: D.opacity, fill: true, loops, ...(D.scope === 'frame' ? { f: S.frame } : {}), pts: loops[0].map((p) => [...p]) };
+  let at = ink.strokes.findIndex((s) => !s.fill); if (at < 0) at = ink.strokes.length; ink.strokes.splice(at, 0, stroke); // under the lines, over the fills before it
+  inkUndo.push({ tid: inkTid(), adds: [{ key, stroke }], dels: [] }); if (inkUndo.length > 60) inkUndo.shift();
+  S.ver++; render(); save(); renderPanel();
 }
 function inkMove(e, toFrame) {
   const g = inkGesture; const q = g && toFrame(e.clientX, e.clientY); if (!q) return;
@@ -1922,7 +1995,7 @@ function inkRevert(g) {
   for (const { key, stroke } of g.adds) { const ink = inkMap()[key]?.ink; const i = ink ? ink.strokes.indexOf(stroke) : -1; if (i >= 0) ink.strokes.splice(i, 1); inkTidy(key); }
   for (const { key, stroke, i } of [...g.dels].reverse()) { const s = inkOf(key).strokes; s.splice(Math.min(i, s.length), 0, stroke); }
 }
-function inkCancel() { const g = inkGesture; inkGesture = null; if (!g) return; inkRevert(g); S.ver++; render(); }
+function inkCancel() { if (inkPress) { clearTimeout(inkPress.timer); inkPress = null; } const g = inkGesture; inkGesture = null; if (!g) return; inkRevert(g); S.ver++; render(); }
 function inkUndoStep() {
   let g = inkUndo.pop(); while (g && g.tid !== inkTid()) g = inkUndo.pop(); // a gesture on something else cannot be undone from here
   if (!g) return; inkRevert(g); S.ver++; render(); save(); renderPanel();
@@ -1975,13 +2048,16 @@ function drawSection() {
     h('div', { class: 'chips', role: 'group', 'aria-label': 'What to draw on' }, tBtn('This figure', { kind: 'fig' }, 'draw-target-fig', !actor && !item),
       acts.map((a) => tBtn(a.name, { kind: 'actor', id: a.id }, `draw-target-actor-${a.id}`, actor?.id === a.id)), items.map((a) => tBtn(`Attachment: ${a.name}`, { kind: 'attach', id: a.id }, `draw-target-attach-${a.id}`, item?.id === a.id))),
     !acts.length && !items.length ? h('p', { class: 'hint' }, 'Figures added in the Scene section of the Body tab, and pictures and shapes added in the Attach tab, can be drawn on too.') : null));
+  const pFig = actor ? actor.fig : figKey(); const pPeople = pFig === 'human' || pFig === 'hose'; // the people are tall and the animals long
+  pickerCv = h('canvas', { class: 'tpose', style: pPeople ? '' : 'aspect-ratio: 16 / 9; max-width: 340px', width: pPeople ? 440 : 640, height: pPeople ? 520 : 360, role: 'img', 'aria-label': 'The figure standing in a plain pose: tap a part to draw on it', testid: 'draw-tpose', onPointerdown: pickerTap });
+  if (!item) { host.append(h('section', { class: 'group', testid: 'draw-picker' }, h('h3', null, 'Pick a part'), pickerCv, h('p', { class: 'hint' }, 'The figure in a plain pose (arms out for the people): tap a part to draw on it. You can also hold a finger on a part on the stage.'))); setTimeout(paintPicker, 0); }
   host.append(h('section', { class: 'group', testid: 'draw-main' }, h('h3', null, 'Draw'),
     h('p', { class: 'hint' }, item ? 'Draw on the attachment: what you draw stays on it and moves with it, and bends with it over a joint.' : 'Draw a part on its own, or the whole figure at once: a line that crosses from the head to the neck is split between them. What you draw sticks to its part and moves with it (a rubber hose limb bends it). Two fingers still pan and zoom.'),
     item ? null : seg('Draw', [['part', 'One part'], ['whole', 'Whole figure']], D.mode, (v) => { D.mode = v; redraw(); }, 'draw-mode'),
     !item && partMode ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Choose the part to draw on' }, list.map((e) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(e.key === sel), testid: `draw-part-${e.key}`, onClick: () => { if (actor) { D.actorKey = e.key; redraw(); } else selectPart({ part: e.part, side: e.side }, { openTab: false }); } }, `${wd(partLabel(e.part, e.side))}${d[e.key]?.ink ? (d[e.key].ink.replace ? ' ●' : ' •') : ''}`))) : null,
-    !item && partMode && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Choose a part above, or use Pick part and tap one on the stage.') : null));
+    !item && partMode && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Tap a part on the little figure, or in the list, or hold a finger on it on the stage.') : null));
   host.append(h('section', { class: 'group', testid: 'draw-pen' }, h('h3', null, 'Pen'),
-    seg('Tool', [['pen', 'Pen'], ['fill', 'Fill shape'], ['eraser', 'Eraser'], ['pick', 'Pick part']], D.tool, (v) => { D.tool = v; redraw(); }, 'draw-tool'),
+    seg('Tool', [['pen', 'Pen'], ['bucket', 'Bucket fill'], ['fill', 'Filled shape'], ['eraser', 'Eraser'], ['pick', 'Pick part']], D.tool, (v) => { D.tool = v; redraw(); }, 'draw-tool'),
     h('div', { class: 'row noreset' }, h('span', { class: 'lab' }, h('span', { class: 'name' }, 'Colour')), h('div', { class: 'swatches' }, INK_COLOURS.map((c) => h('button', { type: 'button', class: 'swatch', style: `background:${c}`, 'aria-label': `Colour ${c}`, 'aria-pressed': String(D.color === c), testid: `draw-swatch-${c.slice(1)}`, onClick: () => { D.color = c; renderPanel(); } })), h('input', { type: 'color', class: 'color', value: D.color, 'aria-label': 'Pen colour', testid: 'draw-color', onInput: (e) => { D.color = e.target.value; } }))),
     slider('Size', () => D.size, (v) => { D.size = v; }, 1, 60, 1, 'draw-size'), slider('Opacity', () => D.opacity, (v) => { D.opacity = v; }, 0.05, 1, 0.01, 'draw-opacity'),
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-undo', disabled: !inkUndo.length, onClick: inkUndoStep }, 'Undo'),
@@ -2800,7 +2876,7 @@ function gestures() {
     if (e.pointerType === 'mouse' && e.button === 1) { e.preventDefault(); stage.setPointerCapture(e.pointerId); mid = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: S.s.camYaw, pitch: S.s.camPitch, panX: S.panX, panY: S.panY, pan: e.shiftKey }; return; }
     stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     cancelPress();
-    if (inkGesture && ptrs.size > 1) inkCancel(); // a second finger: it was a pan or a zoom, not a line
+    if ((inkGesture || inkPress) && ptrs.size > 1) inkCancel(); // a second finger: it was a pan or a zoom, not a line
     else if (S.tab === 'Draw' && ptrs.size === 1 && (e.pointerType !== 'mouse' || e.button === 0) && inkDown(e, toFrame)) return;
     if (ptrs.size === 1 && e.pointerType !== 'mouse') press = { x: e.clientX, y: e.clientY, t: setTimeout(() => { press = null; ctxAt = performance.now(); drag = null; down = null; start = null; contextMenuFor(e.clientX, e.clientY); }, 550) };
     if (ptrs.size === 1) { drag = attachDragStart(e, toFrame) || fixDragStart(e, toFrame) || arcDragStart(e, toFrame) || sceneDragStart(e, toFrame); if (drag) { down = null; start = null; return; } }
@@ -2816,7 +2892,7 @@ function gestures() {
     if (!ptrs.has(e.pointerId)) return;
     if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) cancelPress();
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (inkGesture && e.pointerId === inkGesture.id) { inkMove(e, toFrame); return; }
+    if (inkPress && e.pointerId === inkPress.id) { inkMoveEvent(e, toFrame); return; }
     if (drag) { (drag.arc ? arcDragMove : drag.fix ? fixDragMove : drag.scene ? sceneDragMove : attachDragMove)(drag, e, toFrame); return; }
     const pts = [...ptrs.values()];
     if (!start) return;
@@ -2840,7 +2916,7 @@ function gestures() {
   const up = (e) => {
     if (mid && e.pointerId === mid.id) { mid = null; if (S.tab === 'View') renderPanel(); save(); return; }
     cancelPress();
-    if (inkGesture && e.pointerId === inkGesture.id) { inkEnd(); ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
+    if (inkPress && e.pointerId === inkPress.id) { inkRelease(e, toFrame); ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     if (drag) { if (drag.arc || drag.fix) { renderPanel(); save(); } else if (drag.scene) sceneDragEnd(drag); else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     const was = down; const had = ptrs.has(e.pointerId);
     ptrs.delete(e.pointerId);
@@ -2856,7 +2932,7 @@ function gestures() {
     } else if (had && was?.moved && S.tool === 'orbit') { if (S.tab === 'View') renderPanel(); save(); }
     down = null; start = ptrs.size ? snap() : null;
   };
-  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { if (inkGesture && e.pointerId === inkGesture.id) inkEnd(); if (mid && e.pointerId === mid.id) mid = null; ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
+  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { if (inkPress && e.pointerId === inkPress.id) { inkPress = null; if (inkGesture) inkEnd(); } if (mid && e.pointerId === mid.id) mid = null; ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
   stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.25, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); render(); }, { passive: false });
   stage.addEventListener('dblclick', () => { S.zoom = 1; S.panX = S.panY = 0; render(); });
   function snap() {

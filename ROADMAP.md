@@ -623,3 +623,7 @@ Not done: a mood slider that moves several settings together, a tired walk that 
 ## Done (2026-11-12): drawing bends, scene figures, attachments, blank figures
 - Hose limbs, tails, necks and the snake carry their curve (`spine`), and their UV frame runs along it (design.js `spineFrame`), so strokes and skins bend with them; skins are cut into 24 slices along the curve (no tiling on a bent part yet). Scene figures have their own `design`; attachments have `ink`. Auto-commit on the first line, Hide guide lines, Start from a blank figure.
 - Still open: drawing on scenery props, per-frame drawings are one set per part, no freeform canvas that is not on a rig.
+
+## Done (2026-11-12): picking a part, bucket fill, spider wave gait
+- Draw tab: the little figure to pick parts on (src/app.js paintPicker, TPOSE), hold-to-pick, tap = dot, bucket fill (ink.js floodRegion, maskLoops, simplifyLoop; a fill stroke is `loops` painted even-odd), drawings painted after all part fills, no selection outline over a drawing. Outline and Ink looks cover the hairline where two fills meet (the faint seam lines on the dinosaurs).
+- Spider: a wave gait, each leg stepping in turn from the back of a side to the front, the far side half a cycle behind. The crab keeps two sets of four. Not done: a choice of gait for the spider, and a wave for the crab.

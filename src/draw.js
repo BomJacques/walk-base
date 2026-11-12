@@ -523,7 +523,7 @@ function paintShape(ctx, sh, cam, st, ghost) {
     ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill();
     hatchShape(ctx, sh.pts, st, cam, `${sh.part}${sh.side}`); return;
   }
-  if ((st.style === 'outline' || st.style === 'ink') && !ghost) { ctx.fillStyle = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fill(); return; }
+  if ((st.style === 'outline' || st.style === 'ink') && !ghost) { const flat = sh.fill ?? (far ? mixHex(st.fillColor, st.farTint, 0.4) : hexA(st.fillColor, 1)); ctx.fillStyle = flat; ctx.fill(); ctx.strokeStyle = flat; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(0.6, cam.lw * 0.4); ctx.stroke(); return; } // the thin stroke in its own colour covers the hairline where two fills meet, so the outline underneath does not show through as a faint line
   if (st.style === 'clay' && !ghost) { paintClay(ctx, sh, cam, st); return; }
   if (st.style === 'lowpoly' && !ghost) { if (sh.facets) paintFacets(ctx, sh, cam, st); else paintLowPoly(ctx, sh, cam, st); return; }
   if (st.style === 'blocks' && !ghost) { paintBlocks(ctx, sh, cam, st); return; }
@@ -785,6 +785,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     }
     ctx.restore();
   }
+  const inkQueue = []; // a drawing goes over every part's own fill, so a part drawn later never cuts into it
   for (const sh of shapes) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam, null, opts.skinFrame ?? 0); continue; }
@@ -795,7 +796,10 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
       c.save(); if (sh.dz && sh.dz.opacity < 1) c.globalAlpha *= sh.dz.opacity;
       if (sh.dz?.ink?.replace && !ghost) { /* the drawing stands in for the part */ } else if (st.lineOffset && !ghost && OUTLINED[st.style]) { c.save(); c.translate(st.lineOffset * cam.k, st.lineOffset * cam.k * 0.7); paintShape(c, sh, cam, st, ghost); c.restore(); } else paintShape(c, sh, cam, st, ghost);
       if (sh.dz?.skin && !ghost) paintSkin(c, sh, sh.dz.skin, opts.skinFrame ?? 0, pivotOf(pz, cam, sh.part, sh.side));
-      if (sh.dz?.ink && !ghost) paintInk(c, sh, sh.dz.ink, pivotOf(pz, cam, sh.part, sh.side), opts.skinFrame ?? 0);
+      if (sh.dz?.ink && !ghost) {
+        const pv = pivotOf(pz, cam, sh.part, sh.side); const op = sh.dz.opacity;
+        if (sh.dz.shadow?.on) paintInk(c, sh, sh.dz.ink, pv, opts.skinFrame ?? 0); else inkQueue.push(() => { ctx.save(); if (op < 1) ctx.globalAlpha *= op; paintInk(ctx, sh, sh.dz.ink, pv, opts.skinFrame ?? 0); ctx.restore(); });
+      }
       c.restore();
     };
     if (sh.dz?.shadow?.on && !ghost) castShadow(ctx, sh.dz.shadow, cam.k, paintBody); else paintBody(ctx);
@@ -816,6 +820,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
       if (face.nose) { ctx.beginPath(); ctx.moveTo(face.noseBase.x, face.noseBase.y); ctx.lineTo(face.nose.x, face.nose.y); ctx.stroke(); }
     }
   }
+  for (const paint of inkQueue) paint();
   ctx.restore();
   return { shapes, placed, frames };
 }
