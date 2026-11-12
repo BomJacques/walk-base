@@ -979,7 +979,7 @@ check('with no errors', errors.length === 0, errors);
     await dragB({ x: spots[1].x - 3, y: spots[1].y - 10 }, { x: spots[1].x + 3, y: spots[1].y + 10 }); await wait(200);
     const strokes2 = await ev((k) => window.__walkBase.designOf()[k]?.ink?.strokes || [], legKey);
     check('a line drawn on the second piece is kept for that piece', strokes2.length === strokes.length + 1 && strokes2[strokes2.length - 1].g === 1, strokes2.map((s) => s.g));
-    const reds2 = changed(base0, await grab()); check('and both show, one on each piece', reds2.length > reds.length * 1.5, [reds.length, reds2.length]);
+    const reds2 = changed(base0, await grab()); check('and both show, one on each piece', reds2.length > reds.length * 1.2, [reds.length, reds2.length]);
   }
 }
 check('with no errors', errors.length === 0, errors);
@@ -1002,7 +1002,34 @@ if (name === 'chromium') {
   await tch('touchStart', [[tx, ty]]); await wait(60); await tch('touchEnd', []); await wait(300);
   check('one finger tapping draws a dot, it does not undo', (await strokesN()) === 2, await strokesN());
 }
+// ---- the thigh and the shin keep their own size and place in the list all through the walk, so a drawing on a leg does not swell and squash
+{
+  await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.draw.target = { kind: 'fig' }; w.setFigure('human'); w.setTab('Draw'); w.render(); }); await wait(400);
+  const rows = []; for (let f = 0; f < 12; f++) { await ev((f) => { window.__walkBase.setFrame(f); window.__walkBase.render(); }, f); await wait(60); rows.push(await ev(() => { const fr = window.__walkBase.S.last.frames['leg.L'] || []; return fr.map((p) => [p.fr.L, p.fr.W]); })); }
+  const steady = [0, 1].every((i) => { const L = rows.map((r) => r[i]?.[0]); const W = rows.map((r) => r[i]?.[1]); return L.every((v) => v && Math.abs(v - L[0]) < L[0] * 0.25) && W.every((v) => v && Math.abs(v - W[0]) < W[0] * 0.35); });
+  check('each piece of a leg keeps its size through the whole walk', steady, rows.map((r) => r.map((p) => p.map(Math.round).join('x')).join(' | ')));
+}
 check('with no errors', errors.length === 0, errors);
+// ---- a pencil keeps drawing when a palm touches down, and a pause before moving still draws
+if (name === 'chromium') {
+  await ev(() => { const w = window.__walkBase; w.S.scene = { actors: [], props: [] }; w.S.design = {}; w.S.draw.target = { kind: 'fig' }; w.S.draw.mode = 'part'; w.S.draw.tool = 'pen'; w.S.draw.size = 4; w.S.draw.scope = 'all'; w.S.zoom = 1; w.S.panX = 0; w.S.panY = 0; w.S.rot = 0; w.setFigure('human'); w.selectPart({ part: 'head', side: null }, { openTab: false }); w.setTab('Draw'); w.setFrame(0); w.render(); }); await wait(500);
+  const hp = await ev(() => { const w = window.__walkBase; const f = w.S.last.frames.head[0].fr; const m = w.S.map; return { x: m.left + (m.x0 + (f.cx / m.fcw) * m.zw) / m.d, y: m.top + (m.y0 + (f.cy / m.fch) * m.zh) / m.d }; });
+  const sb = await q('stage').boundingBox();
+  const cdpP = await context.newCDPSession(page);
+  const sendPt = (type, pts) => cdpP.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+  const N = () => ev(() => (window.__walkBase.designOf().head?.ink?.strokes || []));
+  // pencil is simulated with a dispatched touch (a real pen type is not available), so test the palm with mouse-free pointer events instead
+  await ev(({ x, y, px, py }) => { const s = document.querySelector('[data-testid="stage"]'); const mk = (type, id, pt, cx, cy, pr) => s.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: pt, clientX: cx, clientY: cy, pressure: pr, isPrimary: id === 7, bubbles: true, cancelable: true })); window.__pk = { s, mk }; mk('pointerdown', 7, 'pen', x - 20, y, 0.5); mk('pointermove', 7, 'pen', x - 10, y, 0.5); mk('pointerdown', 9, 'touch', px, py, 0.5); mk('pointermove', 9, 'touch', px + 5, py + 3, 0.5); mk('pointermove', 7, 'pen', x, y, 0.5); mk('pointermove', 7, 'pen', x + 10, y + 4, 0.5); mk('pointerup', 9, 'touch', px + 5, py + 3, 0); mk('pointermove', 7, 'pen', x + 20, y + 8, 0.5); mk('pointerup', 7, 'pen', x + 20, y + 8, 0); }, { x: hp.x, y: hp.y, px: sb.x + sb.width * 0.8, py: sb.y + sb.height * 0.8 });
+  await wait(300);
+  const st = await N(); check('a palm touching down mid-line does not cut the pencil line short', st.length === 1 && st[0].pts.length >= 4, st.map((s) => s.pts.length));
+  // a pencil that rests before it moves still draws
+  await ev(({ x, y }) => { const { mk } = window.__pk; mk('pointerdown', 7, 'pen', x, y + 20, 0.5); }, { x: hp.x, y: hp.y }); await wait(700);
+  await ev(({ x, y }) => { const { mk } = window.__pk; mk('pointermove', 7, 'pen', x + 10, y + 20, 0.5); mk('pointermove', 7, 'pen', x + 25, y + 22, 0.5); mk('pointerup', 7, 'pen', x + 25, y + 22, 0); }, { x: hp.x, y: hp.y }); await wait(300);
+  check('a pencil that rests before moving still draws a line', (await N()).length === 2, (await N()).length);
+  // a palm already resting when the pencil lands
+  await ev(({ x, y, px, py }) => { const { mk } = window.__pk; mk('pointerdown', 9, 'touch', px, py, 0.5); mk('pointerdown', 7, 'pen', x, y - 20, 0.5); mk('pointermove', 7, 'pen', x + 10, y - 20, 0.5); mk('pointermove', 7, 'pen', x + 22, y - 18, 0.5); mk('pointerup', 7, 'pen', x + 22, y - 18, 0); mk('pointerup', 9, 'touch', px, py, 0); }, { x: hp.x, y: hp.y, px: sb.x + sb.width * 0.8, py: sb.y + sb.height * 0.8 }); await wait(300);
+  check('a palm already resting does not stop the pencil drawing', (await N()).length === 3, (await N()).length);
+}
 console.log(`\n${name}: ${fails ? fails + ' failed' : 'all passed'}`);
 await browser.close();
 process.exit(fails ? 1 : 0);

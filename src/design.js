@@ -91,10 +91,14 @@ export function cellFor(skin, frame) {
  * The frame of a part on the screen, which its UV map lies on: a box whose long way (u) runs from the joint it swings from toward the middle of the part, and whose short way (v) is across it.
  * pts: the outline [[x, y], ...]; pivot: { x, y } the joint, or null. Returns { cx, cy, ax, ay, L, W }: the centre, the unit direction of u, and the sizes.
  */
-export function shapeFrame(pts, pivot = null) {
+export function shapeFrame(pts, pivot = null, own = false) {
   let cx = 0; let cy = 0; for (const [x, y] of pts) { cx += x; cy += y; } cx /= pts.length; cy /= pts.length;
   let ax; let ay;
-  if (pivot && Math.hypot(cx - pivot.x, cy - pivot.y) > 1.5) { ax = cx - pivot.x; ay = cy - pivot.y; }
+  if (own) { // a later piece of a part (the shin): along its own long way, pointing away from the joint, so the box does not turn over as the limb bends
+    let sxx = 0; let sxy = 0; let syy = 0; for (const [x, y] of pts) { sxx += (x - cx) ** 2; sxy += (x - cx) * (y - cy); syy += (y - cy) ** 2; }
+    const th = 0.5 * Math.atan2(2 * sxy, sxx - syy); ax = Math.cos(th); ay = Math.sin(th);
+    if (pivot ? (cx - pivot.x) * ax + (cy - pivot.y) * ay < 0 : ax < 0) { ax = -ax; ay = -ay; }
+  } else if (pivot && Math.hypot(cx - pivot.x, cy - pivot.y) > 1.5) { ax = cx - pivot.x; ay = cy - pivot.y; }
   else { let fd = -1; for (const [x, y] of pts) { const d = (x - cx) ** 2 + (y - cy) ** 2; if (d > fd) { fd = d; ax = x - cx; ay = y - cy; } } if (ax < 0 || (ax === 0 && ay < 0)) { ax = -ax; ay = -ay; } }
   const l = Math.hypot(ax, ay) || 1; ax /= l; ay /= l;
   let u0 = Infinity; let u1 = -Infinity; let v0 = Infinity; let v1 = -Infinity;
@@ -139,7 +143,7 @@ function spineFromUV(fr, u, v) {
   const o = (v - 0.5) * W; return [P[k][0] + tx * t - ty * o, P[k][1] + ty * t + tx * o];
 }
 /** The UV frame of a drawn shape: along its curve when it has one (a hose limb), else the box round it. */
-export const partFrame = (sh, pivot) => (sh.spine ? spineFrame(sh.spine, sh.spineR) : shapeFrame(sh.pts, pivot));
+export const partFrame = (sh, pivot, own = false) => (sh.spine ? spineFrame(sh.spine, sh.spineR) : shapeFrame(sh.pts, pivot, own));
 
 /** Where a point of a cell of the picture (0 to 1 each way) falls in the UV box, with the skin's offset, scale, turn and flip. */
 export function cellToUV(skin, s, t) {

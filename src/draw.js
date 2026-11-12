@@ -420,7 +420,7 @@ function paintSkin(ctx, sh, skin, frame, pivot) {
 /** The strokes drawn on a part, laid on it through its UV frame so they turn and move with it (and bend with it, if it bends). A stroke's width is a share of the part's size. */
 function paintInk(ctx, sh, ink, pivot, frame = 0, seg = 0) {
   if (!ink?.strokes?.length || sh.pts.length < 3) return;
-  const fr = partFrame(sh, pivot); paintStrokes(ctx, seg ? ink.strokes.filter((s) => (s.g || 0) === seg) : ink.strokes.filter((s) => !s.g), (u, v) => fromUV(fr, u, v), (fr.L + fr.W) / 2, frame); // only what was drawn on this piece: a leg is drawn in two, and the drawing must not show on both
+  const fr = partFrame(sh, pivot, seg > 0); paintStrokes(ctx, seg ? ink.strokes.filter((s) => (s.g || 0) === seg) : ink.strokes.filter((s) => !s.g), (u, v) => fromUV(fr, u, v), (fr.L + fr.W) / 2, frame); // only what was drawn on this piece: a leg is drawn in two, and the drawing must not show on both
 }
 /** The dash pattern for the line style, for a line this wide. */
 const dashOf = (st, w) => (st.lineDash === 'dashed' ? [w * 4, w * 3] : st.lineDash === 'dotted' ? [0.01, w * 2.4] : []);
@@ -799,13 +799,17 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
     ctx.restore();
   }
   const inkQueue = []; // a drawing goes over every part's own fill, so a part drawn later never cuts into it
-  const segN = {}; // which piece of its part each shape is: the thigh and the shin of a leg, in the order they are drawn
+  // which piece of its part each shape is: the thigh and the shin of a leg, nearest the joint first (not the order they are drawn in, which changes with depth)
+  const segOf = new Map();
+  { const groups = {}; const shows = (sh) => !((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) && !sh.attach && sh.part && sh.pts.length >= 3 && (ghost || !coveredByPicture(sh, st, opts.attach));
+    for (const sh of shapes) if (shows(sh)) (groups[partKey(sh.part, sh.side)] ||= []).push(sh);
+    for (const k of Object.keys(groups)) { const g = groups[k]; if (g.length < 2) continue; const pv = pivotOf(pz, cam, g[0].part, g[0].side); const d = (sh) => { let cx = 0; let cy = 0; for (const [x, y] of sh.pts) { cx += x; cy += y; } return pv ? Math.hypot(cx / sh.pts.length - pv.x, cy / sh.pts.length - pv.y) : 0; }; g.slice().sort((a, b) => d(a) - d(b)).forEach((sh, i) => segOf.set(sh, i)); } }
   for (const sh of shapes) {
     if ((sh.role === 'far' && !parts.far) || (sh.role === 'near' && !parts.near) || (sh.role === 'body' && !parts.body)) continue;
     if (sh.attach) { paintItem(ctx, sh.attach, sh.frame, cam, null, opts.skinFrame ?? 0); continue; }
     if (!ghost && coveredByPicture(sh, st, opts.attach)) continue;
-    let seg = 0; if (sh.part && sh.pts.length >= 3) { const k0 = partKey(sh.part, sh.side); seg = segN[k0] = (segN[k0] ?? -1) + 1; }
-    if (frames && sh.part && sh.pts.length >= 3) { const k = partKey(sh.part, sh.side); (frames[k] ||= []).push({ pts: sh.pts, fr: partFrame(sh, pivotOf(pz, cam, sh.part, sh.side)) }); }
+    const seg = segOf.get(sh) ?? 0;
+    if (frames && sh.part && sh.pts.length >= 3) { const k = partKey(sh.part, sh.side); (frames[k] ||= [])[seg] = { pts: sh.pts, fr: partFrame(sh, pivotOf(pz, cam, sh.part, sh.side), seg > 0) }; }
     if (sh.hidden) continue;
     const paintBody = (c) => {
       c.save(); if (sh.dz && sh.dz.opacity < 1) c.globalAlpha *= sh.dz.opacity;

@@ -1908,7 +1908,7 @@ function inkDown(e, toFrame) {
   pause();
   if (S.draw.tool === 'dropper') { inkDropper(e); return true; }
   if (S.draw.tool === 'pick') { if (inkItem()) return true; const hit = pickPart(inkShapes(), q.x, q.y); if (hit) inkPickPart(hit); return true; }
-  inkPress = { id: e.pointerId, x: e.clientX, y: e.clientY, e0: { clientX: e.clientX, clientY: e.clientY }, q, fired: false, timer: setTimeout(inkHoldPick, 480) };
+  inkPress = { id: e.pointerId, x: e.clientX, y: e.clientY, e0: { clientX: e.clientX, clientY: e.clientY }, q, fired: false, timer: e.pointerType === 'pen' ? 0 : setTimeout(inkHoldPick, 480) }; // a pencil resting a moment before it moves is still a line, so only a finger or mouse can hold to pick
   return true;
 }
 /** Chooses a part to draw on: from the stage, the list or the little figure. */
@@ -3009,6 +3009,7 @@ function gestures() {
   let mid = null;
   // A quick tap with two fingers undoes, and with three redoes, as in a paint app. The fingers must land together, lift together and not move.
   let tapG = null;
+  let penId = null; // while a pencil is down, touches are a resting palm or hand: they are ignored, and never cut the line short
   const tapDown = (e) => {
     if (e.pointerType !== 'touch') return; const now = performance.now(); if (ptrs.size === 1) tapG = { t0: now, n: 1, moved: false, fired: false, pos: new Map() };
     if (tapG) { if (now - tapG.t0 > 350) tapG = null; else { tapG.n = Math.max(tapG.n, ptrs.size); tapG.pos.set(e.pointerId, { x: e.clientX, y: e.clientY }); } }
@@ -3026,7 +3027,10 @@ function gestures() {
   stage.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
   stage.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button === 1) { e.preventDefault(); stage.setPointerCapture(e.pointerId); mid = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: S.s.camYaw, pitch: S.s.camPitch, panX: S.panX, panY: S.panY, pan: e.shiftKey }; return; }
-    stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); tapDown(e);
+    if (e.pointerType === 'touch' && penId != null) return;
+    if (e.pointerType === 'pen') { penId = e.pointerId; tapG = null; if (ptrs.size && !ptrs.has(e.pointerId)) { ptrs.clear(); if (inkGesture || inkPress) inkCancel(); drag = null; down = null; start = null; } }
+    try { stage.setPointerCapture(e.pointerId); } catch { /* a pointer the browser has already let go of */ }
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); tapDown(e);
     cancelPress();
     if ((inkGesture || inkPress) && ptrs.size > 1) inkCancel(); // a second finger: it was a pan or a zoom, not a line
     else if (S.tab === 'Draw' && ptrs.size === 1 && (e.pointerType !== 'mouse' || e.button === 0) && inkDown(e, toFrame)) return;
@@ -3051,14 +3055,15 @@ function gestures() {
     if (pts.length >= 2) {
       down = null;
       const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      S.zoom = Math.min(8, Math.max(0.25, start.zoom * (d / start.dist)));
-      S.panX = start.panX + ((pts[0].x + pts[1].x) / 2 - start.cx); S.panY = start.panY + ((pts[0].y + pts[1].y) / 2 - start.cy);
+      const T = { zoom: Math.min(8, Math.max(0.25, start.zoom * (d / start.dist))), panX: start.panX + ((pts[0].x + pts[1].x) / 2 - start.cx), panY: start.panY + ((pts[0].y + pts[1].y) / 2 - start.cy), rot: S.rot };
       // twisting the two fingers turns the page about the point between them; a small twist is left alone, so a pinch does not wobble it
       const dA = turned(start.ang, Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x)); const m = S.map;
       if (m && (start.twist || Math.abs(dA) > 0.07)) {
-        start.twist = true; S.rot = snapTurn(start.rot + dA); const d0 = S.rot - start.rot;
-        const [kx, ky] = holdPoint((start.cx - m.left) * m.d, (start.cy - m.top) * m.d, stage.width / 2 + start.panX * m.d, stage.height / 2 + start.panY * m.d, d0); S.panX += kx / m.d; S.panY += ky / m.d;
+        start.twist = true; const aa = Math.abs(dA); const off = aa < 0.07 ? dA : Math.sign(dA) * 0.07 * Math.max(0, 1 - (aa - 0.07) / 0.35); // the turn begins from nothing when it engages and catches up with the fingers as they twist on, so the page does not jump
+        T.rot = snapTurn(start.rot + dA - off); const d0 = T.rot - start.rot;
+        const [kx, ky] = holdPoint((start.cx - m.left) * m.d, (start.cy - m.top) * m.d, stage.width / 2 + start.panX * m.d, stage.height / 2 + start.panY * m.d, d0); T.panX += kx / m.d; T.panY += ky / m.d;
       }
+      gestAim(T); return;
     } else if (down) {
       const dx = pts[0].x - down.x; const dy = pts[0].y - down.y;
       if (!down.moved && Math.hypot(dx, dy) < 8) return;
@@ -3072,6 +3077,8 @@ function gestures() {
     render();
   });
   const up = (e) => {
+    gestFlush();
+    if (e.pointerId === penId) penId = null; else if (e.pointerType === 'touch' && !ptrs.has(e.pointerId) && !mid) return;
     tapUp(e);
     if (mid && e.pointerId === mid.id) { mid = null; if (S.tab === 'View') renderPanel(); save(); return; }
     cancelPress();
@@ -3091,10 +3098,21 @@ function gestures() {
     } else if (had && was?.moved && S.tool === 'orbit') { if (S.tab === 'View') renderPanel(); save(); }
     down = null; start = ptrs.size ? snap() : null;
   };
-  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { tapG = null; if (inkPress && e.pointerId === inkPress.id) { inkPress = null; if (inkGesture) inkEnd(); } if (mid && e.pointerId === mid.id) mid = null; ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
+  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { tapG = null; if (e.pointerId === penId) penId = null; if (inkPress && e.pointerId === inkPress.id) { inkPress = null; if (inkGesture) inkEnd(); } if (mid && e.pointerId === mid.id) mid = null; ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
   stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.25, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); render(); }, { passive: false });
-  stage.addEventListener('dblclick', () => { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); });
+  stage.addEventListener('dblclick', () => { gestT = null; S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); });
+  // The page eases toward where the fingers put it, a little each frame, so the jitter of touch samples (one finger reports, then the other) does not shake it.
+  let gestT = null; let gestRaf = 0;
+  function gestAim(T) { gestT = T; if (!gestRaf) gestRaf = requestAnimationFrame(gestStep); }
+  function gestStep() {
+    gestRaf = 0; const T = gestT; if (!T) return; const k = 0.45; const dr = turned(S.rot, T.rot);
+    S.zoom += (T.zoom - S.zoom) * k; S.panX += (T.panX - S.panX) * k; S.panY += (T.panY - S.panY) * k; S.rot = turned(0, S.rot + dr * k);
+    if (Math.abs(T.zoom - S.zoom) < 0.002 && Math.abs(T.panX - S.panX) < 0.2 && Math.abs(T.panY - S.panY) < 0.2 && Math.abs(dr * (1 - k)) < 0.001) { gestFlush(); return; }
+    render(); gestRaf = requestAnimationFrame(gestStep);
+  }
+  function gestFlush() { const T = gestT; gestT = null; if (gestRaf) { cancelAnimationFrame(gestRaf); gestRaf = 0; } if (T) { S.zoom = T.zoom; S.panX = T.panX; S.panY = T.panY; S.rot = T.rot; render(); } }
   function snap() {
+    gestFlush();
     const pts = [...ptrs.values()];
     const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length; const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
     return { zoom: S.zoom, panX: S.panX, panY: S.panY, rot: S.rot, twist: false, ang: pts.length > 1 ? Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x) : 0, cx, cy, dist: pts.length > 1 ? Math.max(1, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)) : 1 };
