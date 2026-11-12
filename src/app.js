@@ -1,6 +1,6 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
 import { DEFAULTS, cycleFrames, cycleTravel, foot, sideGait, gaitSummary, supportStats } from './rig.js';
-import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, unmuted, paramsAt, motionAt, integrate, Recorder, laneValue } from './automation.js';
+import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, unmuted, paramsAt, motionAt, integrate, Recorder, laneValue, replaceSpan, thinPoints } from './automation.js';
 import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
@@ -40,6 +40,8 @@ import { turned, snapTurn, spin, holdPoint } from './viewrot.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
+import { bodyFromRig, bodyChannels, neutralPose, liveOf, PHYS_CHANNELS } from './physpose.js';
+import { stepBody as bodyStep, PT as BPT, pointsOf as bodyPoints, dragStart as bodyDragStart, dragMove as bodyDragMove, dragEnd as bodyDragEnd, release as bodyRelease, shove as bodyShove } from './body.js';
 
 const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -66,6 +68,8 @@ const S = {
   speech: null, speechDraft: null, speechStart: 0, speechSpeed: 1, mouthPreview: null,
   // The scene: other figures with walks of their own, and scenery. sceneSel is the one being edited.
   scene: { actors: [], props: [] }, sceneSel: null,
+  // Physics: the settings of the body simulation, and the values it is writing to the figure right now (physLive, never saved).
+  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, balance: 0.8, friction: 0.6, bounce: 0.1, keep: 'stay', holds: [] }, physLive: null,
   // The file: its name, the state when it was last saved (to tell what has changed since), and the clipboard for Copy and Paste.
   fileName: 'walk-settings', savedState: null, everSaved: false, clipboard: null,
 };
@@ -81,12 +85,12 @@ function perfData() {
   const n = Math.max(2, Math.round(S.p.cycleFrames));
   // On uneven ground the figure has to keep going to climb, so a plain cycle becomes four cycles long.
   const T = S.perfLen > 0 ? Math.round(S.perfLen) : S.p.terrain && S.p.terrain !== 'flat' ? n * 4 : n;
-  if (!hasLanes(S.lanes) && T === n) return null;
+  if (!hasLanes(S.lanes) && T === n && !S.physLive) return null;
   const key = `${S.ver}|${T}|${JSON.stringify(S.p)}`;
   if (perfCache?.key !== key) { const dog = S.p.rig === 'dog';
     const s = integrate(S.p, unmuted(S.lanes), T, n, dog ? null : contact);
     perfCache = { key, T, u: s.u, x: s.x, px: s.px, pz: s.pz, path: s.path, plants: dog ? dogPlants(S.p, unmuted(S.lanes), T, s) : s.plants }; }
-  const live = rec.liveValues();
+  const live = { ...rec.liveValues(), ...(S.physLive || {}) };
   return { ...perfCache, lanes: unmuted(S.lanes), live: Object.keys(live).length ? live : null };
 }
 /** The parameters every drawing and export reads: gait, proportions and the motion you have changed. */
@@ -113,7 +117,7 @@ const hist = new History({ gap: 250 });
 let restoring = false;
 const snapState = () => JSON.stringify({
   p: S.p, s: Object.fromEntries(Object.entries(S.s).filter(([k]) => !/^cam|^autoOrbit/.test(k))), x: S.x, r: S.r, motion: S.motion, lanes: S.lanes,
-  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, design: S.design,
+  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, design: S.design, phys: { ...S.phys, on: false },
 });
 function refreshHistory() {
   refreshSaveState();
@@ -151,7 +155,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -182,7 +186,7 @@ function cleanLanes(raw) {
   for (const [t, l] of Object.entries(raw || {})) {
     if (!validTarget(t) || !Array.isArray(l?.pts)) continue;
     const pts = l.pts.filter((q) => Number.isFinite(Number(q.t)) && Number.isFinite(Number(q.v))).map((q) => ({ t: Math.max(0, Math.round(Number(q.t))), v: Number(q.v) })).sort((a, b) => a.t - b.t);
-    if (pts.length) out[t] = { pts, interp: l.interp === 'linear' ? 'linear' : 'smooth', ...(l.mute ? { mute: true } : {}) };
+    if (pts.length) out[t] = { pts, interp: l.interp === 'linear' ? 'linear' : 'smooth', ...(l.mute ? { mute: true } : {}), ...(l.phys ? { phys: true } : {}) };
   }
   return out;
 }
@@ -202,6 +206,7 @@ function adopt(raw) {
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
+  S.phys = { ...cleanPhysState(raw.phys), on: S.phys.on }; PH.dirty = true;
   adoptSampler(raw.sampler);
   if (raw.preset) S.preset = raw.preset;
   { const a = adoptArcs('human', raw.s?.arcs); if (a) S.s.arcs = a; const d = adoptArcs('dog', raw.s?.arcsDog); if (d) S.s.arcsDog = d; }
@@ -1010,9 +1015,10 @@ function paint() {
   const zw = fw * S.zoom; const zh = fh * S.zoom;
   const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
   if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
-  const info = drawScene(frameCanvas.getContext('2d'), P(), S.s, fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
-  stage.style.cursor = S.tab === 'Draw' ? 'crosshair' : '';
+  const info = drawScene(frameCanvas.getContext('2d'), P(), stageStyle(), fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
+  stage.style.cursor = S.tab === 'Draw' ? 'crosshair' : physActive() ? 'grab' : '';
   if (S.tab === 'Draw' && S.draw.guides) paintDrawGuides(frameCanvas.getContext('2d'), info, fcw);
+  if (physActive()) paintPhysics(frameCanvas.getContext('2d'), info);
   const x0 = (cw - zw) / 2 + S.panX * d; const y0 = (ch - zh) / 2 + S.panY * d;
   ctx.imageSmoothingQuality = 'high';
   const ccx = x0 + zw / 2; const ccy = y0 + zh / 2; ctx.save(); if (S.rot) { ctx.translate(ccx, ccy); ctx.rotate(S.rot); ctx.translate(-ccx, -ccy); } // the page can be turned with two fingers
@@ -1311,6 +1317,170 @@ function recordable(rng, num, targets, readStored, writeStored, apply) {
   });
 }
 
+// ---------- the physics tab: the figure as a body with weight ----------
+// The body (body.js) is simulated live in the side view. Drag it by a hand, the head, the hips or a foot and let go: it falls, lands, swings from a hold, floats, or is thrown.
+// Each frame the body's joint angles are written to the rig's channels as live values (physpose.js), so the figure is posed by the real rig. A take writes those frames to ordinary lanes.
+const PH = { body: null, raf: 0, last: 0, acc: 0, taking: null, drag: null, dirty: false, zoomOut: false };
+function cleanPhysState(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const n = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : d);
+  return { on: false, gravity: n(r.gravity, 0, 2, 1), drag: n(r.drag, 0, 6, 0.15), strength: n(r.strength, 0, 1, 0.8), balance: n(r.balance, 0, 1, 0.8), friction: n(r.friction, 0, 1, 0.6), bounce: n(r.bounce, 0, 0.8, 0.1), keep: r.keep === 'return' ? 'return' : 'stay',
+    holds: (Array.isArray(r.holds) ? r.holds : []).slice(0, 24).map((q) => ({ x: n(q?.x, -12, 12, 0), y: n(q?.y, -0.5, 12, 3) })) };
+}
+const physOk = () => S.source !== 'sampled' && S.p.rig === 'human';
+const physActive = () => S.tab === 'Physics' && S.phys.on && physOk();
+const physParams = () => ({ ...S.p, proportions: S.r });
+/** Boxes in the scene are ground to stand on, in the figure's own line (the side view). */
+function physEnv() {
+  const boxes = (S.scene?.props || []).filter((q) => q.kind === 'box' && q.visible !== false && Math.abs(q.z || 0) < 0.8);
+  const px = S.last?.pz?.pelvisX ?? 0;
+  const ground = boxes.length ? (lx) => { let g = 0; const wx = lx + px; for (const q of boxes) if (Math.abs(wx - q.x) <= q.w / 2) g = Math.max(g, (q.y || 0) + q.h); return g; } : () => 0;
+  const cam = S.last?.cam; const xmin = cam ? -cam.cx / cam.scale + 0.3 : -Infinity; const xmax = cam ? (cam.w - cam.cx) / cam.scale - 0.3 : Infinity; // the sides of the frame are walls, and the top is a ceiling
+  const ymax = cam ? cam.target[1] + cam.cy / cam.scale - 0.5 : Infinity;
+  return { gravity: S.phys.gravity, drag: S.phys.drag, strength: S.phys.strength, balance: S.phys.balance, friction: S.phys.friction, bounce: S.phys.bounce, holds: S.phys.holds, ground, xmin, xmax, ymax, fps: Math.max(1, S.p.fps), autoGrab: true, reach: 0.14 };
+}
+function physNew() { PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true }); PH.dirty = true; }
+const physChannels = () => bodyChannels(PH.body, neutralPose(physParams(), S.motion, frameU()));
+/** Moves the body on by n frames, writes the pose to the figure, and feeds a take that is being recorded. */
+function physAdvance(n = 1) {
+  if (!PH.body) physNew();
+  let ch = null;
+  for (let i = 0; i < n; i++) { bodyStep(PH.body, physEnv(), 1); ch = physChannels(); if (PH.taking) physTake(ch); }
+  S.physLive = liveOf(ch || physChannels()); PH.dirty = false;
+  return ch;
+}
+function physLoop(t) {
+  PH.raf = 0;
+  if (!physActive()) { physStop(); return; }
+  if (!PH.body) physNew();
+  PH.acc += Math.min(0.1, Math.max(0, (t - PH.last) / 1000)); PH.last = t;
+  const per = 1 / Math.max(1, S.p.fps); let steps = 0;
+  while (PH.acc >= per && steps < 3) { PH.acc -= per; steps++; }
+  if (PH.acc > per * 3) PH.acc = 0;
+  if (steps) physAdvance(steps); else if (PH.dirty) { S.physLive = liveOf(physChannels()); PH.dirty = false; }
+  if (steps || PH.dirty || S.physLive) render();
+  PH.raf = requestAnimationFrame(physLoop);
+}
+function physStart() { if (PH.raf) return; if (!PH.body) physNew(); PH.last = performance.now(); PH.acc = 0; PH.raf = requestAnimationFrame(physLoop); render(); }
+function physStop() { if (PH.raf) cancelAnimationFrame(PH.raf); PH.raf = 0; if (PH.taking) physEndTake(); PH.drag = null; if (S.physLive) { S.physLive = null; render(); } }
+/** Called when the tab or the switch changes. */
+function physSync() { if (physActive()) { physFrame(true); physStart(); } else { physStop(); physFrame(false); } }
+/** While physics is on the figure is drawn smaller, so there is room above and beside it to lift and throw it; the view comes back when it is off. */
+function physFrame(on) { if (on !== PH.zoomOut) { PH.zoomOut = on; render(); } }
+const stageStyle = () => (PH.zoomOut ? { ...S.s, figureHeight: Math.min(S.s.figureHeight, 0.34), groundHeight: Math.max(S.s.groundHeight, 0.86) } : S.s); // the view is not changed, only drawn smaller while physics is on
+
+const PHYS_RETURN = 18; // frames a take takes to hand the figure back to the walk when it is set to
+function physStartTake() {
+  if (!physActive() || PH.taking) return;
+  const start = S.frame; const end = Math.min(MAX_FRAMES, start + Math.max(1, S.p.fps) * 30); const old = S.lanes[CADENCE];
+  // the walk's cycle stops where the take starts, so the feet are measured from one fixed pose
+  S.lanes[CADENCE] = { ...replaceSpan(old, Math.max(0, start - 1), end, [...(start > 0 ? [{ t: start - 1, v: laneValue(old, start - 1, 1) }] : []), { t: start, v: 0 }, { t: end, v: 0 }]), interp: 'linear' };
+  const hadLen = S.perfLen; if (S.perfLen < end + 1) S.perfLen = end + 1;
+  S.ver++; PH.taking = { start, frames: [], hadLen, end };
+  renderPanel(); render();
+}
+function physTake(ch) {
+  const tk = PH.taking; tk.frames.push(ch);
+  const t = tk.start + tk.frames.length;
+  if (t < tk.end - 1) S.frame = t; else physEndTake();
+}
+function physEndTake() {
+  const tk = PH.taking; PH.taking = null; if (!tk || !tk.frames.length) { renderPanel(); return; }
+  const t0 = tk.start; const t1 = t0 + tk.frames.length - 1; const a = Math.max(0, t0 - 1); const ret = S.phys.keep === 'return'; const tail = ret ? t1 + PHYS_RETURN : t1;
+  const put = (target, fresh, anchor, back) => {
+    // (the points are every frame the body was simulated, thinned as a straight line would describe them, so the lane is a straight-line lane)
+    const old = S.lanes[target]; const pts = [...(a < t0 ? [{ t: a, v: old?.pts?.length ? laneValue(old, a, anchor) : anchor }] : []), ...fresh];
+    if (ret) pts.push({ t: tail, v: old?.pts?.length ? laneValue(old, tail, back) : back });
+    S.lanes[target] = { ...replaceSpan(old, a, tail, pts), interp: 'linear', phys: true };
+  };
+  for (const id of PHYS_CHANNELS) {
+    const target = targetOfChannel(id, 'offset');
+    put(target, thinPoints(tk.frames.map((c, k) => ({ t: t0 + k, v: c[id] })), rangeOfTarget(target) * 0.003), 0, 0);
+    put(targetOfChannel(id, 'amount'), [{ t: t0, v: 0 }], 1, 1);
+  }
+  put(targetOfParam('headBob'), [{ t: t0, v: 0 }], S.p.headBob, S.p.headBob);
+  if (tk.hadLen <= 0) S.perfLen = Math.min(MAX_FRAMES, Math.max(Math.round(S.p.cycleFrames), tail + 1)); else S.perfLen = Math.max(S.perfLen, tail + 1);
+  S.ver++; markCustom(); buildStrip(); renderPanel(); render(); save();
+  setMessage(`Recorded ${tk.frames.length} frames of physics (frames ${t0 + 1} to ${t1 + 1}). It is on the timeline now: play it, scrub it, or export it.`);
+}
+const physLaneTargets = () => Object.keys(S.lanes).filter((t) => S.lanes[t]?.phys);
+function physClearLanes() {
+  for (const t of physLaneTargets()) delete S.lanes[t];
+  S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage('The physics take is removed from the timeline.');
+}
+
+/** What the pointer picks up: a hold's dot, or the nearest point of the body. p is in the figure's own units. */
+function physPick(w) {
+  let hi = -1; let hd = 0.17;
+  S.phys.holds.forEach((q, i) => { const d = Math.hypot(q.x - w.x, q.y - w.y); if (d < hd) { hd = d; hi = i; } });
+  if (hi >= 0) return { kind: 'hold', i: hi };
+  const pts = bodyPoints(PH.body); let best = -1; let bd = 0.34;
+  pts.forEach((q, i) => { const d = Math.hypot(q[0] - w.x, q[1] - w.y) * (i === BPT.HR || i === BPT.HL ? 0.85 : 1); if (d < bd) { bd = d; best = i; } });
+  return best >= 0 ? { kind: 'point', i: best } : null;
+}
+/** Draws the hand-holds, and the places on the body that can be taken hold of, over the stage. */
+function paintPhysics(ctx, info) {
+  const cam = info.cam; const px = info.pz?.pelvisX ?? 0; if (!cam) return;
+  const sc = cam.scale; const at = (x, y) => cam.p([x + px, y, 0]);
+  ctx.save();
+  S.phys.holds.forEach((q, i) => {
+    const a = at(q.x, q.y); const held = PH.body && (PH.body.grip.R === i || PH.body.grip.L === i);
+    ctx.lineWidth = Math.max(2, sc * 0.02); ctx.strokeStyle = held ? '#d9731a' : '#2b73d9';
+    ctx.beginPath(); ctx.moveTo(a.x - sc * 0.32, a.y); ctx.lineTo(a.x + sc * 0.32, a.y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(a.x, a.y, sc * 0.065, 0, Math.PI * 2); ctx.fillStyle = held ? 'rgba(217,115,26,.95)' : 'rgba(43,115,217,.3)'; ctx.fill(); ctx.stroke();
+  });
+  if (PH.body) bodyPoints(PH.body).forEach((q, i) => {
+    const a = at(q[0], q[1]); const on = PH.drag?.kind === 'point' && PH.drag.i === i;
+    ctx.beginPath(); ctx.arc(a.x, a.y, sc * (on ? 0.045 : i === BPT.HR || i === BPT.HL ? 0.03 : 0.022), 0, Math.PI * 2);
+    ctx.fillStyle = on ? 'rgba(217,115,26,.95)' : 'rgba(43,115,217,.55)'; ctx.fill();
+  });
+  ctx.restore();
+}
+
+function physicsSection() {
+  const host = h('div', { class: 'phys' });
+  const ph = S.phys;
+  if (!physOk()) { host.append(h('section', { class: 'group' }, h('h3', null, 'Physics'), h('p', { class: 'hint' }, 'Body physics works on the human figure and the rubber hose person for now. Switch to one of them to use it.'))); return host; }
+  const seg = (items, cur, on, tp) => h('div', { class: 'seg', role: 'group' }, items.map(([v, label]) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(cur === v), testid: `${tp}-${v}`, onClick: () => on(v) }, label)));
+  const slider = (label, key, lo, hi, step, tid, help) => {
+    const val = h('span', { class: 'mini-v' }, String(+ph[key].toFixed(2)));
+    return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: ph[key], testid: tid, 'aria-label': label, onInput: (e) => { ph[key] = Number(e.target.value); val.textContent = String(+ph[key].toFixed(2)); PH.dirty = true; save(); } }), val);
+  };
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Body physics'),
+    h('p', { class: 'hint' }, 'Turn it on, then drag the figure by a hand, the head, the hips or a foot, and let go. It falls, lands, swings from a hold, floats or is thrown, by the numbers below. This is worked out as a body with weight, not drawn as a pose.'),
+    h('div', { class: 'btnrow' },
+      h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: ph.on, testid: 'phys-on', onChange: (e) => { ph.on = e.target.checked; if (ph.on) physNew(); physSync(); renderPanel(); } }), h('span', null, 'Physics on')),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-reset', title: 'Put the figure back on its feet where it started', onClick: () => { physNew(); setMessage('Standing again.'); } }, 'Stand it up'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-letgo', title: 'Let go of every hold', onClick: () => { if (PH.body) { bodyRelease(PH.body, 'R', 1); bodyRelease(PH.body, 'L', 1); } } }, 'Let go')),
+    h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn', testid: 'phys-jump', title: 'Spring up from the feet', onClick: () => { if (PH.body) bodyShove(PH.body, 0, 6, S.p.fps); } }, 'Jump'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-shove-fwd', title: 'Knock it forward', onClick: () => { if (PH.body) bodyShove(PH.body, 4, 1, S.p.fps); } }, 'Push forward'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-shove-back', title: 'Knock it back', onClick: () => { if (PH.body) bodyShove(PH.body, -4, 1, S.p.fps); } }, 'Push back'))));
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Weight and air'),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Where it is' }, [['Earth', { gravity: 1, drag: 0.15, strength: 0.8 }], ['Moon', { gravity: 0.17, drag: 0.05, strength: 0.8 }], ['Water', { gravity: 0.3, drag: 3, strength: 0.5 }], ['Space', { gravity: 0, drag: 0.4, strength: 0.45 }]].map(([name, v]) => h('button', { type: 'button', class: 'pchip', testid: `phys-env-${name.toLowerCase()}`, onClick: () => { Object.assign(ph, v); save(); renderPanel(); } }, name))),
+    slider('Gravity', 'gravity', 0, 2, 0.01, 'phys-gravity', '1 is the earth. 0 floats for ever.'),
+    slider('Air or water drag', 'drag', 0, 6, 0.05, 'phys-drag', 'How fast it slows down. High for water.'),
+    slider('Muscle strength', 'strength', 0, 1, 0.01, 'phys-strength', '0 is limp, a rag doll. 1 holds its pose firmly.'),
+    slider('Balance', 'balance', 0, 1, 0.01, 'phys-balance', 'How hard it keeps itself upright on its feet.'),
+    slider('Ground grip', 'friction', 0, 1, 0.01, 'phys-friction', 'How much the feet and body slide on the ground. Low is ice.'),
+    slider('Bounce', 'bounce', 0, 0.8, 0.01, 'phys-bounce', 'How much it bounces when it lands.')));
+  host.append(h('section', { class: 'group' }, h('h3', null, `Holds (${ph.holds.length})`),
+    h('p', { class: 'hint' }, 'A hold is a bar, a rope, a ledge or a rung. Drag it where you want it on the stage. A hand that comes near one takes hold of it and the body hangs from it and swings; drag the hand away to let go. A ladder of holds is a climb: drag the figure up and each hand takes the next rung.'),
+    h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn', testid: 'phys-add-hold', onClick: () => { ph.holds.push({ x: 0.2 + ph.holds.length * 0.5, y: 3 }); save(); renderPanel(); render(); } }, 'Add a bar'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-add-ladder', onClick: () => { for (let k = 0; k < 6 && ph.holds.length < 24; k++) ph.holds.push({ x: 0.7, y: 1 + k * 0.5 }); save(); renderPanel(); render(); } }, 'Add a ladder'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-clear-holds', onClick: () => { ph.holds.length = 0; if (PH.body) { PH.body.grip.R = null; PH.body.grip.L = null; } save(); renderPanel(); render(); } }, 'Clear holds')),
+    ph.holds.map((q, i) => h('div', { class: 'laneitem', testid: `phys-hold-${i}` }, h('span', { class: 'lname' }, `Hold ${i + 1}`, h('small', null, ` x ${q.x.toFixed(2)}, height ${q.y.toFixed(2)}`)),
+      h('button', { type: 'button', class: 'btn tiny', testid: `phys-del-${i}`, 'aria-label': `Remove hold ${i + 1}`, onClick: () => { ph.holds.splice(i, 1); if (PH.body) for (const sd of ['R', 'L']) if (PH.body.grip[sd] != null) PH.body.grip[sd] = PH.body.grip[sd] === i ? null : PH.body.grip[sd] > i ? PH.body.grip[sd] - 1 : PH.body.grip[sd]; save(); renderPanel(); render(); } }, 'Remove')))));
+  const lanes = physLaneTargets();
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Record'),
+    h('p', { class: 'hint' }, 'Press Record, then drag and throw the figure about. Every frame is written to the timeline as ordinary automation, from the frame the playhead is on, so it plays back, scrubs and exports like anything else. The walk stops at that frame.'),
+    h('div', { class: 'btnrow' }, seg([['stay', 'Stay where it lands'], ['return', 'Return to the walk']], ph.keep, (v) => { ph.keep = v; save(); renderPanel(); }, 'phys-keep'),
+      h('button', { type: 'button', class: 'btn primary', testid: 'phys-record', 'aria-pressed': String(Boolean(PH.taking)), disabled: !ph.on, onClick: () => { if (PH.taking) physEndTake(); else physStartTake(); renderPanel(); } }, PH.taking ? `Stop (frame ${S.frame + 1})` : 'Record')),
+    lanes.length ? h('div', { class: 'btnrow' }, h('span', { class: 'hint' }, `A physics take is on the timeline (${lanes.length} lanes).`), h('button', { type: 'button', class: 'btn', testid: 'phys-clear', onClick: physClearLanes }, 'Remove it')) : null));
+  return host;
+}
+
 // ---------- panel ----------
 /** A row's label is a button: tapping it shows or hides the help text under the row. */
 function labBtn(name, unit) {
@@ -1567,7 +1737,9 @@ function autoSection() {
     h('label', { class: 'mini' }, h('span', { class: 'mini-l' }, 'Strength'), h('input', { type: 'range', class: 'rng', min: 0.3, max: 1.5, step: 0.05, value: S.clipK, testid: 'clip-k', 'aria-label': 'Movement strength', onInput: (e) => { S.clipK = Number(e.target.value); } })),
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'clip-add', onClick: () => addClip(clip, S.clipStart, S.clipLen ?? clip.frames, S.clipK) }, `Add ${clip.label.toLowerCase()}`))));
 
-  const targets = Object.keys(S.lanes).filter((t) => S.lanes[t].pts?.length);
+  const physN = physLaneTargets().length;
+  if (physN) host.append(h('section', { class: 'group' }, h('h3', null, 'Physics take'), h('p', { class: 'hint' }, `A recorded physics take (${physN} lanes) is on the timeline. Record and change it in the Physics tab.`), h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'phys-lanes-clear', onClick: physClearLanes }, 'Remove it'))));
+  const targets = Object.keys(S.lanes).filter((t) => S.lanes[t].pts?.length && !S.lanes[t].phys);
   // Lanes are sorted into groups: timing, the gait settings, then the moving parts by region of the body.
   const LANE_ORDER = ['Speed and timing', 'Gait settings', 'Body settings', 'Body', 'Core', 'Head', 'Arms', 'Front legs', 'Legs', 'Hind legs', 'Tail', 'Other'];
   const laneGroup = (t) => {
@@ -1713,6 +1885,7 @@ function renderPanel() {
   const top = host.scrollTop;
   host.textContent = '';
   if (S.tab === 'Auto') host.append(autoSection());
+  else if (S.tab === 'Physics') host.append(physicsSection());
   else if (S.tab === 'Parts') host.append(partsSection());
   else if (S.tab === 'Attach') host.append(attachSection());
   else if (S.tab === 'Design') host.append(designSection());
@@ -1731,6 +1904,7 @@ function renderPanel() {
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
   document.querySelector('.tab[aria-selected="true"]')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
   setTimeout(refreshSparks, 0);
+  physSync();
 }
 
 // ---------- the design tab: each part's own look, skins, UV maps and sprite sheets ----------
@@ -2561,7 +2735,7 @@ function saveAs() {
   S.fileName = name; saveSettings();
 }
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, images: usedImages() }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, images: usedImages() }, null, 1)], { type: 'application/json' });
   deliver(blob, `${S.fileName}.json`).then(() => { S.savedState = snapState(); S.everSaved = true; refreshSaveState(); setMessage(`Saved ${S.fileName}.json.`); });
 }
 async function loadSettings(e) {
@@ -2972,6 +3146,31 @@ function gestures() {
     let cx = (clientX - m.left) * m.d; let cy = (clientY - m.top) * m.d; if (m.rot) [cx, cy] = spin(cx, cy, m.ccx, m.ccy, -m.rot); // back through the turn of the page
     return { x: ((cx - m.x0) / m.zw) * m.fcw, y: ((cy - m.y0) / m.zh) * m.fch };
   };
+  // Body physics: a point of the body, or a hold, follows the pointer; letting go throws the body at the pointer's speed.
+  const physWorld = (cx, cy) => {
+    const q = toFrame(cx, cy); const cam = S.last?.cam; const pz = S.last?.pz; if (!q || !cam || !pz) return null;
+    const px = pz.pelvisX; const p0 = cam.p([px, 0, 0]); const p1 = cam.p([px + 1, 0, 0]); const p2 = cam.p([px, 1, 0]);
+    const ax = p1.x - p0.x; const ay = p1.y - p0.y; const bx = p2.x - p0.x; const by = p2.y - p0.y; const det = ax * by - bx * ay; if (Math.abs(det) < 1e-9) return null;
+    const dx = q.x - p0.x; const dy = q.y - p0.y; return { x: (dx * by - bx * dy) / det, y: (ax * dy - ay * dx) / det };
+  };
+  const physDown = (e) => {
+    if (!physActive() || !PH.body) return false;
+    const w = physWorld(e.clientX, e.clientY); if (!w) return false;
+    const hit = physPick(w); if (!hit) return false;
+    PH.drag = { id: e.pointerId, ...hit };
+    if (hit.kind === 'point') bodyDragStart(PH.body, hit.i, w.x, w.y, performance.now() / 1000);
+    return true;
+  };
+  const physMove = (e) => {
+    const w = physWorld(e.clientX, e.clientY); if (!w || !PH.drag) return;
+    if (PH.drag.kind === 'point') bodyDragMove(PH.body, w.x, w.y, performance.now() / 1000); else S.phys.holds[PH.drag.i] = { x: w.x, y: Math.max(-0.5, w.y) };
+    PH.dirty = true;
+  };
+  const physUp = (e) => {
+    const d = PH.drag; PH.drag = null;
+    if (d?.kind === 'point' && PH.body) bodyDragEnd(PH.body, performance.now() / 1000, { fps: Math.max(1, S.p.fps) }); else if (d) { save(); renderPanel(); }
+    ptrs.delete(e.pointerId); PH.dirty = true;
+  };
   // A menu for whatever is under the pointer: a right-click, or holding a finger still. Every item acts on that object.
   const sceneRow = (id) => S.scene.actors.find((a) => a.id === id) || S.scene.props.find((p) => p.id === id) || null;
   const contextMenuFor = (cx, cy) => {
@@ -3044,6 +3243,7 @@ function gestures() {
     try { stage.setPointerCapture(e.pointerId); } catch { /* a pointer the browser has already let go of */ }
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); tapDown(e);
     cancelPress();
+    if (ptrs.size === 1 && (e.pointerType !== 'mouse' || e.button === 0) && physDown(e)) { down = null; start = null; return; }
     if ((inkGesture || inkPress) && ptrs.size > 1) inkCancel(); // a second finger: it was a pan or a zoom, not a line
     else if (S.tab === 'Draw' && ptrs.size === 1 && (e.pointerType !== 'mouse' || e.button === 0) && inkDown(e, toFrame)) return;
     if (ptrs.size === 1 && e.pointerType !== 'mouse') press = { x: e.clientX, y: e.clientY, t: setTimeout(() => { press = null; ctxAt = performance.now(); drag = null; down = null; start = null; contextMenuFor(e.clientX, e.clientY); }, 550) };
@@ -3060,6 +3260,7 @@ function gestures() {
     if (!ptrs.has(e.pointerId)) return;
     if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) cancelPress();
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); tapMove(e);
+    if (PH.drag && e.pointerId === PH.drag.id) { physMove(e); return; }
     if (inkPress && e.pointerId === inkPress.id) { inkMoveEvent(e, toFrame); return; }
     if (drag) { (drag.arc ? arcDragMove : drag.fix ? fixDragMove : drag.scene ? sceneDragMove : attachDragMove)(drag, e, toFrame); return; }
     const pts = [...ptrs.values()];
@@ -3094,6 +3295,7 @@ function gestures() {
     tapUp(e);
     if (mid && e.pointerId === mid.id) { mid = null; if (S.tab === 'View') renderPanel(); save(); return; }
     cancelPress();
+    if (PH.drag && e.pointerId === PH.drag.id) { physUp(e); down = null; start = ptrs.size ? snap() : null; return; }
     if (inkPress && e.pointerId === inkPress.id) { inkRelease(e, toFrame); ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     if (drag) { if (drag.arc || drag.fix) { renderPanel(); save(); } else if (drag.scene) sceneDragEnd(drag); else attachDragEnd(drag, e, toFrame); drag = null; ptrs.delete(e.pointerId); down = null; start = ptrs.size ? snap() : null; return; }
     const was = down; const had = ptrs.has(e.pointerId);
@@ -3110,7 +3312,7 @@ function gestures() {
     } else if (had && was?.moved && S.tool === 'orbit') { if (S.tab === 'View') renderPanel(); save(); }
     down = null; start = ptrs.size ? snap() : null;
   };
-  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { tapG = null; if (e.pointerId === penId) penId = null; if (inkPress && e.pointerId === inkPress.id) { inkPress = null; if (inkGesture) inkEnd(); } if (mid && e.pointerId === mid.id) mid = null; ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
+  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { tapG = null; if (e.pointerId === penId) penId = null; if (inkPress && e.pointerId === inkPress.id) { inkPress = null; if (inkGesture) inkEnd(); } if (mid && e.pointerId === mid.id) mid = null; if (PH.drag && e.pointerId === PH.drag.id) physUp(e); ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
   stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.25, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); render(); }, { passive: false });
   stage.addEventListener('dblclick', () => { gestT = null; S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); });
   // The page eases toward where the fingers put it, a little each frame, so the jitter of touch samples (one finger reports, then the other) does not shake it.
@@ -3272,7 +3474,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.__walkBase = {
   setFigure, figKey, clipsFor, clipsForFigure, applyClip, undo, redo, hist, snapState, menuOwner, closeMenus, setDensity, setTheme, setRows, addAttach, patchAttach, selectAttach, attachItem, attachList, pickAttachImage, cleanAttach, REF, refPaint, pickRef, findKeyFrames: () => findKeyFrames(P()), laneTable: () => laneTable(P()), exportKeys: (over = {}) => exportKeyFrames(P(), S.s, { ...S.x, ...over }),
-  buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
+  physAdvance, physNew, physPick, physActive, physState: () => ({ body: PH.body, taking: PH.taking, drag: PH.drag }), buildSpeechNow, clearSpeech, setSpeechText: (t) => { S.speechDraft = t; }, setRig, rec, addClip, makeLoop, loopGapNow: () => loopGap(P()), openLaneEditor, setArmed, nowValues, perfData, S, P, LAYOUT, layoutApply, render: paint, setFrame, play, pause, applyPreset, selectPart, openEditor, closeEditor, setMotion, patchMotion, liveValue, setTab: (t) => { S.tab = t === 'Body' || t === 'Scene' ? 'Gait' : t === 'Look' || t === 'Guides' ? 'View' : t; renderPanel(); },
   setParam: (id, v) => { const c = CONTROLS.find((x) => x.id === id); setParam(c, v); renderPanel(); },
   addActor, addProp, inkFrame, inkTarget, toUV, fromUV, setMoodPad, mood: () => MOOD, designOf: () => designOf(), patchPart, partKeys, packCurrentCharacter, importCharacterObject, exportUvTemplate, applyAtlas, triggerPad, storePad, padBank, padRun: () => PADRUN, padMode: (m) => { PADMODE = m; },
   exportZip: (over = {}) => exportPngZip(P(), S.s, { ...S.x, ...over }),

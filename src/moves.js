@@ -216,17 +216,17 @@ export const HUMAN_MOVES = [
   },
   {
     id: 'float', label: 'Float', frames: 96, ends: 'drifts down and stands',
-    help: 'Weightless: the walk stops, the body lifts off the ground, the arms drift out and up, the legs trail behind and the whole figure turns slowly as if in water or in space. It sinks back and stands at the end. Strength sets how high it rises.',
+    help: 'Weightless: the walk stops, the body lifts off the ground, the arms drift out and up, the legs trail behind and the whole figure turns slowly as if in water or in space. It sinks back and stands at the end. Strength sets how high it rises. This one is a posed movement, drawn as keys. For real physics, where the figure has weight and you drag it about, use the Physics tab.',
     build: (b, D, k = 1) => ({ ...floatPoses(b, D, k), [CADENCE]: at(D, [[0, 1], [0.12, 0], [0.88, 0], [1, 1]]), [P('headBob')]: at(D, [[0, b.headBob], [0.15, 0], [0.85, 0], [1, b.headBob]]) }),
   },
   {
     id: 'hang', label: 'Hang', frames: 64, ends: 'stays hanging',
-    help: 'Reaches up, jumps and takes hold of something overhead, then hangs by the arms: the body drops under the hands, the shoulders rise, the legs hang straight with the feet off the ground and the head tips back. Stand up to let go and land. Dangle swings the legs.',
+    help: 'Reaches up, jumps and takes hold of something overhead, then hangs by the arms: the body drops under the hands, the shoulders rise, the legs hang straight with the feet off the ground and the head tips back. Stand up to let go and land. Dangle swings the legs. This one is a posed movement, drawn as keys. For real physics, where the figure has weight and you drag it about, use the Physics tab.',
     build: (b, D, k = 1) => ({ ...poseBuild([[0.22, { 'arm.pitch.R': 2.2, 'arm.pitch.L': 2.2, 'elbow.flex.R': 0.15, 'elbow.flex.L': 0.15, 'pelvis.y': -0.04 }], [0.46, { ...HUNG, 'pelvis.y': 0.56, 'foot.y.R': 0.4, 'foot.y.L': 0.4 }], [0.7, { ...HUNG, 'pelvis.y': 0.52, 'foot.y.R': 0.3, 'foot.y.L': 0.3 }], [1, HUNG]], { kill: BASE_ARMS, stay: true })(b, D, k), [CADENCE]: at(D, [[0, 1], [0.12, 0], [1, 0]]), [P('headBob')]: at(D, [[0, b.headBob], [0.3, 0], [1, 0]]) }),
   },
   {
     id: 'dangle', label: 'Dangle', frames: 96, ends: 'stays hanging',
-    help: 'Hanging by the hands with the legs swinging like a pendulum: the legs swing forward and back out of step with each other, the body tips a little and the swing dies down as it goes on. It starts from standing or from Hang.',
+    help: 'Hanging by the hands with the legs swinging like a pendulum: the legs swing forward and back out of step with each other, the body tips a little and the swing dies down as it goes on. It starts from standing or from Hang. This one is a posed movement, drawn as keys. For real physics, where the figure has weight and you drag it about, use the Physics tab.',
     build: (b, D, k = 1) => {
       const keys = [[0.2, { 'arm.pitch.R': 2.2, 'arm.pitch.L': 2.2, 'elbow.flex.R': 0.15, 'elbow.flex.L': 0.15 }], [0.34, { ...HUNG }]];
       const n = 5;
@@ -240,7 +240,7 @@ export const HUMAN_MOVES = [
   },
   {
     id: 'climb', label: 'Climb', frames: 96, ends: 'stays hanging on the wall',
-    help: 'Hand over hand up a rope, ladder or wall: each arm reaches high in turn, the opposite foot lifts to the next hold, and the body pulls in close and leans toward the climb. It ends hanging by the hands; Stand up to step off.',
+    help: 'Hand over hand up a rope, ladder or wall: each arm reaches high in turn, the opposite foot lifts to the next hold, and the body pulls in close and leans toward the climb. It ends hanging by the hands; Stand up to step off. This one is a posed movement, drawn as keys. For real physics, where the figure has weight and you drag it about, use the Physics tab.',
     build: (b, D, k = 1) => {
       const keys = [[0.1, { 'arm.pitch.R': 1.5, 'arm.pitch.L': 1.5, 'spine1.pitch': 0.08, 'elbow.flex.R': 0.8, 'elbow.flex.L': 0.8 }]];
       const n = 4;

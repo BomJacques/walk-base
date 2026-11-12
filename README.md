@@ -252,3 +252,10 @@ PNG frames in a ZIP, as one file per timeline frame or one per drawing plus a ti
 - **Auto tab, Record by hand:** Punch in and out records only between two frames. Every lane in the list has Mute, Edit and Clear; a muted lane is kept but ignored.
 - **Walks:** Robot, Skip, Tiptoe, Catwalk, Zombie, Drunk and Power walk (the dog has Robot and Skip), in the preset list on the Gait tab.
 - **Movements, group Weight:** Float, Hang, Dangle and Climb. Add them in the Auto tab; Stand up lets go and lands.
+
+## Physics (2026-11-13)
+
+- **Physics tab** (separate from Auto): switch it on, then drag the figure by a hand, the head, the hips or a foot and let go. It falls, lands, swings from a bar, floats in space or water, or is thrown. It is a body with weight, not a posed movement.
+- **Holds:** Add a bar or a ladder, drag them where you want them. A hand that comes near one takes hold; drag the hand away to let go.
+- **Settings:** Gravity (Earth, Moon, Water, Space), drag, muscle strength, balance, ground grip, bounce. Boxes in the scene are ground.
+- **Record:** captures the simulation to the timeline as ordinary lanes (Auto shows one physics take, with Remove).
