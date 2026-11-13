@@ -2,7 +2,7 @@
 // World: x forward, y up, z the figure's right. Camera: yaw orbits about the vertical through the figure, pitch lifts it above (positive) or below.
 // Yaw 0 and pitch 0 is the side view, with the figure's right side toward you.
 import { cycleFrames, keyPhases, sideGait, groundAt } from './rig.js';
-import { pose3, footCorners, footShape, footMarks, add, mul, apply, hoseLimbs } from './rig3.js';
+import { pose3, footCorners, footShape, footMarks, add, sub, mul, apply, hoseLimbs } from './rig3.js';
 import { paramsAt, motionAt } from './automation.js';
 import { drawSampled } from './sampler.js';
 import { hull, circlePts } from './geom.js';
@@ -124,15 +124,17 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
   const S = (pt) => cam.p([pt[0] + pz.pelvisX, pt[1], pt[2]]);
   const sc = cam.scale; const lp = st.style === 'lowpoly'; const NS = Math.max(4, Math.min(12, Math.round(st.polySides ?? 6)));
   const pr = pz.params?.proportions || {}; const gk = pr.limbGirth ?? 1; const tk = pr.torsoGirth ?? 1; // drawn thickness of the limbs and of the body
+  const robot = pz.params?.model === 'robot'; const alien = pz.params?.model === 'alien';
   const capsule = (a, b, ra, rb, part, side, role, k = 1) => {
-    const A = S(a); const B = S(b);
-    const sh = { pts: hull([...circlePts(A, ra * k * sc), ...circlePts(B, rb * k * sc)]), depth: (A.d + B.d) / 2, part, side, role }; shapes.push(sh);
+    const A = S(a); const B = S(b); const len = Math.hypot(B.x - A.x, B.y - A.y);
+    const box = robot && len > 4 && part !== 'neck'; const nx = box ? -(B.y - A.y) / len : 0; const ny = box ? (B.x - A.x) / len : 0; const wa = ra * k * sc; const wb = rb * k * sc;
+    const sh = { pts: box ? hull([[A.x + nx * wa, A.y + ny * wa], [B.x + nx * wb, B.y + ny * wb], [B.x - nx * wb, B.y - ny * wb], [A.x - nx * wa, A.y - ny * wa]]) : hull([...circlePts(A, ra * k * sc), ...circlePts(B, rb * k * sc)]), depth: (A.d + B.d) / 2, part, side, role }; shapes.push(sh);
     if (lp) withFacets(sh, capsuleFacets(S, sc, a, b, ra * k, rb * k, NS)); // a real prism of flat sides, turning with the camera
   };
-  const section = (C, M, rf, rl, n = 12) => Array.from({ length: n }, (_, i) => {
+  const section = (C, M, rf, rl, n = 12) => (robot ? Array.from({ length: 4 }, (_, i) => { const t = Math.PI / 4 + (i * Math.PI) / 2; return S(add(C, apply(M, [rf * 1.35 * Math.cos(t), 0, rl * 1.35 * Math.sin(t)]))); }) : Array.from({ length: n }, (_, i) => {
     const t = (i / n) * TAU;
     return S(add(C, apply(M, [rf * Math.cos(t), 0, rl * Math.sin(t)])));
-  });
+  }));
   const tube = (C0, C1, M0, M1, r0, r1, part) => {
     const a = section(C0, M0, r0[0] * tk, r0[1] * tk); const b = section(C1, M1, r1[0] * tk, r1[1] * tk);
     const sh = { pts: hull([...a, ...b].map((q) => [q.x, q.y])), depth: (S(C0).d + S(C1).d) / 2, part, side: null, role: 'body' }; shapes.push(sh);
@@ -155,7 +157,7 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
     const ph = (lat / 12) * Math.PI;
     for (let lon = 0; lon < (lat === 0 || lat === 12 ? 1 : 32); lon++) {
       const th = (lon / 32) * TAU;
-      const q = [0.95 * Math.sin(ph) * Math.cos(th), 1.08 * Math.cos(ph), 0.85 * Math.sin(ph) * Math.sin(th)];
+      const q = alien ? [0.8 * Math.sin(ph) * Math.cos(th), 1.32 * Math.cos(ph) * (Math.cos(ph) < 0 ? 0.8 : 1), 0.78 * Math.sin(ph) * Math.sin(th)] : [0.95 * Math.sin(ph) * Math.cos(th), 1.08 * Math.cos(ph), 0.85 * Math.sin(ph) * Math.sin(th)];
       const P = S(add(pz.headC, apply(pz.Rh, mul(q, hr))));
       headPts.push([P.x, P.y]);
     }
@@ -169,6 +171,20 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
   const eyes = [1, -1].map((s) => S(add(pz.headC, apply(pz.Rh, [hr * 0.82, hr * 0.12, s * hr * 0.42]))));
   const front = (p) => p.d > hc.d - 0.0001;
   const face = { nose: front(nose) ? nose : null, noseBase, eyes: eyes.filter(front), c: hc };
+  if (robot) { // a box head with a dark visor across the front, and an antenna with a ball on it
+    const corner = (x, y, z) => { const P = S(add(pz.headC, apply(pz.Rh, [x * hr, y * hr, z * hr]))); return [P.x, P.y]; };
+    const box = []; for (const x of [-0.9, 0.9]) for (const y of [-1, 1]) for (const z of [-0.8, 0.8]) box.push(corner(x, y, z));
+    shapes[shapes.length - 1] = { pts: hull(box), depth: hc.d, part: 'head', side: null, role: 'body' };
+    const vis = [corner(0.92, 0.45, -0.7), corner(0.92, 0.45, 0.7), corner(0.92, -0.05, 0.7), corner(0.92, -0.05, -0.7)];
+    if (front(S(add(pz.headC, apply(pz.Rh, [hr * 0.95, 0.2 * hr, 0]))))) shapes.push({ pts: hull(vis), depth: hc.d + 0.0006, part: 'head', side: null, role: 'body', fill: '#18202c' });
+    const a0 = add(pz.headC, apply(pz.Rh, [0, hr * 1.0, 0])); const a1 = add(pz.headC, apply(pz.Rh, [0, hr * 1.7, 0])); capsule(a0, a1, 0.01, 0.01, 'head', null, 'body'); const B1 = S(a1); shapes.push({ pts: circlePts(B1, 0.03 * sc, 12), depth: B1.d, part: 'head', side: null, role: 'body' });
+    face.eyes = []; face.nose = null;
+  }
+  if (alien) { // two big black almond eyes slanting up at the sides of the front of the face, and no nose
+    const ey = (z) => { const c = add(pz.headC, apply(pz.Rh, [hr * 0.72, hr * 0.12, z * hr * 0.42])); return Array.from({ length: 16 }, (_, i) => { const t = (i / 16) * TAU; const P = S(add(c, apply(pz.Rh, [0.04 * hr, hr * (0.2 * Math.sin(t) + 0.12 * Math.cos(t) * z), hr * (0.26 * Math.cos(t))]))); return [P.x, P.y]; }); };
+    for (const z of [1, -1]) if (front(S(add(pz.headC, apply(pz.Rh, [hr * 0.8, hr * 0.12, z * hr * 0.42]))))) shapes.push({ pts: ey(z), depth: hc.d + 0.0006, part: 'head', side: null, role: 'body', fill: '#0c0f14' });
+    face.eyes = []; face.nose = null;
+  }
 
   for (const side of ['R', 'L']) {
     const sd = pz.sides[side];
@@ -191,6 +207,13 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
     }
     capsule(sd.shoulder, sd.elbow, 0.05, 0.038, 'arm', side, role, gk);
     capsule(sd.elbow, sd.wrist, 0.036, 0.028, 'forearm', side, role, gk);
+    if (robot) for (const [q, r, pt] of [[sd.hip, 0.07, 'leg'], [sd.knee, 0.06, 'leg'], [sd.elbow, 0.045, 'forearm'], [sd.shoulder, 0.055, 'arm']]) { const Q = S(q); shapes.push({ pts: circlePts(Q, r * gk * sc, 14), depth: Q.d + 0.0004, part: pt, side, role }); } // ball joints
+    if (alien) { // a second, lower pair of arms from the middle of the ribs, swinging against the first pair
+      const other = pz.sides[side === 'R' ? 'L' : 'R']; const mz = (v) => [v[0], v[1], -v[2]]; const sh2 = add(sd.shoulder, mul(sub(pz.j1, pz.j3), 0.45));
+      const rel = (a, b) => mz(sub(a, b)); const el2 = add(sh2, rel(other.elbow, other.shoulder)); const wr2 = add(sh2, rel(other.wrist, other.shoulder)); const hd2 = add(sh2, rel(other.hand, other.shoulder));
+      capsule(sh2, el2, 0.042, 0.032, 'arm', side, role, gk); capsule(el2, wr2, 0.03, 0.024, 'forearm', side, role, gk);
+      const H2 = S(add(wr2, mul(sub(hd2, wr2), 0.6))); shapes.push({ pts: circlePts(H2, 0.04 * (pr.handSize ?? 1) * sc, 12), depth: H2.d, part: 'hand', side, role });
+    }
     const hc2 = add(sd.wrist, mul([sd.hand[0] - sd.wrist[0], sd.hand[1] - sd.wrist[1], sd.hand[2] - sd.wrist[2]], 0.6));
     const H = S(hc2);
     const hp = handPolys(H, S(sd.wrist), 0.045 * (pr.handSize ?? 1) * sc, st.handStyle);

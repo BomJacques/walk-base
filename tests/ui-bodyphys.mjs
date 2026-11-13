@@ -144,10 +144,20 @@ check('Remove it takes the physics lanes off the timeline', await ev(() => Objec
 // ---- rag doll: every joint goes limp
 await page.locator('[data-testid="tab-Physics"]').click(); await q('phys-on').check(); await q('phys-reset').click(); await page.waitForTimeout(300);
 await q('phys-ragdoll').click();
-check('Rag doll switches the muscles off', await ev(() => window.__walkBase.S.phys.strength === 0 && window.__walkBase.S.phys.limbs === 0));
+check('Rag doll is a mode that keeps the muscle sliders as they were', await ev(() => window.__walkBase.S.phys.ragdoll === true && window.__walkBase.S.phys.strength > 0.5));
 check('and the body crumples under its own weight: hips and head come down, the back folds', await until(() => { const b = window.__walkBase.physState().body; return b.y[0] < 0.6 && b.y[2] < 0.6; }, undefined, 6000));
 await shot('8-ragdoll');
-await q('phys-ragdoll').click(); check('Stiffen up puts the muscles back', await ev(() => window.__walkBase.S.phys.strength > 0.5));
+const fall1 = await ev(() => window.__walkBase.physState().body.x.slice(0, 12));
+// it stays limp through the other moves: a weight preset, a jump, standing it up again
+await q('phys-env-moon').click(); await q('phys-jump').click(); await page.waitForTimeout(300);
+check('the weight presets and a jump do not stiffen it', await ev(() => window.__walkBase.S.phys.ragdoll === true));
+await q('phys-reset').click(); await page.waitForTimeout(1500);
+check('stood up again it still collapses (the mode stays on)', await until(() => { const b = window.__walkBase.physState().body; return b.y[2] < 1.2; }, undefined, 6000));
+await q('phys-env-earth').click(); await q('phys-reset').click(); await page.waitForTimeout(1500);
+const fall2 = await ev(() => window.__walkBase.physState().body.x.slice(0, 12));
+check('and it does not fall the same way twice', fall1.some((v, i) => Math.abs(v - fall2[i]) > 0.02), [fall1, fall2]);
+check('the mode is saved with the settings', await ev(() => window.__walkBase.S.phys.ragdoll === true));
+await q('phys-ragdoll').click(); check('Stiffen up puts the muscles back', await ev(() => window.__walkBase.S.phys.ragdoll === false));
 await q('phys-reset').click(); await page.waitForTimeout(500);
 check('and it stands again', await until(() => { const b = window.__walkBase.physState().body; return b.y[0] > 1 && b.y[2] > 1.8; }, undefined, 4000));
 

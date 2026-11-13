@@ -225,7 +225,8 @@ export function poseDog(params, motion, u, extra = null) {
     const lean = ang - 0.6 * pitch;
     const pawC = [(front ? shoulderRestX : 0) + f.x + k('paw.x'), L.paw + f.y + k('paw.y') + (tG[leg4]?.y ?? 0), s * k('paw.z')];
     const targetWalk = add(pawC, [-bone * Math.sin(lean), bone * Math.cos(lean), 0]);
-    const target = !front && fl > 0 ? mixv(targetWalk, add(P, apply(Rp, [-0.32 * lg, -0.2 * lg, s * 0.05])), fl) : targetWalk;
+    const tuckFront = front && sp.wings; // a flying dragon draws its front feet up under the chest, as a bird does its hind ones
+    const target = (!front || tuckFront) && fl > 0 ? mixv(targetWalk, tuckFront ? add(j3, apply(R3, [0.1 * lg, -L.shoulderDrop - 0.3 * lg, s * L.shoulderWidth])) : add(P, apply(Rp, [-0.32 * lg, -0.2 * lg, s * 0.05])), fl) : targetWalk;
     // Front leg: the shoulder blade is a bone of its own. Its top rides on the ribs by the withers (it slides and drops there),
     // it swings about that point, and the shoulder joint hangs from its lower end. The upper arm starts at that joint.
     let top = null; let root;
@@ -262,11 +263,37 @@ export function poseDog(params, motion, u, extra = null) {
     }
     const ik = ik3(root, target, l1, l2, pole);
     let pawF = pawC; let toe = add(pawC, [Math.cos(pitch) * L.pawLen * sc('dPaw'), Math.sin(pitch) * L.pawLen * sc('dPaw'), 0]);
-    if (!front && fl > 0) { // tucked: the foot trails back under the tail
-      pawF = mixv(pawC, add(ik.ankle, apply(Rp, [-0.09 * lg, -0.09 * lg, 0])), fl);
-      toe = mixv(toe, add(pawF, apply(Rp, [-0.1 * lg, -0.03 * lg, 0])), fl);
+    if ((!front || tuckFront) && fl > 0) { // tucked: the foot trails back under the tail (or, for a front foot, up against the chest)
+      const Rt2 = front ? R3 : Rp;
+      pawF = mixv(pawC, add(ik.ankle, apply(Rt2, [-0.09 * lg, -0.09 * lg, 0])), fl);
+      toe = mixv(toe, add(pawF, apply(Rt2, [-0.1 * lg, -0.03 * lg, 0])), fl);
     }
     legs[leg4] = { front, side, s, top, root, mid: ik.knee, wrist: ik.ankle, paw: pawF, toe, reached: ik.reached, stance: f.stance && fl < 0.5, w, theta: pitch };
+  }
+  if (sp.arms) { // a person's arms from the top of the trunk (a centaur's neck): they hang and swing against each other, apart from the legs
+    const am = sp.arms; const root0 = add(neck[Math.max(0, nSegs - 1)], mul(sub(neckTop, neck[Math.max(0, nSegs - 1)]), 0.3));
+    for (const side of ['R', 'L']) {
+      const s = side === 'R' ? 1 : -1; const root = add(root0, apply(Rn, [0, 0, s * 0.11])); const sw = Math.sin(TAU * (uw - (side === 'R' ? 0 : 0.5)));
+      const goal = add(root, [0.04 + 0.1 * sw * clamp(p.dogStride / 1.2, 0.2, 1.5), -(am.upper + am.fore) * 0.9, s * 0.04]); const arm = ik3(root, goal, am.upper, am.fore, [-1, -0.1, 0]);
+      const dir = norm(sub(arm.ankle, arm.knee)); const hand = add(arm.ankle, mul(dir, 0.05));
+      legs['A' + side] = { front: true, side, s, top: null, root, mid: arm.knee, wrist: arm.ankle, paw: hand, toe: add(hand, mul(dir, 0.04)), arm: true, reached: arm.reached, stance: false, w: 0, theta: 0, free: true };
+    }
+  }
+  if (sp.wings) { // a pair of wings on the back (a dragon's), apart from the legs: folded along the back, or spread and beating
+    const wb = sp.wings; const open = clamp(p.dogWingOpen, 0, 1); const amp = clamp(p.dogFlap / 30, 0, 1); const back = apply(R3, [-1, 0, 0]);
+    for (const side of ['R', 'L']) {
+      const s = side === 'R' ? 1 : -1; const root = add(j3, apply(R3, [wb.root[0], wb.root[1], s * wb.root[2]]));
+      const ph = flapPhase; const beat = rad(p.dogFlap) * Math.sin(ph); const l1 = wb.upper; const l2 = wb.fore;
+      const reach = (l1 + l2) * 0.97 * (1 - 0.3 * Math.max(0, Math.sin(ph)) * amp);
+      const ext = mul(norm([-0.2, Math.sin(beat) + 0.1, Math.cos(beat)]), reach); const fold = [wb.rest[0] * (l1 + l2) * 0.6, wb.rest[1] * (l1 + l2) * 0.6, wb.rest[2] * (l1 + l2) * 0.6];
+      const loc = [fold[0] * (1 - open) + ext[0] * open, fold[1] * (1 - open) + ext[1] * open, fold[2] * (1 - open) + ext[2] * open];
+      const goal = add(root, apply(R3, [loc[0], loc[1], s * loc[2]]));
+      const arm = ik3(root, goal, l1, l2, norm([0, 1, s * 0.15]));
+      const d0 = norm(sub(arm.ankle, arm.knee)); const f = wb.finger * (0.35 + 0.65 * open); const lag = open * amp * 0.25 * Math.cos(ph);
+      const tip = (a, b, k, drop) => add(arm.ankle, mul(norm([d0[0] * a + back[0] * b, d0[1] * a + back[1] * b - drop - lag * k, d0[2] * a + back[2] * b]), f * k));
+      const tips = [tip(1, 0, 1, 0), tip(0.7, 0.5, 1.05, 0.15), tip(0.3, 0.9, 0.9, 0.3)];
+      legs['W' + side] = { front: true, side, s, top: null, root, mid: arm.knee, wrist: arm.ankle, paw: tips[0], toe: tips[0], tips, wing: true, reached: arm.reached, stance: false, w: 0, theta: 0, free: true };
+    }
   }
   return { u: uw, pelvisX: extra?.worldX ?? uw * p.dogStride, params: p, groundY: gHind, pelvis: P, Rp, R1, R2, R3, Rn, Rh, Rj, j1, j2, j3, neckBase, neckTop, neck, headC, noseTip, hinge, jawEnd, ears, tail, legs, heights, baseTilt };
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DEFAULTS } from '../src/rig.js';
 import { pose3 } from '../src/rig3.js';
 import { bodyDims, bodyFromRig, bodyChannels, neutralPose, liveOf, PHYS_CHANNELS } from '../src/physpose.js';
-import { PT, HAND, ANKLE, createBody, bodyFromAngles, stepBody, pointsOf, anglesNow, anglesOf, grip, release, centreOfMass, setVelocity, velocityOf, dragStart, dragMove, dragEnd } from '../src/body.js';
+import { PT, HAND, ANKLE, createBody, bodyFromAngles, stepBody, pointsOf, anglesNow, anglesOf, grip, release, centreOfMass, setVelocity, velocityOf, jostle, dragStart, dragMove, dragEnd } from '../src/body.js';
 import { motionAt } from '../src/automation.js';
 
 const params = { ...DEFAULTS, proportions: {} };
@@ -179,4 +179,11 @@ test('a rag doll thrown through the air keeps its momentum while it flops', () =
   const b = standing(); lift(b, 2); setVelocity(b, 2, 0, 24); const c0 = centreOfMass(b);
   stepBody(b, { gravity: 0, drag: 0, strength: 0, limbs: 0 }, 36); const c1 = centreOfMass(b);
   assert.ok(Math.abs(c1[0] - c0[0] - 3) < 0.05 && Math.abs(c1[1] - c0[1]) < 0.05, `${c1[0] - c0[0]}, ${c1[1] - c0[1]}`);
+});
+
+test('a limp body that is jostled does not fall the same way twice, and stays finite', () => {
+  const fall = (seed) => { let s = seed; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; const b = standing(); jostle(b, rnd, 1.5, 24); stepBody(b, { gravity: 1, strength: 0, limbs: 0, balance: 0 }, 48); return Array.from(b.x); };
+  const a = fall(7); const c = fall(99);
+  assert.ok(a.every(Number.isFinite) && c.every(Number.isFinite));
+  assert.ok(a.some((v, i) => Math.abs(v - c[i]) > 0.02));
 });

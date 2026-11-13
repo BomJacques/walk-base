@@ -28,6 +28,20 @@ export function buildCrawlerShapes(pz, cam, st = {}) {
     ellipsoid(b.abdomen, b.abdL * 0.5, 0.16 * g, 0.15 * g, 'dog.spine1'); ellipsoid(b.thorax, b.thoL * 0.5, 0.09 * g, 0.1 * g, 'dog.spine3'); ellipsoid(pz.headC, 0.05 * g, 0.045 * g, 0.055 * g, 'dog.head', null, 'body', 0.0004);
     for (const sg of [1, -1]) capsule(add(pz.noseTip, [0, 0, sg * 0.015]), add(pz.noseTip, [0.01, -0.07, sg * 0.012]), 0.013, 0.005, 'dog.jaw', null);
     eyes = b.eyes.map(S);
+  } else if (kind === 'ant' || kind === 'beetle') {
+    const b = pz.body; const g = b.girth; const beetle = kind === 'beetle'; const hc = pz.headC;
+    if (beetle) { // a domed shell in two halves over the back, a broad shield behind the head, a small head with a horn
+      for (const sg of [1, -1]) ellipsoid(add(b.abdomen, [-0.01, 0.01, sg * 0.032 * g]), b.abdL * 0.56, 0.17 * g, 0.12 * g, 'dog.spine1', null, 'body', 0.0002);
+      ellipsoid(add(b.thorax, [0.01, 0.01, 0]), b.thoL * 0.62, 0.1 * g, 0.15 * g, 'dog.spine3');
+      ellipsoid(hc, 0.07 * g, 0.055 * g, 0.075 * g, 'dog.head', null, 'body', 0.0004);
+      capsule(add(hc, [0.02, 0.04 * g, 0]), add(hc, [0.1, 0.15 * g, 0]), 0.022 * g, 0.008 * g, 'dog.head', null);
+    } else { // a big round abdomen, a thin waist, a small thorax and a big head
+      ellipsoid(b.abdomen, b.abdL * 0.5, 0.12 * g, 0.105 * g, 'dog.spine1'); ellipsoid(add(b.thorax, [-b.thoL * 0.55, 0, 0]), 0.03, 0.025 * g, 0.025 * g, 'dog.spine2');
+      ellipsoid(add(b.thorax, [0.01, 0.012, 0]), b.thoL * 0.5, 0.07 * g, 0.065 * g, 'dog.spine3'); ellipsoid(hc, 0.085 * g, 0.07 * g, 0.075 * g, 'dog.head', null, 'body', 0.0004);
+    }
+    for (const sg of [1, -1]) { const o = 0.012 + 0.03 * b.open; capsule(add(pz.noseTip, [-0.02, 0.01, sg * 0.02]), add(pz.noseTip, [0.035, -0.02 - 0.025 * b.open, sg * (0.012 + o * 0.4)]), 0.014, 0.006, 'dog.jaw', null); }
+    for (const a of b.antennae) { capsule(a.pts[0], a.pts[1], 0.009, 0.007, 'dog.ear', a.side, a.side === 'R' ? 'near' : 'far'); capsule(a.pts[1], a.pts[2], 0.007, 0.004, 'dog.ear', a.side, a.side === 'R' ? 'near' : 'far'); }
+    eyes = [1, -1].map((sg) => S(add(hc, [0.035, 0.02 * g, sg * 0.055 * g])));
   } else if (kind === 'crab') {
     const b = pz.body; const g = b.girth;
     ellipsoid(b.centre, b.half, 0.1 * g, 0.19 * g, 'dog.spine2');
@@ -35,7 +49,7 @@ export function buildCrawlerShapes(pz, cam, st = {}) {
     eyes = b.eyes.map((e) => S(e.tip));
   }
   for (const key of Object.keys(pz.legs)) {
-    const l = pz.legs[key]; const role = l.side === 'R' ? 'near' : 'far'; const pre = key[0] === 'C' || key[0] === 'F' ? 'dog.f' : 'dog.h'; const tk = kind === 'crab' ? 1.1 : 0.9;
+    const l = pz.legs[key]; const role = l.side === 'R' ? 'near' : 'far'; const pre = key[0] === 'C' || key[0] === 'F' ? 'dog.f' : 'dog.h'; const tk = kind === 'crab' ? 1.1 : kind === 'beetle' ? 1.2 : 0.9;
     if (l.free) { // a crab's claw
       capsule(l.root, l.mid, 0.034 * girth, 0.038 * girth, `${pre}leg`, l.side, role); capsule(l.mid, l.wrist, 0.042 * girth, 0.05 * girth, `${pre}leg`, l.side, role);
       const d0 = norm(sub(l.toe, l.wrist)); const per = [-d0[1], d0[0], 0]; const a = l.open ?? 0.3;

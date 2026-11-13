@@ -13,7 +13,7 @@ const presets = Object.entries(PRESETS_SPECIES).flatMap(([sp, set]) => Object.en
 
 test('every species has complete bones and the presets name their species', () => {
   for (const [id, s] of Object.entries(SPECIES)) {
-    assert.ok([0, 2, 4, 8].includes(s.legs), id);
+    assert.ok([0, 2, 4, 6, 8].includes(s.legs), id);
     assert.ok(['leg', 'arm', 'wing'].includes(s.front), id);
     for (const k of Object.keys(s.bones)) assert.ok(Array.isArray(s.bones[k]) ? s.bones[k].every((v) => v > 0) : s.bones[k] >= 0, `${id}.${k}`);
     assert.ok(s.view.zoom > 0 && s.look.body > 0);

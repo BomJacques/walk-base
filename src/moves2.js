@@ -120,10 +120,45 @@ export const SPECIES_MOVES = {
   ],
 };
 const SHARED = { bird: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake'], theropod: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff'], sauropod: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'], ceratopsian: ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'sniff', 'standup'] };
+SPECIES_MOVES.centaur = []; SHARED.centaur = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround'];
+SPECIES_MOVES.stegosaurus = []; SHARED.stegosaurus = SHARED.ceratopsian;
+SPECIES_MOVES.crocodile = []; SPECIES_MOVES.monkey = []; SPECIES_MOVES.dragon = []; SHARED.crocodile = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake'];
+SHARED.monkey = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake', 'sniff']; SHARED.dragon = SHARED.crocodile;
+SPECIES_MOVES.ant = []; SPECIES_MOVES.beetle = []; SHARED.ant = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown']; SHARED.beetle = SHARED.ant;
 SPECIES_MOVES.lizard = []; SPECIES_MOVES.snake = []; SPECIES_MOVES.spider = []; SPECIES_MOVES.crab = [];
 SHARED.snake = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown'];
 SHARED.spider = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown'];
 SHARED.crab = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown']; SPECIES_MOVES.plesiosaur = [];
 SHARED.lizard = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'wag', 'shake', 'sniff'];
 SHARED.plesiosaur = ['stop', 'begin', 'turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'speedup', 'slowdown', 'lookaround', 'neckswing'];
+// Mouth and jaw movements for every animal with a head. The jaw is a channel of its own (Jaw open), so these are poses of it with the head and neck moving behind it.
+const jaw = (v, extra = {}) => ({ 'dog.jaw.open': v, ...extra });
+const ROAR = {
+  id: 'roar', label: 'Roar', frames: 64, ends: 'mouth closes',
+  help: 'The head rears up and back, the mouth opens wide and holds, the head shudders, then it comes down and the jaw closes.',
+  build: poseBuild([[0.2, jaw(0.45, { 'dog.neck.pitch': -0.3, 'dog.head.pitch': -0.35 })], [0.35, jaw(1, { 'dog.neck.pitch': -0.45, 'dog.head.pitch': -0.5 })], [0.5, jaw(0.95, { 'dog.neck.pitch': -0.42, 'dog.head.pitch': -0.5, 'dog.head.roll': 0.06 })], [0.6, jaw(1, { 'dog.neck.pitch': -0.45, 'dog.head.pitch': -0.5, 'dog.head.roll': -0.06 })], [0.8, jaw(0.3, { 'dog.neck.pitch': -0.15, 'dog.head.pitch': -0.15 })], [1, {}]]),
+};
+const CHOMP = {
+  id: 'chomp', label: 'Chomp', frames: 48, ends: 'mouth closes',
+  help: 'The head thrusts forward and down and the jaws snap shut three times, hard, the head recoiling a little each time.',
+  build: poseBuild([[0.12, jaw(0.8, { 'dog.neck.pitch': 0.2, 'dog.head.pitch': 0.1 })], [0.22, jaw(0, { 'dog.neck.pitch': 0.3, 'dog.head.pitch': 0.15 })], [0.4, jaw(0.8, { 'dog.neck.pitch': 0.2 })], [0.5, jaw(0, { 'dog.neck.pitch': 0.3 })], [0.68, jaw(0.8, { 'dog.neck.pitch': 0.2 })], [0.78, jaw(0, { 'dog.neck.pitch': 0.3 })], [1, {}]]),
+};
+const SQUAWK = {
+  id: 'squawk', label: 'Squawk', frames: 40, ends: 'beak closes',
+  help: 'The head jerks up and back and the beak or jaws snap open and shut in quick calls.',
+  build: poseBuild([[0.1, jaw(0.6, { 'dog.neck.pitch': -0.25, 'dog.head.pitch': -0.3 })], [0.2, jaw(0.05, { 'dog.neck.pitch': -0.1 })], [0.35, jaw(0.6, { 'dog.neck.pitch': -0.25, 'dog.head.pitch': -0.3 })], [0.45, jaw(0.05, { 'dog.neck.pitch': -0.1 })], [0.62, jaw(0.6, { 'dog.neck.pitch': -0.25, 'dog.head.pitch': -0.3 })], [0.74, {}], [1, {}]]),
+};
+const HISS = {
+  id: 'hiss', label: 'Hiss', frames: 56, ends: 'mouth closes',
+  help: 'The head draws back and rises, the mouth opens wide and holds, shaking a little, then it relaxes.',
+  build: poseBuild([[0.25, jaw(1, { 'dog.neck.pitch': -0.35, 'dog.head.pitch': -0.15 })], [0.5, jaw(0.95, { 'dog.neck.pitch': -0.4, 'dog.head.pitch': -0.15, 'dog.head.yaw': 0.06 })], [0.65, jaw(1, { 'dog.neck.pitch': -0.4, 'dog.head.yaw': -0.06 })], [0.85, jaw(0.2, { 'dog.neck.pitch': -0.1 })], [1, {}]]),
+};
+const WHINNY = {
+  id: 'whinny', label: 'Whinny', frames: 56, ends: 'head comes down',
+  help: 'The head flings up and back, the mouth opens and shakes, then the head comes down.',
+  build: poseBuild([[0.25, jaw(0.6, { 'dog.neck.pitch': -0.35, 'dog.head.pitch': -0.5 })], [0.45, jaw(0.5, { 'dog.neck.pitch': -0.4, 'dog.head.pitch': -0.55 })], [0.6, jaw(0.55, { 'dog.neck.pitch': -0.4, 'dog.head.pitch': -0.5, 'dog.head.roll': 0.05 })], [0.85, jaw(0.1, { 'dog.neck.pitch': -0.1 })], [1, {}]]),
+};
+const add = (kind, ...moves) => { SPECIES_MOVES[kind] = SPECIES_MOVES[kind] || []; for (const m of moves) if (!SPECIES_MOVES[kind].some((x) => x.id === m.id)) SPECIES_MOVES[kind].push(m); };
+add('theropod', CHOMP); add('sauropod', ROAR, CHOMP); add('ceratopsian', ROAR, CHOMP); add('plesiosaur', ROAR, CHOMP); add('dragon', ROAR, CHOMP);
+add('lizard', HISS, CHOMP); add('snake', HISS, CHOMP); add('bird', SQUAWK); add('horse', WHINNY); add('monkey', SQUAWK, CHOMP);
 export const speciesSharedIds = (fig) => SHARED[fig] || null;

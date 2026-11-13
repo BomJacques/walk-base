@@ -92,7 +92,11 @@ export function buildDogShapes(pz, cam, st = {}) {
   tube(pz.pelvis, pz.j1, pz.R1, pz.R1, [0.16 * BO, 0.1 * BO], [0.165 * BO, 0.105 * BO], 'dog.spine1');
   tube(pz.j1, pz.j2, pz.R2, pz.R2, [0.165 * BO, 0.105 * BO], [0.18 * BO, 0.11 * BO], 'dog.spine2');
   tube(pz.j2, pz.j3, pz.R3, pz.R3, [0.18 * BO, 0.11 * BO], [0.2 * BO, 0.115 * BO], 'dog.spine3');
-  { const nk = pz.neck || [pz.neckBase, pz.neckTop]; const n = nk.length - 1; for (let i = 0; i < n; i++) capsule(nk[i], nk[i + 1], (0.09 - 0.025 * (i / n)) * NK, (0.09 - 0.025 * ((i + 1) / n)) * NK, 'dog.neck', null, 'body'); }
+  if (sp.belly) { // a deep barrel under the back, so the body reads as one mass and not three tubes
+    const bb = sp.belly; const pts = [[pz.pelvis, 0.17], [pz.j1, 0.2], [pz.j2, 0.2], [pz.j3, 0.17]].flatMap(([q, r]) => circlePts(S(add(q, [0, -0.05 * BO, 0])), r * bb * BO * sc, 14));
+    shapes.push({ pts: hull(pts), depth: S(pz.j1).d - 0.0003, part: 'dog.spine2', side: null, role: 'body' });
+  }
+  { const nk = pz.neck || [pz.neckBase, pz.neckTop]; const n = nk.length - 1; const nb = sp.neckBase ?? 1; const nr = (t) => (0.09 * nb + ((nb > 1 ? 0.045 : 0.065) - 0.09 * nb) * t) * NK; for (let i = 0; i < n; i++) capsule(nk[i], nk[i + 1], nr(i / n), nr((i + 1) / n), 'dog.neck', null, 'body'); }
 
   // Head: a skull and a tapering snout, with the jaw under it.
   const jw = pz.params.proportions?.dJawW ?? 1;
@@ -117,7 +121,14 @@ export function buildDogShapes(pz, cam, st = {}) {
     const role = side === 'R' ? 'near' : 'far';
     capsule(pz.ears[side].root, pz.ears[side].tip, 0.045 * (K.ear ?? 1), 0.03 * (K.ear ?? 1) * (K.ear ? 0.5 : 1) * earW, 'dog.ear', side, role);
   }
-  for (let k = 0; k < 3; k++) capsule(pz.tail[k], pz.tail[k + 1], (0.035 - k * 0.008) * K.tail, (0.03 - k * 0.009) * K.tail, `dog.tail${k + 1}`, null, 'body');
+  { const tb = sp.tailBase ?? 1; const tr = (k) => (tb > 1 ? 0.035 * tb * (1 - 0.3 * k) * 0.85 : 0.035 - k * 0.008) * K.tail; for (let k = 0; k < 3; k++) capsule(pz.tail[k], pz.tail[k + 1], tr(k), tb > 1 ? tr(k + 1) : (0.03 - k * 0.009) * K.tail, `dog.tail${k + 1}`, null, 'body'); }
+  if (sp.tailSpikes) { const d = norm(sub(pz.tail[3], pz.tail[2])); for (const s of [1, -1]) capsule(add(pz.tail[2], mul(d, 0.2)), add(add(pz.tail[3], mul(d, 0.34)), [0, 0.1 + 0.05 * s, 0]), 0.03 * K.tail, 0.005, 'dog.tail3', null, 'body'); }
+  if (sp.plates) { // big bony plates standing along the back
+    const q = [pz.pelvis, pz.j1, pz.j2, pz.j3, pz.neck?.[1] || pz.neckBase]; const hh = [0.22, 0.34, 0.38, 0.3, 0.18];
+    q.forEach((c, i) => { const base = add(c, [0, 0.14 * BO, 0]); const pts = [add(base, [-0.09, 0, 0]), add(base, [0.09, 0, 0]), add(base, [0.02, hh[i] * sp.plates, 0])].map(S); shapes.push({ pts: hull(pts.map((a) => [a.x, a.y])), depth: S(c).d + 0.0003, part: 'dog.spine3', side: null, role: 'body' }); });
+  }
+  if (sp.teeth) { const d = norm(sub(pz.noseTip, pz.hinge)); const sd = norm(apply(pz.Rh, [0, -1, 0])); for (let i = 0; i < 6; i++) { const t = 0.35 + 0.1 * i; const q = add(pz.hinge, mul(sub(pz.noseTip, pz.hinge), t)); capsule(add(q, mul(sd, -0.01)), add(q, mul(sd, 0.045 * hs)), 0.009 * hs, 0.0015, 'dog.head', null, 'body'); } } // a row of teeth along the upper jaw
+  if (sp.brow) { const Lb = bonesOf(pz.params).skull * (pz.params.proportions?.dHead ?? 1); capsule(add(pz.neckTop, apply(pz.Rh, [Lb * 0.95, Lb * 0.35, 0])), add(pz.neckTop, apply(pz.Rh, [Lb * 0.35, Lb * 0.42, 0])), 0.04 * Lb, 0.03 * Lb, 'dog.head', null, 'body'); }
   if (bird) { // a tail fan: a wedge of feathers spreading out from the last joint
     const d = norm(sub(pz.tail[3], pz.tail[2])); const base = pz.tail[2]; const tip = add(pz.tail[3], mul(d, 0.12));
     const spread = 1 + 0.9 * Math.min(1, pz.params.dogFlight || 0); // the tail fans out in flight
@@ -131,6 +142,23 @@ export function buildDogShapes(pz, cam, st = {}) {
     shapes.push({ pts: hull(ring), depth: S(pz.neckTop).d - 0.0004, part: 'dog.head', side: null, role: 'body' });
     for (const s of [1, -1]) capsule(H(0.75, 0.15, s * 0.14), H(1.1, 0.62, s * 0.14), 0.07 * Ls, 0.012 * Ls, 'dog.head', null, 'body');
     const nb = add(pz.noseTip, apply(pz.Rh, [-0.18 * Ls, 0.02 * Ls, 0])); capsule(nb, add(nb, apply(pz.Rh, [0.08 * Ls, 0.42 * Ls, 0])), 0.07 * Ls, 0.012 * Ls, 'dog.head', null, 'body');
+  }
+  if (sp.horns) { const Ls = bonesOf(pz.params).skull * (pz.params.proportions?.dHead ?? 1); const H = (x, y, z) => add(pz.neckTop, apply(pz.Rh, [x * Ls, y * Ls, z * Ls])); for (const s of [1, -1]) capsule(H(0.35, 0.18, s * 0.16), H(-0.6, 0.75, s * 0.28), 0.07 * Ls, 0.012 * Ls, 'dog.head', null, 'body'); } // two horns sweeping back from the skull
+  if (sp.ridge) { // a row of spikes (a dragon) or low scutes (a crocodile) along the back and the tail
+    const k = sp.ridge; const row = [[pz.pelvis, 0.05], [pz.j1, 0.06], [pz.j2, 0.065], [pz.j3, 0.06], ...pz.tail.slice(0, 3).map((q, i) => [q, 0.045 - 0.01 * i])];
+    for (const [q, h] of row) capsule(add(q, [0, 0.12 * K.body, 0]), add(q, [-0.03, 0.12 * K.body + h * 3.2 * k, 0]), 0.036 * k, 0.004, 'dog.spine2', null, 'body');
+  }
+  for (const a of ['AR', 'AL']) { // a centaur's arm
+    const l = pz.legs[a]; if (!l) continue; const role = l.side === 'R' ? 'near' : 'far';
+    capsule(l.root, l.mid, 0.045, 0.035, 'dog.fleg', l.side, role); capsule(l.mid, l.wrist, 0.034, 0.026, 'dog.fleg', l.side, role);
+    const H = S(l.paw); shapes.push({ pts: circlePts(H, 0.04 * sc, 12), depth: H.d, part: 'dog.fpaw', side: l.side, role });
+  }
+  for (const w of ['WR', 'WL']) { // a dragon's wing: a membrane stretched on three fingers, over the bones
+    const l = pz.legs[w]; if (!l) continue; const role = l.side === 'R' ? 'near' : 'far'; const hipPt = add(pz.pelvis, apply(pz.Rp, [-0.05, 0.02, l.s * 0.06]));
+    const open = pz.params.dogWingOpen ?? 0; const mem = (open < 0.4 ? [l.root, l.mid, l.wrist, ...l.tips] : [l.root, l.mid, l.wrist, ...l.tips, hipPt]).map(S);
+    shapes.push({ pts: hull(mem.map((q) => [q.x, q.y])), depth: S(l.mid).d - 0.0004, part: 'dog.fleg', side: l.side, role, fill: mixHex(st.fillColor ?? '#f2eee6', '#a05a4a', 0.45) });
+    capsule(l.root, l.mid, 0.045 * K.wing, 0.032 * K.wing, 'dog.fleg', l.side, role); capsule(l.mid, l.wrist, 0.032 * K.wing, 0.022 * K.wing, 'dog.fleg', l.side, role);
+    for (const t of l.tips) capsule(l.wrist, t, 0.014 * K.wing, 0.005, 'dog.fleg', l.side, role);
   }
   for (const leg4 of ['HR', 'HL', 'FR', 'FL']) {
     const l = pz.legs[leg4]; const role = l.side === 'R' ? 'near' : 'far';

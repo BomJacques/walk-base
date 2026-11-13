@@ -14,7 +14,7 @@ import { DOG_DEFAULTS } from './dogdefaults.js';
 
 export const DEFAULTS = Object.freeze({
   rig: 'human',         // which figure: human | dog
-  model: 'mannequin',   // how the human rig is dressed: mannequin | hose (the rubber hose figure shares the walk and the channels)
+  model: 'mannequin',   // how the human rig is dressed: mannequin | hose | robot | alien (the rubber hose figure shares the walk and the channels)
   ...DOG_DEFAULTS,
   // timing
   fps: 24,

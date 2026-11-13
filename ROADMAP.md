@@ -675,3 +675,45 @@ The Float, Hang, Dangle and Climb movements of 2026-11-12 were poses drawn as ke
 **Settings.** Gravity (Earth, Moon, Water, Space), air or water drag, muscle strength, balance, ground grip, bounce. Jump and Push buttons, Stand it up, Let go.
 **Record.** Record writes every frame of the simulation to the timeline as ordinary straight-line lanes (the walk is stopped at that frame), so it plays back, scrubs and exports like anything else; the Auto tab shows it as one physics take with Remove. A take can stay where it lands or hand the figure back to the walk.
 **Tests.** body.test.mjs (16): the rig reproduces the body's pose; standing holds, limp lies down; a fall takes the time gravity says and does not bounce back up; gravity and drag as settings; momentum is conserved in space; a hung body swings with the period of a pendulum of its length, the bones keep their length, the hand stays on the hold; a hand takes hold on a jump; a throw carries the pointer's speed; boxes are ground. ui-bodyphys.mjs (Chromium and WebKit): the tab, dragging by the head and letting go, taking a hand to a bar and hanging, swinging, letting go, Space, a box, and recording a take that plays back frame for frame from the lanes.
+
+## Phase: more proportions and more movement (asked 2026-11-13, not started)
+
+**Proportions** (today: 16 sliders, one set for the whole figure, both sides alike):
+- Left and right apart: arm, leg, hand and foot lengths and thickness, so a figure can be lopsided or limp.
+- Segments on their own: thigh, shin, neck, each torso section and the head (width apart from height, jaw and chin), shoulder slope, hip height, per-segment thickness.
+- Body presets that set many sliders at once (child, giant, stocky, heroic, cartoon big head), and an overall height and build (lean to heavy) that also drives the weight in the Physics tab.
+- Body physics reads the same dimensions, so every proportion change must keep the simulation working.
+
+**Movements** (today: 24 human, 17 dog, and the Physics tab):
+- Gait variants: limp, march, tiptoe, walk backwards, sidestep, crouch walk, turn round, climb stairs.
+- Body moves: crawl, roll, trip and fall, lean on a wall, pick up and carry, push and pull, punch, dodge, spin, dance steps, swim.
+- Chaining: play one move into the next with blending, and per-move speed, strength and mirror.
+- Custom moves: save any recorded take (including a physics take) as a move that can be reused.
+
+**Other models** (asked 2026-11-13, not started):
+- Mouth and jaw movement on every figure that has a head: the dog already has Jaw open; the theropod, quadruped dinosaur, bird (beak), snake and the rest need an opening jaw, a Jaw/beak channel in Automation and the Speech tab (talk, roar, bark, chomp, bite), and a lower jaw that follows the head.
+- More options per model: the same proportion and movement depth as the human (see the phase above), starting with head, neck, tail and limb sections.
+- New models to suggest and choose from: horse, cat, rabbit/kangaroo (hopper), elephant, monkey/ape (knuckle walk and swing), fish and dolphin (swimmers), lizard/crocodile (sprawled legs), insect with six legs, centaur, robot, four-armed alien, long-necked sauropod, pterosaur, dragon (four legs and wings).
+
+**Model list chosen by the user (2026-11-13), in the order to build:**
+1. Refine the dinosaur body shapes (sauropod, ceratopsian, theropod, pterodactyl, plesiosaur): better silhouettes, necks, tails, heads, plates and crests.
+2. Fix the spider walk (crawler.js `spider`): it looks wrong and every step is alike. Needs the real alternating-tetrapod gait (legs 1 and 3 on one side with 2 and 4 on the other), leg-specific stride lengths and heights, body sway and yaw, and variation in timing, lift and placement between legs and between steps.
+3. Dragon (four legs and wings, jaw and tail), crocodile (a sprawled lizard with a long jaw; the lizard species exists to start from), monkey (arms as long as legs, knuckle walk, swinging, tail).
+4. Beetle, a six-legged insect (alternating tripod gait), and other insects, built on a six-leg crawler.
+5. Centaur (human torso on a horse body), robot (the human rig with stiff joints and mechanical parts), four-armed alien.
+6. Mouth and jaw movement on every head, as above.
+Already there: horse, lizard, pterodactyl, plesiosaur, bird, snake, crab. The crab's and spider's leg code (`eightLegs`) is where a six-leg version starts.
+
+**Spider walk, correction from the user (2026-11-13):** spiders move their legs somewhat individually. So not a fixed set pattern: each of the eight legs has its own phase, stride, lift and pause, loosely coordinated (a leg waits for a neighbour to be planted before it lifts, so the body is never unsupported), with variation from step to step, the odd hesitation, and legs that reach out and touch before they step. Tetrapod grouping is only the tendency, not the rule.
+
+## Done 2026-11-13: more models, a spider that walks on its own legs, jaws
+
+Rag doll became a mode (on until Stiffen up, through every move, jostled so no fall repeats), then the models:
+- **Spider and every many-legged creature** (`src/legwalk.js`, `manyLegs` in `crawler.js`): each leg takes a few steps a cycle, each with its own length of time, landing place, lift and swing, picked by a fixed hash so the cycle still loops and a planted foot never slides. Legs are given a place in the order (tetrapod, tripod) and wander from it, scaled by a new **Leg independence** setting (0 is a machine, 1 is as loose as a spider). The spider is never left on fewer than three feet. Front legs tap the ground before they step. The crab uses the same code, tighter.
+- **New crawlers:** Ant (thin waist, big jaws, bent feelers) and Beetle (domed shell in two halves, horn), six legs in two sets of three.
+- **New animals on the dog rig:** Monkey (long arms, knuckle walk, scamper, bound), Crocodile (sprawled, long jaw, scutes), Dragon (four legs and a pair of wings of their own, folded on the walk, spread and beating in flight, with the front feet tucking up as it flies; horns and a spiked ridge), Stegosaurus (plates and tail spikes), Centaur (a horse's body and legs, its neck the person's trunk, with a pair of arms that swing).
+- **New people on the human rig:** Robot (box limbs, ball joints, box head with visor and antenna, a stiff machine step) and Four-armed alien (tall, thin, big-headed with black eyes, a second pair of arms swinging against the first).
+- **Dinosaur shapes refined:** a deep barrel of a body instead of three tubes, thicker tail and neck bases, theropod teeth and brow.
+- **Mouth and jaw movement:** Roar, Chomp, Hiss, Squawk and Whinny movements for every animal with a head (the jaw channel was already on every one).
+Tests: `tests/legwalk.test.mjs`, `tests/models.test.mjs`, `tests/ui-models.mjs`.
+Not done: the centaur's head is a plain round head (no face shapes), the robot and alien have no colours of their own (use Design), the new animals are not yet in the Physics tab (human and rubber hose only), the proportion sliders and the new movements for the person are still to come (the phase above), and a fly or dragonfly with wings, a spider's web and a snail are not built.

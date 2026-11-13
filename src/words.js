@@ -23,16 +23,22 @@ const HIDE = {
   bird: new Set([...EARS, ...QUAD_ONLY, 'dogArmSwing']),
   horse: new Set([...BIPED_ONLY, ...BIRD_ONLY]),
   lizard: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY]),
+  centaur: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS]),
+  crocodile: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY]),
+  monkey: new Set([...BIPED_ONLY, ...BIRD_ONLY]),
+  dragon: new Set([...BIPED_ONLY, ...EARS, 'dogHeadHold']),
   plesiosaur: new Set([...BIPED_ONLY, ...EARS, 'dogHeadHold']),
   snake: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogFlex', 'dogNeckAngle'].includes(k)), 'dogEar', 'dEar', 'dNeck', 'dLeg', 'dHead', ...NEW_BODY]),
   spider: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift'].includes(k)), 'dNeck', 'dTail', ...NEW_BODY]),
+  ant: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift'].includes(k)), 'dNeck', 'dTail', ...NEW_BODY]),
+  beetle: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift'].includes(k)), 'dNeck', 'dTail', ...NEW_BODY]),
   crab: new Set([...BIPED_ONLY, ...BIRD_ONLY, ...EARS, ...QUAD_ONLY, ...NONE.filter((k) => !['dogLift', 'dogDuty', 'dogAsymTiming', 'dogAsymDuty', 'dogAsymLift', 'dogWag'].includes(k)), 'dNeck', 'dTail', ...NEW_BODY]),
 };
 /** Rubber hose settings that are only for the person: the animals have no gloves, shorts or pie eyes. */
 const HOSE_PERSON = new Set(['hoseEars', 'hoseEyes', 'hoseShorts', 'hoseGlove', 'hoseSquash', 'hoseTail']);
 
 /** The gaits each figure can do. */
-const GAITS = { dog: ['walk', 'trot', 'pace', 'gallop'], sauropod: ['walk'], ceratopsian: ['walk', 'trot'], theropod: ['walk', 'run'], bird: ['walk', 'run', 'hop'], horse: ['walk', 'trot', 'pace', 'gallop'], snake: ['walk'], spider: ['walk'], crab: ['walk'], lizard: ['walk', 'trot'], plesiosaur: ['walk'] };
+const GAITS = { dog: ['walk', 'trot', 'pace', 'gallop'], sauropod: ['walk'], ceratopsian: ['walk', 'trot'], theropod: ['walk', 'run'], bird: ['walk', 'run', 'hop'], horse: ['walk', 'trot', 'pace', 'gallop'], snake: ['walk'], spider: ['walk'], crab: ['walk'], ant: ['walk'], beetle: ['walk'], lizard: ['walk', 'trot'], stegosaurus: ['walk', 'trot'], monkey: ['walk', 'trot', 'gallop'], dragon: ['walk', 'trot'], plesiosaur: ['walk'] };
 
 /** A function that rewrites a label for this figure, with .hides(control) and .hidesPart(id). The human and the dog are left as they are. */
 export function wordsFor(fig) {
@@ -49,7 +55,7 @@ export function wordsFor(fig) {
     };
   }
   const FACE = /^(eye|brow|blink|mouth(Show|Style|Width|Smile)|lip|teeth|tongue|cavity)/; // the face settings are for the two-legged figures' heads
-  f.hides = (c) => hide.has(c.id) || (c.id === 'dGirth' && !sp?.crawler) || (Boolean(sp) && c.scope === 's' && FACE.test(c.id)) || (/^hose/.test(c.id) && (sp?.hose ? HOSE_PERSON.has(c.id) : fig !== 'hose')); // the rubber hose controls belong to the rubber hose figures
+  f.hides = (c) => hide.has(c.id) || (c.id === 'dGirth' && !sp?.crawler) || (c.id === 'dogLegVariety' && !(sp?.crawler && sp.legs > 0)) || (Boolean(sp) && c.scope === 's' && FACE.test(c.id)) || (/^hose/.test(c.id) && (sp?.hose ? HOSE_PERSON.has(c.id) : fig !== 'hose')); // the rubber hose controls belong to the rubber hose figures
   /** The choices a control offers this figure (a theropod has no hop or gallop). */
   f.options = (c) => (c.id === 'dogGait' && GAITS[kind] ? c.options.filter((o) => GAITS[kind].includes(o)) : c.options);
   f.hidesPart = (id) => Boolean(sp && fig !== 'dog' && id === 'dog.ear');

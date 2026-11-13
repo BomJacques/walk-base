@@ -259,3 +259,7 @@ PNG frames in a ZIP, as one file per timeline frame or one per drawing plus a ti
 - **Holds:** Add a bar or a ladder, drag them where you want them. A hand that comes near one takes hold; drag the hand away to let go.
 - **Settings:** Gravity (Earth, Moon, Water, Space), drag, muscle strength, balance, ground grip, bounce. Boxes in the scene are ground.
 - **Record:** captures the simulation to the timeline as ordinary lanes (Auto shows one physics take, with Remove).
+
+**Rag doll** is a mode, not a slider setting. Switch it on and the figure goes limp from whatever pose it is in, and stays limp through jumps, pushes, drags, holds, the Earth/Moon/Water/Space presets and recorded takes until you press Stiffen up. A small random disturbance means it never falls the same way twice. It can be switched on or off in the middle of a take.
+
+**More figures.** The Figure menu now groups: People (human, rubber hose, robot, four-armed alien), Animals (dog, horse, monkey, bird, lizard, snake), Insects and crawlers (spider, crab, ant, beetle), Dinosaurs and reptiles (theropod, sauropod, ceratopsian, pterodactyl, plesiosaur, stegosaurus, crocodile, dragon), Mythical and strange (centaur) and the rubber hose animals. A creature with many legs steps with each leg on its own; the **Leg independence** setting (Body tab, Gait) goes from machine-like to a loose, spiderlike step. Animals with a head have Roar, Chomp, Hiss, Squawk or Whinny movements in the Auto tab.

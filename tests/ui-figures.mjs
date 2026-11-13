@@ -23,9 +23,9 @@ const pick = async (v) => { await page.locator('[data-testid="rig"]').selectOpti
 const presets = () => page.locator('#preset option').evaluateAll((os) => os.map((o) => o.textContent));
 
 const opts = await page.locator('[data-testid="rig"] option').evaluateAll((os) => os.map((o) => o.value));
-check('the Figure menu offers all sixteen figures', JSON.stringify(opts) === JSON.stringify(['human', 'hose', 'dog', 'horse', 'bird', 'lizard', 'snake', 'spider', 'crab', 'theropod', 'sauropod', 'ceratopsian', 'pterodactyl', 'plesiosaur', 'hosehorse', 'hosebird']), opts);
+check('the Figure menu offers all twenty-five figures', JSON.stringify(opts) === JSON.stringify(['human', 'hose', 'robot', 'alien', 'dog', 'horse', 'monkey', 'bird', 'lizard', 'snake', 'spider', 'crab', 'ant', 'beetle', 'theropod', 'sauropod', 'ceratopsian', 'pterodactyl', 'plesiosaur', 'stegosaurus', 'crocodile', 'dragon', 'centaur', 'hosehorse', 'hosebird']), opts);
 const groups = await page.locator('[data-testid="rig"] optgroup').evaluateAll((os) => os.map((o) => o.label + ':' + o.children.length));
-check('grouped as People, Animals, Dinosaurs and reptiles, and Rubber hose animals', JSON.stringify(groups) === JSON.stringify(['People:2', 'Animals:7', 'Dinosaurs and reptiles:5', 'Rubber hose animals:2']), groups);
+check('grouped as People, Animals, Insects and crawlers, Dinosaurs and reptiles, Mythical and strange, and Rubber hose animals', JSON.stringify(groups) === JSON.stringify(['People:4', 'Animals:6', 'Insects and crawlers:4', 'Dinosaurs and reptiles:8', 'Mythical and strange:1', 'Rubber hose animals:2']), groups);
 
 const expectPresets = { theropod: ['Walk', 'Stalk', 'Run'], bird: ['Walk', 'Hop', 'Flapping'], sauropod: ['Walk'], ceratopsian: ['Walk', 'Charge'] };
 for (const f of ['theropod', 'bird', 'sauropod', 'ceratopsian']) {

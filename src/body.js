@@ -72,6 +72,8 @@ export const anglesNow = (b) => anglesOf(b.d, pointsOf(b));
 /** Every point moves at the same velocity (leg lengths a second): a throw or a shove. The step is one frame's worth of substeps. */
 export function setVelocity(b, vx, vy, fps = 24) { const dt = 1 / (fps * SUB); for (let i = 0; i < N; i++) { b.ox[i] = b.x[i] - vx * dt; b.oy[i] = b.y[i] - vy * dt; } }
 export function shove(b, vx, vy, fps = 24) { const dt = 1 / (fps * SUB); for (let i = 0; i < N; i++) { b.ox[i] -= vx * dt; b.oy[i] -= vy * dt; } }
+/** A small random disturbance to every point, so a limp body never falls the same way twice. rnd() gives numbers in 0..1. */
+export function jostle(b, rnd = Math.random, speed = 1.5, fps = 24) { const dt = 1 / (fps * SUB); const lean = (rnd() - 0.5) * speed * 1.6; for (let i = 0; i < N; i++) { b.ox[i] -= ((rnd() - 0.5) * speed + lean * b.y[i]) * dt; b.oy[i] -= (rnd() - 0.5) * speed * 0.5 * dt; } }
 export const velocityOf = (b, i, fps = 24) => [((b.x[i] - b.ox[i]) * fps * SUB), ((b.y[i] - b.oy[i]) * fps * SUB)];
 export const centreOfMass = (b) => { let m = 0; let x = 0; let y = 0; for (let i = 0; i < N; i++) { m += MASS[i]; x += MASS[i] * b.x[i]; y += MASS[i] * b.y[i]; } return [x / m, y / m]; };
 

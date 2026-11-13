@@ -7,6 +7,7 @@ export const DOG_DEFAULTS = Object.freeze({
   dogAsymTiming: 0,       // cycle fraction the left paws land late
   dogAsymDuty: 0,         // left paws' time on the ground, added to dogDuty
   dogAsymLift: 0,         // left paws' lift, as a fraction more or less
+  dogLegVariety: 0.6,     // many-legged creatures: how far each leg goes its own way (0 is the same step for every leg)
   dogBob: 0.03,           // up and down travel of the hips
   dogFlex: 6,             // degrees the spine bends side to side
   dogArch: 2,             // degrees the back arches with each footfall
@@ -61,17 +62,17 @@ export const DOG_GAITS = Object.freeze({
 const SPECIES_BASE = Object.freeze({
   dog: { label: 'Dog', legs: 4, front: 'leg', bones: {}, lean: { hock: 0.35, pastern: 0.12 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 1.45, y: 0.55 } },
   sauropod: {
-    label: 'Sauropod', legs: 4, front: 'leg',
+    label: 'Sauropod', legs: 4, front: 'leg', belly: 0.95, tailBase: 1.7, neckBase: 1.9,
     bones: { spine: [0.42, 0.42, 0.42], neck: 1.7, skull: 0.15, snout: 0.1, jaw: 0.1, upper: 0.55, fore: 0.5, pastern: 0.1, thigh: 0.6, shin: 0.5, meta: 0.1, paw: 0.06, pawLen: 0.24, shoulderDrop: 0.1, scapula: 0.3, tail: [0.75, 0.65, 0.55], ear: 0.02, hipWidth: 0.16, shoulderWidth: 0.17, scapulaWidth: 0.14 },
     lean: { hock: 0.06, pastern: 0.04 }, look: { body: 2.1, leg: 2.1, neck: 1.25, tail: 1.8, wing: 1 }, view: { zoom: 0.72, y: 1.0 },
   },
   ceratopsian: {
-    label: 'Ceratopsian', legs: 4, front: 'leg',
+    label: 'Ceratopsian', legs: 4, front: 'leg', belly: 0.95, tailBase: 1.4, neckBase: 1.4,
     bones: { spine: [0.36, 0.36, 0.36], neck: 0.3, skull: 0.5, snout: 0.28, jaw: 0.32, upper: 0.36, fore: 0.34, pastern: 0.12, thigh: 0.42, shin: 0.36, meta: 0.12, paw: 0.06, pawLen: 0.2, scapula: 0.26, tail: [0.42, 0.36, 0.3], ear: 0.02, hipWidth: 0.13, shoulderWidth: 0.15, scapulaWidth: 0.12 },
     lean: { hock: 0.14, pastern: 0.08 }, look: { body: 1.7, leg: 1.6, neck: 1.5, tail: 1.5, wing: 1 }, view: { zoom: 1.05, y: 0.6 },
   },
   theropod: {
-    label: 'Theropod', legs: 2, front: 'arm', armRest: [0.1, -0.13, 0],
+    label: 'Theropod', legs: 2, front: 'arm', armRest: [0.1, -0.13, 0], belly: 0.95, tailBase: 1.9, neckBase: 1.7, teeth: true, brow: true,
     bones: { spine: [0.36, 0.36, 0.36], neck: 0.55, skull: 0.5, snout: 0.34, jaw: 0.52, upper: 0.14, fore: 0.12, pastern: 0.06, thigh: 0.64, shin: 0.62, meta: 0.44, paw: 0.06, pawLen: 0.24, shoulderDrop: 0.1, scapula: 0.14, tail: [0.8, 0.7, 0.6], ear: 0.02, hipWidth: 0.1, shoulderWidth: 0.08, scapulaWidth: 0.07 },
     lean: { hock: 0.3, pastern: 0.1 }, look: { body: 1.7, leg: 1.5, neck: 1.5, tail: 1.8, wing: 1 }, view: { zoom: 0.8, y: 0.95 },
   },
@@ -89,6 +90,16 @@ const SPECIES_BASE = Object.freeze({
     label: 'Spider', crawler: 'spider', legs: 8, legKeys: ['FR', 'FL', 'AR', 'AL', 'BR', 'BL', 'HR', 'HL'], front: 'leg',
     bones: { spine: [0.28, 0.2, 0.2], neck: 0.05, skull: 0.12, snout: 0.05, jaw: 0.1, tail: [0.1, 0.1, 0.1], upper: 0.55, fore: 0.7, pastern: 0.22, thigh: 0.4, shin: 0.4, meta: 0.2, paw: 0.02, pawLen: 0.05, ear: 0.02 },
     lean: { hock: 0, pastern: 0 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 1.0, y: 0.4 },
+  },
+  ant: {
+    label: 'Ant', crawler: 'ant', legs: 6, legKeys: ['FR', 'FL', 'AR', 'AL', 'HR', 'HL'], front: 'leg',
+    bones: { spine: [0.5, 0.24, 0.3], neck: 0.04, skull: 0.2, snout: 0.06, jaw: 0.1, tail: [0.1, 0.1, 0.1], upper: 0.22, fore: 0.3, pastern: 0.12, thigh: 0.4, shin: 0.4, meta: 0.2, paw: 0.02, pawLen: 0.05, ear: 0.02 },
+    lean: { hock: 0, pastern: 0 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 2.0, y: 0.2 },
+  },
+  beetle: {
+    label: 'Beetle', crawler: 'beetle', legs: 6, legKeys: ['FR', 'FL', 'AR', 'AL', 'HR', 'HL'], front: 'leg',
+    bones: { spine: [0.7, 0.3, 0.36], neck: 0.04, skull: 0.2, snout: 0.06, jaw: 0.1, tail: [0.1, 0.1, 0.1], upper: 0.22, fore: 0.3, pastern: 0.1, thigh: 0.3, shin: 0.3, meta: 0.14, paw: 0.025, pawLen: 0.05, ear: 0.02 },
+    lean: { hock: 0, pastern: 0 }, look: { body: 1, leg: 1, neck: 1, tail: 1, wing: 1 }, view: { zoom: 2.0, y: 0.18 },
   },
   crab: {
     label: 'Crab', crawler: 'crab', legs: 8, legKeys: ['FR', 'FL', 'AR', 'AL', 'BR', 'BL', 'HR', 'HL'], front: 'leg',
@@ -109,6 +120,31 @@ const SPECIES_BASE = Object.freeze({
     label: 'Plesiosaur', legs: 4, front: 'wing', hind: 'wing', flipper: true, armRest: [-0.12, -0.12, 0.28], hindRest: [-0.1, -0.1, 0.26],
     bones: { spine: [0.5, 0.5, 0.5], neck: 1.8, skull: 0.2, snout: 0.16, jaw: 0.2, upper: 0.4, fore: 0.36, pastern: 0.26, thigh: 0.4, shin: 0.36, meta: 0.26, paw: 0.03, pawLen: 0.1, shoulderDrop: 0.1, scapula: 0.2, tail: [0.45, 0.35, 0.28], ear: 0.02, hipWidth: 0.14, shoulderWidth: 0.15, scapulaWidth: 0.12 },
     lean: { hock: 0.1, pastern: 0.05 }, look: { body: 2.1, leg: 1.6, neck: 1.1, tail: 1.4, wing: 1.8 }, view: { zoom: 0.7, y: 1.0 },
+  },
+  stegosaurus: {
+    label: 'Stegosaurus', word: 'Stegosaurus', like: 'ceratopsian', legs: 4, front: 'leg', belly: 0.95, tailBase: 1.5, neckBase: 1.3, plates: 1, tailSpikes: true,
+    bones: { spine: [0.42, 0.42, 0.4], neck: 0.3, skull: 0.22, snout: 0.26, jaw: 0.24, upper: 0.28, fore: 0.26, pastern: 0.1, thigh: 0.5, shin: 0.4, meta: 0.14, paw: 0.06, pawLen: 0.2, scapula: 0.2, tail: [0.6, 0.55, 0.5], ear: 0.02, hipWidth: 0.14, shoulderWidth: 0.15, scapulaWidth: 0.12 },
+    lean: { hock: 0.12, pastern: 0.06 }, look: { body: 1.9, leg: 1.5, neck: 1.5, tail: 1.5, wing: 1 }, view: { zoom: 0.9, y: 0.75 },
+  },
+  crocodile: {
+    label: 'Crocodile', like: 'lizard', legs: 4, front: 'leg', ridge: 0.6,
+    bones: { spine: [0.5, 0.5, 0.5], neck: 0.16, skull: 0.5, snout: 0.8, jaw: 0.85, upper: 0.18, fore: 0.17, pastern: 0.09, thigh: 0.2, shin: 0.18, meta: 0.09, paw: 0.04, pawLen: 0.14, shoulderDrop: 0.05, scapula: 0.12, tail: [0.95, 0.85, 0.75], ear: 0.02, hipWidth: 0.13, shoulderWidth: 0.14, scapulaWidth: 0.11 },
+    lean: { hock: 0.3, pastern: 0.1 }, look: { body: 2, leg: 1.4, neck: 1.8, tail: 2.5, wing: 1, snout: 1.2 }, view: { zoom: 0.8, y: 0.4 },
+  },
+  monkey: {
+    label: 'Monkey', legs: 4, front: 'leg',
+    bones: { spine: [0.3, 0.3, 0.3], neck: 0.22, skull: 0.32, snout: 0.12, jaw: 0.14, upper: 0.42, fore: 0.42, pastern: 0.16, thigh: 0.34, shin: 0.34, meta: 0.16, paw: 0.05, pawLen: 0.16, shoulderDrop: 0.1, shoulderBack: 0.04, scapula: 0.2, tail: [0.55, 0.55, 0.5], ear: 0.1, hipWidth: 0.08, shoulderWidth: 0.1, scapulaWidth: 0.08 },
+    lean: { hock: 0.35, pastern: 0.18 }, look: { body: 1.05, leg: 0.8, neck: 1, tail: 1.1, wing: 1, ear: 0.8 }, view: { zoom: 1.35, y: 0.6 },
+  },
+  centaur: {
+    label: 'Centaur', word: 'Centaur', like: 'horse', legs: 4, front: 'leg', arms: { upper: 0.3, fore: 0.28 },
+    bones: { spine: [0.33, 0.33, 0.33], neck: 0.62, skull: 0.2, snout: 0.02, jaw: 0.08, upper: 0.27, fore: 0.34, pastern: 0.25, thigh: 0.34, shin: 0.35, meta: 0.27, paw: 0.05, pawLen: 0.09, tail: [0.24, 0.24, 0.22], ear: 0.01, hipWidth: 0.085, shoulderWidth: 0.09 },
+    lean: { hock: 0.26, pastern: 0.07 }, look: { body: 1.4, leg: 0.85, neck: 1.9, tail: 1.5, wing: 1, snout: 1, ear: 0.2 }, view: { zoom: 0.9, y: 0.85 }, // the horse's neck is the human trunk, and its head the human head
+  },
+  dragon: {
+    label: 'Dragon', legs: 4, front: 'leg', horns: true, ridge: 1, wings: { upper: 0.85, fore: 0.9, finger: 0.75, root: [-0.04, 0.12, 0.13], rest: [-0.45, 0.32, 0.12] },
+    bones: { spine: [0.42, 0.42, 0.42], neck: 0.85, skull: 0.42, snout: 0.38, jaw: 0.42, upper: 0.44, fore: 0.4, pastern: 0.14, thigh: 0.5, shin: 0.44, meta: 0.3, paw: 0.06, pawLen: 0.22, shoulderDrop: 0.1, scapula: 0.26, tail: [0.9, 0.8, 0.7], ear: 0.02, hipWidth: 0.16, shoulderWidth: 0.16, scapulaWidth: 0.13 },
+    lean: { hock: 0.28, pastern: 0.08 }, look: { body: 1.9, leg: 1.7, neck: 1.3, tail: 1.9, wing: 1.2 }, view: { zoom: 0.7, y: 0.9 },
   },
   bird: {
     label: 'Bird', legs: 2, front: 'wing', armRest: [-0.2, -0.04, 0],

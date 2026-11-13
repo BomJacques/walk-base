@@ -173,7 +173,7 @@ export const clipsFor = (rig) => CLIPS[rig] || [];
 /** The movements for one figure: the human's, the dog's, or (for the other animals) the dog's that suit them and their own. */
 export function clipsForFigure(fig0) {
   const fig = kindOf(fig0); const hose = fig0 === 'hose' || Boolean(SPECIES[fig0]?.hose); const mine = (c) => hose || !c.hose; // the wobbly movements are for the rubber hose figures
-  if (fig === 'human' || fig === 'hose') return CLIPS.human.filter(mine);
+  if (fig === 'human' || fig === 'hose' || fig === 'robot' || fig === 'alien') return CLIPS.human.filter(mine);
   const wob = CLIPS.dog.filter((c) => c.hose && hose);
   if (fig === 'dog' || !SPECIES_MOVES[fig]) return CLIPS.dog.filter(mine);
   const keep = speciesSharedIds(fig) || [];

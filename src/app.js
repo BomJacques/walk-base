@@ -5,7 +5,7 @@ import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from '.
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
 import { EXPORT_DEFAULTS, exportPngZip, exportKeyFrames, exportMp4, videoSupport, contactSheet, deliver, summary, renderFrame, exportTimeline, manifest } from './export.js';
-import { CONTROLS, TABS, TAB_LABELS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor, HOSE_PROPORTIONS } from './controls.js';
+import { CONTROLS, TABS, TAB_LABELS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor, HOSE_PROPORTIONS, propsFor } from './controls.js';
 import { SPECIES } from './dogdefaults.js';
 import { wordsFor } from './words.js';
 import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
@@ -41,21 +41,22 @@ import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
 import { bodyFromRig, bodyChannels, neutralPose, liveOf, PHYS_CHANNELS } from './physpose.js';
-import { stepBody as bodyStep, PT as BPT, pointsOf as bodyPoints, dragStart as bodyDragStart, dragMove as bodyDragMove, dragEnd as bodyDragEnd, release as bodyRelease, shove as bodyShove } from './body.js';
+import { stepBody as bodyStep, PT as BPT, pointsOf as bodyPoints, dragStart as bodyDragStart, dragMove as bodyDragMove, dragEnd as bodyDragEnd, release as bodyRelease, shove as bodyShove, jostle as bodyJostle } from './body.js';
 
 const KEY = 'walkbase.v2';
 const clone = (v) => JSON.parse(JSON.stringify(v));
 /** The figures. The human has its own rig; the others are species of the dog's legged rig, each with its own attachments, saved performances and presets. */
 /** The figures, in the groups the menus show them in. */
-const FIG_GROUPS = [['People', ['human', 'hose']], ['Animals', ['dog', 'horse', 'bird', 'lizard', 'snake', 'spider', 'crab']], ['Dinosaurs and reptiles', ['theropod', 'sauropod', 'ceratopsian', 'pterodactyl', 'plesiosaur']], ['Rubber hose animals', ['hosehorse', 'hosebird']]];
+const FIG_GROUPS = [['People', ['human', 'hose', 'robot', 'alien']], ['Animals', ['dog', 'horse', 'monkey', 'bird', 'lizard', 'snake']], ['Insects and crawlers', ['spider', 'crab', 'ant', 'beetle']], ['Dinosaurs and reptiles', ['theropod', 'sauropod', 'ceratopsian', 'pterodactyl', 'plesiosaur', 'stegosaurus', 'crocodile', 'dragon']], ['Mythical and strange', ['centaur']], ['Rubber hose animals', ['hosehorse', 'hosebird']]];
 const FIGS = FIG_GROUPS.flatMap(([, list]) => list);
-const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', lizard: 'Lizard', snake: 'Snake', spider: 'Spider', crab: 'Crab', pterodactyl: 'Pterodactyl', plesiosaur: 'Plesiosaur', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
+const FIG_LABELS = { human: 'Human', hose: 'Rubber hose', robot: 'Robot', alien: 'Four-armed alien', dog: 'Dog', theropod: 'Theropod', bird: 'Bird', sauropod: 'Sauropod', ceratopsian: 'Ceratopsian', horse: 'Horse', lizard: 'Lizard', snake: 'Snake', spider: 'Spider', crab: 'Crab', ant: 'Ant', beetle: 'Beetle', stegosaurus: 'Stegosaurus', crocodile: 'Crocodile', monkey: 'Monkey', dragon: 'Dragon', centaur: 'Centaur', pterodactyl: 'Pterodactyl', plesiosaur: 'Plesiosaur', hosehorse: 'Rubber hose horse', hosebird: 'Rubber hose bird' };
 let BANKS = {}; // the pad bank of each figure: eight walks to switch between
 let PADRUN = null; // a blend to a pad that is waiting or under way
 const MOODREC = new Set(); // the settings the mood pad is writing in the take being recorded
 let PADMODE = 'play'; // what a tap on a pad does: play | store | clear
 let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner, and the walk in the middle
-const rigOfFig = (f) => (f === 'human' || f === 'hose' ? 'human' : 'dog');
+const HUMANOID = new Set(['human', 'hose', 'robot', 'alien']); // a person on the human rig: the same walk and channels, dressed differently
+const rigOfFig = (f) => (HUMANOID.has(f) ? 'human' : 'dog');
 const S = {
   draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', brush: 'round', smooth: 0.5, pressure: true, shape: 'line', shapeFill: false, prevTool: 'pen', target: { kind: 'fig' }, actorKey: null }, // the Draw tab: what the pen does
   design: {}, // each figure's design: { figure: { part key: its own look and skin } }
@@ -69,7 +70,7 @@ const S = {
   // The scene: other figures with walks of their own, and scenery. sceneSel is the one being edited.
   scene: { actors: [], props: [] }, sceneSel: null,
   // Physics: the settings of the body simulation, and the values it is writing to the figure right now (physLive, never saved).
-  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, limbs: 0.3, balance: 0.8, friction: 0.6, bounce: 0.1, keep: 'stay', holds: [] }, physLive: null,
+  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, limbs: 0.3, balance: 0.8, friction: 0.6, bounce: 0.1, ragdoll: false, keep: 'stay', holds: [] }, physLive: null,
   // The file: its name, the state when it was last saved (to tell what has changed since), and the clipboard for Copy and Paste.
   fileName: 'walk-settings', savedState: null, everSaved: false, clipboard: null,
 };
@@ -192,7 +193,7 @@ function cleanLanes(raw) {
 }
 function adopt(raw) {
   if (raw.p?.rig === 'dog' || raw.p?.rig === 'human') S.p.rig = raw.p.rig;
-  if (raw.p?.model === 'hose' || raw.p?.model === 'mannequin') S.p.model = raw.p.model;
+  if (['hose', 'mannequin', 'robot', 'alien'].includes(raw.p?.model)) S.p.model = raw.p.model;
   if (SPECIES[raw.p?.dogSpecies]) S.p.dogSpecies = raw.p.dogSpecies;
   if (raw.bank && typeof raw.bank === 'object') for (const r of FIGS) { const b = raw.bank[r]; S.bank[r] = b ? { lanes: cleanLanes(b.lanes), perfLen: Math.max(0, Math.round(finite(b.perfLen))) } : null; }
   for (const c of CONTROLS) {
@@ -241,7 +242,7 @@ function load() {
 const ATT_IMG_KEY = 'walkbase.attachimgs';
 /** The longest a performance can be, in frames: ten minutes at 24 frames a second. */
 const MAX_FRAMES = 14400;
-const figKey = (p = S.p) => (p.rig === 'dog' ? (SPECIES[p.dogSpecies] ? p.dogSpecies : 'dog') : p.model === 'hose' ? 'hose' : 'human');
+const figKey = (p = S.p) => (p.rig === 'dog' ? (SPECIES[p.dogSpecies] ? p.dogSpecies : 'dog') : HUMANOID.has(p.model) && p.model !== 'human' ? p.model : 'human');
 const wd = (s) => wordsFor(figKey())(s);
 const attachList = () => S.attach[figKey()] || (S.attach[figKey()] = []);
 const attachItem = (id = S.attachSel) => (id ? attachList().find((a) => a.id === id) || null : null);
@@ -658,7 +659,7 @@ async function pickRef(file) {
 function actorParams(fig, name) {
   const rig = rigOfFig(fig); const preset = presetsForFigure(fig)[name] || presetsForFigure(fig)[Object.keys(presetsForFigure(fig))[0]] || {};
   const { camYaw, camPitch, ...pp } = preset; void camYaw; void camPitch;
-  const p = { ...DEFAULTS, ...pp, rig, model: fig === 'hose' ? 'hose' : 'mannequin' };
+  const p = { ...DEFAULTS, ...pp, rig, model: HUMANOID.has(fig) && fig !== 'human' ? fig : 'mannequin' };
   if (rig === 'dog') p.dogSpecies = fig;
   p.fps = S.p.fps; p.cycleFrames = S.p.cycleFrames; p.travel = S.p.travel; p.exposure = pp.exposure ?? 1;
   return p;
@@ -667,7 +668,7 @@ const sceneItem = () => S.scene.actors.find((a) => a.id === S.sceneSel) || S.sce
 function sceneChanged(panel = false) { S.ver++; if (panel) renderPanel(); render(); save(); }
 function addActor(fig) {
   const name = Object.keys(presetsForFigure(fig))[0]; const n = S.scene.actors.length;
-  const a = newActor(fig, FIG_LABELS[fig], actorParams(fig, name), fig === 'hose' ? { ...HOSE_PROPORTIONS } : {}, { preset: name, x: 1.3 + n * 0.9, z: n % 2 ? 0.55 : -0.55, phase: (0.25 + 0.2 * n) % 1 });
+  const a = newActor(fig, FIG_LABELS[fig], actorParams(fig, name), propsFor(fig), { preset: name, x: 1.3 + n * 0.9, z: n % 2 ? 0.55 : -0.55, phase: (0.25 + 0.2 * n) % 1 });
   S.scene.actors.push(a); S.sceneSel = a.id; sceneChanged(true); setMessage(`${FIG_LABELS[fig]} added behind and beside the main figure. Pick its walk and place it below.`);
 }
 /** A JPG, PNG or similar from the device, made into a flat piece of scenery that stands on the ground. */
@@ -713,12 +714,12 @@ function resetFigure(target, what) {
   const doGait = what === 'gait' || what === 'all'; const doBody = what === 'body' || what === 'all'; const doColours = what === 'colours' || what === 'all';
   if (target === 'main') {
     if (doGait) { const names = presetsForFigure(figKey()); applyPreset(names[S.preset] ? S.preset : Object.keys(names)[0]); }
-    if (doBody) S.r = figKey() === 'hose' ? { ...HOSE_PROPORTIONS } : {};
+    if (doBody) S.r = propsFor(figKey());
     if (doColours) for (const k of ['fillColor', 'lineColor', 'farTint', 'farOpacity', 'fillOpacity', ...hoseColours]) S.s[k] = STYLE_DEFAULTS[k];
     S.ver++; renderPanel(); render(); save(); setMessage(`Reset the ${what === 'all' ? 'figure' : what}.`);
   } else if (target) {
     if (doGait) target.p = actorParams(target.fig, target.preset || Object.keys(presetsForFigure(target.fig))[0]);
-    if (doBody) target.r = target.fig === 'hose' ? { ...HOSE_PROPORTIONS } : {};
+    if (doBody) target.r = propsFor(target.fig);
     if (doColours) { target.fill = ''; target.line = ''; target.tint = ''; }
     sceneChanged(true); setMessage(`Reset ${target.name}.`);
   }
@@ -1120,8 +1121,8 @@ function setFigure(fig) {
   const rig = rigOfFig(fig); const wasRig = S.p.rig; const wasSpecies = S.p.dogSpecies; const wasFig = figKey();
   (S.rBank ||= {})[wasFig] = S.r; // each figure keeps its own proportions
   (S.pBank ||= {})[wasFig] = { p: Object.fromEntries([...new Set(walkKeys(wasRig))].map((k) => [k, S.p[k]])), preset: S.preset }; // and its own walk
-  S.r = S.rBank[fig] ?? (fig === 'hose' ? { ...HOSE_PROPORTIONS } : {});
-  if (rig === 'human') S.p.model = fig === 'hose' ? 'hose' : 'mannequin';
+  S.r = S.rBank[fig] ?? propsFor(fig);
+  if (rig === 'human') S.p.model = fig !== 'human' ? fig : 'mannequin';
   S.p.rig = rig; S.sel = null; S.attachSel = null; S.frame = 0; S.clipLen = null; S.clipStart = 0;
   S.clip = clipsForFigure(fig)[0]?.id ?? '';
   // Coming back to a figure, it has the walk it had when you left it (before this, a human reached by way of the dog was left with the rubber hose walk under the name Normal).
@@ -1324,7 +1325,7 @@ const PH = { body: null, raf: 0, last: 0, acc: 0, taking: null, drag: null, dirt
 function cleanPhysState(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const n = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : d);
-  return { on: false, gravity: n(r.gravity, 0, 2, 1), drag: n(r.drag, 0, 6, 0.15), strength: n(r.strength, 0, 1, 0.8), limbs: n(r.limbs, 0, 1, 0.3), balance: n(r.balance, 0, 1, 0.8), friction: n(r.friction, 0, 1, 0.6), bounce: n(r.bounce, 0, 0.8, 0.1), keep: r.keep === 'return' ? 'return' : 'stay',
+  return { on: false, gravity: n(r.gravity, 0, 2, 1), drag: n(r.drag, 0, 6, 0.15), strength: n(r.strength, 0, 1, 0.8), limbs: n(r.limbs, 0, 1, 0.3), balance: n(r.balance, 0, 1, 0.8), friction: n(r.friction, 0, 1, 0.6), bounce: n(r.bounce, 0, 0.8, 0.1), ragdoll: r.ragdoll === true, keep: r.keep === 'return' ? 'return' : 'stay',
     holds: (Array.isArray(r.holds) ? r.holds : []).slice(0, 24).map((q) => ({ x: n(q?.x, -12, 12, 0), y: n(q?.y, -0.5, 12, 3) })) };
 }
 const physOk = () => S.source !== 'sampled' && S.p.rig === 'human';
@@ -1337,14 +1338,17 @@ function physEnv() {
   const ground = boxes.length ? (lx) => { let g = 0; const wx = lx + px; for (const q of boxes) if (Math.abs(wx - q.x) <= q.w / 2) g = Math.max(g, (q.y || 0) + q.h); return g; } : () => 0;
   const cam = S.last?.cam; const xmin = cam ? -cam.cx / cam.scale + 0.3 : -Infinity; const xmax = cam ? (cam.w - cam.cx) / cam.scale - 0.3 : Infinity; // the sides of the frame are walls, and the top is a ceiling
   const ymax = cam ? cam.target[1] + cam.cy / cam.scale - 0.5 : Infinity;
-  return { gravity: S.phys.gravity, drag: S.phys.drag, strength: S.phys.strength, limbs: S.phys.limbs, balance: S.phys.balance, friction: S.phys.friction, bounce: S.phys.bounce, holds: S.phys.holds, ground, xmin, xmax, ymax, fps: Math.max(1, S.p.fps), autoGrab: true, reach: 0.14 };
+  const rd = S.phys.ragdoll; // rag doll is a mode, not a setting: it overrides the muscle sliders and stays on through everything until it is switched off
+  return { gravity: S.phys.gravity, drag: S.phys.drag, strength: rd ? 0 : S.phys.strength, limbs: rd ? 0 : S.phys.limbs, balance: rd ? 0 : S.phys.balance, friction: S.phys.friction, bounce: S.phys.bounce, holds: S.phys.holds, ground, xmin, xmax, ymax, fps: Math.max(1, S.p.fps), autoGrab: true, reach: 0.14 };
 }
 /** Physics on, but not yet touched: the body is the figure's pose at this frame (to pick up and draw handles on), and the walk carries on as it was. */
 function physIdle() { const nv = nowValues(); PH.body = bodyFromRig({ ...nv.p, proportions: S.r }, nv.m, frameU(), { stand: false }); PH.engaged = false; S.physLive = null; PH.dirty = true; }
 /** The body takes over from the pose it is in. Playback stops there, since the figure is no longer following the walk. */
-function physEngage() { if (PH.engaged) return; if (S.playing) pause(); const x = PH.body ? PH.body.x[0] : 0; PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true, x }); PH.engaged = true; PH.dirty = true; } // a walking pose is mid-stride and cannot stand, so the body takes over on its feet, where the figure is
+function physEngage() { if (PH.engaged) return; if (S.playing) pause(); const x = PH.body ? PH.body.x[0] : 0; PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true, x }); PH.engaged = true; PH.dirty = true; if (S.phys.ragdoll) bodyJostle(PH.body, Math.random, 1.5, S.p.fps); } // a walking pose is mid-stride and cannot stand, so the body takes over on its feet, where the figure is
 /** A new body standing on its feet, in charge at once. */
-function physNew() { PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true }); PH.engaged = true; PH.dirty = true; }
+function physNew() { PH.body = bodyFromRig(physParams(), S.motion, frameU(), { stand: true }); PH.engaged = true; PH.dirty = true; if (S.phys.ragdoll) bodyJostle(PH.body, Math.random, 1.5, S.p.fps); }
+/** Rag doll on or off, in place: the body goes limp (or firm) from the pose it is in, with a little chance in how it folds. */
+function physLimp(on) { S.phys.ragdoll = on; physEngage(); if (on && PH.body) bodyJostle(PH.body, Math.random, 1.5, S.p.fps); PH.dirty = true; save(); renderPanel(); setMessage(on ? 'Rag doll: limp, and it stays limp through every move until you stiffen up.' : 'Stiffened up.'); }
 const physChannels = () => bodyChannels(PH.body, neutralPose(physParams(), S.motion, frameU()));
 /** Moves the body on by n frames, writes the pose to the figure, and feeds a take that is being recorded. */
 function physAdvance(n = 1) {
@@ -1465,7 +1469,7 @@ function physicsSection() {
       h('button', { type: 'button', class: 'btn', testid: 'phys-walk', title: 'Hand the figure back to its walk', onClick: () => { physIdle(); setMessage('Back to the walk.'); render(); } }, 'Back to the walk'),
       h('button', { type: 'button', class: 'btn', testid: 'phys-letgo', title: 'Let go of every hold', onClick: () => { physEngage(); if (PH.body) { bodyRelease(PH.body, 'R', 1); bodyRelease(PH.body, 'L', 1); } } }, 'Let go')),
     h('div', { class: 'btnrow' },
-      h('button', { type: 'button', class: 'btn', testid: 'phys-ragdoll', 'aria-pressed': String(ph.strength === 0 && ph.limbs === 0), title: 'Every joint goes limp: it moves only by weight, momentum and whatever it hits', onClick: () => { const on = ph.strength === 0 && ph.limbs === 0; if (on) Object.assign(S.phys, { strength: S.phys.prevStrength ?? 0.8, limbs: S.phys.prevLimbs ?? 0.3 }); else Object.assign(S.phys, { prevStrength: S.phys.strength || 0.8, prevLimbs: S.phys.limbs || 0.3, strength: 0, limbs: 0 }); physEngage(); save(); renderPanel(); } }, ph.strength === 0 && ph.limbs === 0 ? 'Stiffen up' : 'Rag doll'),
+      h('button', { type: 'button', class: 'btn', testid: 'phys-ragdoll', 'aria-pressed': String(ph.ragdoll), title: 'A mode: every joint goes limp and stays limp through jumps, pushes, drags, holds, the weight presets and recorded takes, until you stiffen up. Switch it on or off in the middle of a take.', onClick: () => physLimp(!ph.ragdoll) }, ph.ragdoll ? 'Stiffen up' : 'Rag doll'),
       h('button', { type: 'button', class: 'btn', testid: 'phys-jump', title: 'Spring up from the feet', onClick: () => { physEngage(); if (PH.body) bodyShove(PH.body, 0, 6, S.p.fps); } }, 'Jump'),
       h('button', { type: 'button', class: 'btn', testid: 'phys-shove-fwd', title: 'Knock it forward', onClick: () => { physEngage(); if (PH.body) bodyShove(PH.body, 4, 1, S.p.fps); } }, 'Push forward'),
       h('button', { type: 'button', class: 'btn', testid: 'phys-shove-back', title: 'Knock it back', onClick: () => { physEngage(); if (PH.body) bodyShove(PH.body, -4, 1, S.p.fps); } }, 'Push back'))));
@@ -2042,7 +2046,7 @@ let pickerCv = null; let pickerInfo = null;
 const parseKey = (k) => { const m = /^(.*)\.(R|L)$/.exec(k || ''); return k ? (m ? { part: m[1], side: m[2] } : { part: k, side: null }) : null; };
 /** Draws the little figure (with what has been drawn on it) and shades the part being drawn on. */
 function paintPicker() {
-  const cv = pickerCv; if (!cv || !cv.isConnected || inkItem()) return; const actor = inkActor(); const fig = actor ? actor.fig : figKey(); const people = fig === 'human' || fig === 'hose';
+  const cv = pickerCv; if (!cv || !cv.isConnected || inkItem()) return; const actor = inkActor(); const fig = actor ? actor.fig : figKey(); const people = HUMANOID.has(fig);
   const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
   const base = actor ? { ...actor.p, proportions: actor.r } : { ...P() };
   const params = { ...base, motion: people ? {} : { 'dog.jaw.open': { amount: 1, offset: 0.4, phase: 0, freq: 1 } }, attach: [], scene: null, speech: null, perf: null, sampled: null, design: actor ? actor.design || null : S.design[figKey()] || null, ...(people ? TPOSE : {}) };
@@ -2349,7 +2353,7 @@ function drawSection() {
       acts.map((a) => tBtn(a.name, { kind: 'actor', id: a.id }, `draw-target-actor-${a.id}`, actor?.id === a.id)), items.map((a) => tBtn(`Attachment: ${a.name}`, { kind: 'attach', id: a.id }, `draw-target-attach-${a.id}`, !prop && item?.id === a.id)),
       props.map((a) => tBtn(`Scenery: ${a.name}`, { kind: 'prop', id: a.id }, `draw-target-prop-${a.id}`, prop?.id === a.id))),
     !acts.length && !items.length && !props.length ? h('p', { class: 'hint' }, 'Figures and scenery added in the Scene section of the Body tab, and pictures and shapes added in the Attach tab, can be drawn on too. A Drawing sheet (Add scenery) is a blank page to draw a backdrop on.') : null));
-  const pFig = actor ? actor.fig : figKey(); const pPeople = pFig === 'human' || pFig === 'hose'; // the people are tall and the animals long
+  const pFig = actor ? actor.fig : figKey(); const pPeople = HUMANOID.has(pFig); // the people are tall and the animals long
   pickerCv = h('canvas', { class: 'tpose', style: pPeople ? '' : 'aspect-ratio: 16 / 9; max-width: 340px', width: pPeople ? 440 : 640, height: pPeople ? 520 : 360, role: 'img', 'aria-label': 'The figure standing in a plain pose: tap a part to draw on it', testid: 'draw-tpose', onPointerdown: pickerTap });
   if (!item) { host.append(h('section', { class: 'group', testid: 'draw-picker' }, h('h3', null, 'Pick a part'), pickerCv, h('p', { class: 'hint' }, 'The figure in a plain pose (arms out for the people): tap a part to draw on it. You can also hold a finger on a part on the stage.'))); setTimeout(paintPicker, 0); }
   host.append(h('section', { class: 'group', testid: 'draw-main' }, h('h3', null, 'Draw'),
@@ -2589,7 +2593,7 @@ function speechSection() {
   const sp = S.speech;
   const num = (label, value, min, max, on, tid) => h('label', { class: 'field' }, h('span', null, label), h('input', { type: 'number', class: 'num', inputmode: 'numeric', min, max, value, testid: tid, onChange: (e) => on(Number(e.target.value)) }));
   const say = h('section', { class: 'group', testid: 'speech-say' }, h('h3', null, 'Say'),
-    S.p.rig === 'human' ? null : h('p', { class: 'hint' }, 'Mouth shapes are drawn on the human and rubber hose heads for now. Choose one of them in the Figure menu to see them.'),
+    S.p.rig === 'human' ? null : h('p', { class: 'hint' }, 'Mouth shapes are drawn on the human and rubber hose heads for now. The animals open and close their jaw with the Jaw open lane in the Auto tab, and have Roar, Chomp, Hiss, Squawk or Whinny movements there.'),
     h('textarea', { class: 'speechtext', rows: 3, testid: 'speech-text', 'aria-label': 'What the head says', placeholder: 'Type what the head should say', onInput: (e) => { S.speechDraft = e.target.value; } }, S.speechDraft ?? sp?.text ?? ''),
     h('div', { class: 'btnrow' },
       num('Starts at frame', S.speechStart + 1, 1, MAX_FRAMES, (v) => { S.speechStart = Math.max(0, Math.round(v) - 1); }, 'speech-start'),
