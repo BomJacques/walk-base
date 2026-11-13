@@ -3,6 +3,7 @@
 // Angles are radians (forward is positive). `k` scales how strongly it is done.
 import { laneValue, replaceSpan, targetOfParam, targetOfChannel, CADENCE } from './automation.js';
 import { HUMAN_MOVES, DOG_MOVES } from './moves.js';
+import './moves4.js'; // tiptoe, march, crouch walk, spin, dance, think, facepalm, hands up, yawn, shiver, dodge and push
 import './moves3.js'; // adds the jog, sprint, duck, punch, clap and salute movements
 import { kindOf, SPECIES } from './dogdefaults.js';
 import { SPECIES_MOVES, speciesSharedIds } from './moves2.js'; // also adds the kneel, limp, scratch and roll over movements to the two lists above
@@ -160,13 +161,13 @@ CLIPS.human = [...CLIPS.human, ...HUMAN_MOVES];
 CLIPS.dog = [...CLIPS.dog, ...DOG_MOVES];
 /** The movements are shown in these groups, in this order. */
 export const CLIP_GROUPS = [
-  ['Pace', ['turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'begin', 'stop', 'jog', 'run', 'sprint', 'slow', 'speedup', 'slowdown', 'limp', 'nolimp', 'takeoff', 'land', 'trip']],
+  ['Pace', ['turnright', 'turnleft', 'uturn', 'curve', 'straighten', 'begin', 'stop', 'jog', 'run', 'sprint', 'slow', 'speedup', 'slowdown', 'limp', 'nolimp', 'takeoff', 'land', 'trip', 'tiptoe', 'march', 'crouchwalk', 'spin']],
   ['Weight', ['float', 'hang', 'dangle', 'climb']],
   ['Posture', ['sit', 'down', 'beg', 'kneel', 'crouch', 'standup', 'bow', 'stretch', 'playbow', 'headdown', 'rollover']],
-  ['Action', ['stumble', 'slip', 'stagger', 'duck', 'punch', 'jump', 'drop', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff', 'peck', 'roar', 'lunge', 'rearup', 'toss']],
+  ['Action', ['stumble', 'slip', 'stagger', 'duck', 'dodge', 'push', 'dance', 'punch', 'jump', 'drop', 'kick', 'throw', 'pickup', 'reach', 'point', 'tailchase', 'shake', 'bark', 'howl', 'sniff', 'peck', 'roar', 'lunge', 'rearup', 'toss']],
   ['Mood', ['gettired', 'perkup', 'cheerup', 'getangry', 'gosneaky']],
   ['Wobbly', ['gowobbly', 'firmup', 'wobble', 'noodle', 'jellylegs', 'shimmy', 'boing']],
-  ['Gesture', ['clap', 'salute', 'wave', 'cheer', 'shrug', 'nod', 'look', 'lookaround', 'wag', 'scratch', 'neckswing']],
+  ['Gesture', ['clap', 'salute', 'think', 'facepalm', 'handsup', 'yawn', 'shiver', 'wave', 'cheer', 'shrug', 'nod', 'look', 'lookaround', 'wag', 'scratch', 'neckswing']],
 ];
 export const groupOfClip = (id) => CLIP_GROUPS.find(([, ids]) => ids.includes(id))?.[0] || 'Other';
 export const clipsFor = (rig) => CLIPS[rig] || [];

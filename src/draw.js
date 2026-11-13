@@ -135,19 +135,19 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
     const t = (i / n) * TAU;
     return S(add(C, apply(M, [rf * Math.cos(t), 0, rl * Math.sin(t)])));
   }));
-  const tube = (C0, C1, M0, M1, r0, r1, part) => {
-    const a = section(C0, M0, r0[0] * tk, r0[1] * tk); const b = section(C1, M1, r1[0] * tk, r1[1] * tk);
+  const tube = (C0, C1, M0, M1, r0, r1, part, m = 1) => {
+    const a = section(C0, M0, r0[0] * tk * m, r0[1] * tk * m); const b = section(C1, M1, r1[0] * tk * m, r1[1] * tk * m);
     const sh = { pts: hull([...a, ...b].map((q) => [q.x, q.y])), depth: (S(C0).d + S(C1).d) / 2, part, side: null, role: 'body' }; shapes.push(sh);
-    if (lp) { const wr = (C, M, rf, rl) => Array.from({ length: NS }, (_, i) => { const t = (i / NS) * TAU; return add(C, apply(M, [rf * Math.cos(t), 0, rl * Math.sin(t)])); }); withFacets(sh, slabFacets(S, sc, wr(C0, M0, r0[0] * tk, r0[1] * tk), wr(C1, M1, r1[0] * tk, r1[1] * tk))); }
+    if (lp) { const wr = (C, M, rf, rl) => Array.from({ length: NS }, (_, i) => { const t = (i / NS) * TAU; return add(C, apply(M, [rf * Math.cos(t), 0, rl * Math.sin(t)])); }); withFacets(sh, slabFacets(S, sc, wr(C0, M0, r0[0] * tk * m, r0[1] * tk * m), wr(C1, M1, r1[0] * tk * m, r1[1] * tk * m))); }
   };
   const hw = pz.hw;
 
   const pelvisLow = add(pz.pelvis, apply(pz.Rp, [0, -0.06, 0]));
-  tube(pelvisLow, pz.base0, pz.Rp, pz.Rp, [0.085, hw + 0.055], [0.08, hw + 0.04], 'pelvis');
-  tube(pz.base0, pz.j1, pz.R1, pz.R1, [0.085, 0.135], [0.095, 0.15], 'spine.lower');
-  tube(pz.j1, pz.j2, pz.R2, pz.R2, [0.095, 0.15], [0.1, 0.165], 'spine.mid');
-  tube(pz.j2, pz.j3, pz.R3, pz.R3, [0.1, 0.17], [0.075, 0.165], 'spine.upper');
-  capsule(pz.neckBase, pz.neckTop, 0.04, 0.034, 'neck', null, 'body', tk);
+  tube(pelvisLow, pz.base0, pz.Rp, pz.Rp, [0.085, hw + 0.055], [0.08, hw + 0.04], 'pelvis', pr.hipGirth ?? 1);
+  tube(pz.base0, pz.j1, pz.R1, pz.R1, [0.085, 0.135], [0.095, 0.15], 'spine.lower', pr.waistGirth ?? 1);
+  tube(pz.j1, pz.j2, pz.R2, pz.R2, [0.095, 0.15], [0.1, 0.165], 'spine.mid', pr.chestGirth ?? 1);
+  tube(pz.j2, pz.j3, pz.R3, pz.R3, [0.1, 0.17], [0.075, 0.165], 'spine.upper', pr.chestGirth ?? 1);
+  capsule(pz.neckBase, pz.neckTop, 0.04, 0.034, 'neck', null, 'body', tk * (pr.neckGirth ?? 1));
 
   // Head: an ellipsoid sampled on three great circles.
   const hr = pz.headR;
@@ -157,7 +157,7 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
     const ph = (lat / 12) * Math.PI;
     for (let lon = 0; lon < (lat === 0 || lat === 12 ? 1 : 32); lon++) {
       const th = (lon / 32) * TAU;
-      const q = alien ? [0.8 * Math.sin(ph) * Math.cos(th), 1.32 * Math.cos(ph) * (Math.cos(ph) < 0 ? 0.8 : 1), 0.78 * Math.sin(ph) * Math.sin(th)] : [0.95 * Math.sin(ph) * Math.cos(th), 1.08 * Math.cos(ph), 0.85 * Math.sin(ph) * Math.sin(th)];
+      const hwid = pr.headWidth ?? 1; const q = alien ? [0.8 * Math.sin(ph) * Math.cos(th), 1.32 * Math.cos(ph) * (Math.cos(ph) < 0 ? 0.8 : 1), 0.78 * hwid * Math.sin(ph) * Math.sin(th)] : [0.95 * Math.sin(ph) * Math.cos(th), 1.08 * Math.cos(ph), 0.85 * hwid * Math.sin(ph) * Math.sin(th)];
       const P = S(add(pz.headC, apply(pz.Rh, mul(q, hr))));
       headPts.push([P.x, P.y]);
     }
@@ -189,14 +189,14 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
   for (const side of ['R', 'L']) {
     const sd = pz.sides[side];
     const role = side === 'R' ? 'near' : 'far';
-    capsule(sd.hip, sd.knee, 0.088, 0.062, 'leg', side, role, gk);
-    capsule(sd.knee, sd.ankle, 0.058, 0.038, 'leg', side, role, gk);
-    const fs3 = footShape(pz, side, pr.footSize ?? 1); const fa = fs3.a.map(S).map((q) => [q.x, q.y]); const fb = fs3.b.map(S).map((q) => [q.x, q.y]);
+    capsule(sd.hip, sd.knee, 0.088, 0.062, 'leg', side, role, gk * (pr.thighGirth ?? 1));
+    capsule(sd.knee, sd.ankle, 0.058, 0.038, 'leg', side, role, gk * (pr.shinGirth ?? 1));
+    const fs3 = footShape(pz, side, pr.footSize ?? 1, pr.footLength ?? 1); const fa = fs3.a.map(S).map((q) => [q.x, q.y]); const fb = fs3.b.map(S).map((q) => [q.x, q.y]);
     const area = (poly) => Math.abs(poly.reduce((t, q, i) => { const r = poly[(i + 1) % poly.length]; return t + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
     const fh = hull([...fa, ...fb]); const big = area(fa) >= area(fb) ? fa : fb;
     // Side on, one face is the shoe (with its dip at the instep). Turned toward the camera the faces spread apart, so the outline is their hull.
     const shoePts = area(big) >= 0.9 * area(fh) ? big : fh;
-    const fk = pr.footSize ?? 1; const footAt = (x, y, z = 0) => add(sd.ankle, add(mul(sd.foot.fx, x * fk), add(mul(sd.foot.fy, y), mul(sd.foot.lat, z * fk))));
+    const fk = pr.footSize ?? 1; const footAt = (x, y, z = 0) => add(sd.ankle, add(mul(sd.foot.fx, x * fk * (pr.footLength ?? 1)), add(mul(sd.foot.fy, y), mul(sd.foot.lat, z * fk))));
     if (st.footStyle === 'round') capsule(footAt(-0.02, -0.075 + 0.056 * fk), footAt(0.25, -0.075 + 0.05 * fk), 0.056 * fk, 0.05 * fk, 'foot', side, role); // a round, rubber hose foot
     else if (st.footStyle === 'bare') { // a bare foot: a low sole and five toes
       capsule(footAt(-0.03, -0.075 + 0.04 * fk), footAt(0.17, -0.075 + 0.032 * fk), 0.04 * fk, 0.032 * fk, 'foot', side, role);
@@ -205,8 +205,8 @@ function buildShapes(pz, cam, st = STYLE_DEFAULTS) {
       shapes.push({ pts: shoePts, depth: S(sd.ankle).d, part: 'foot', side, role });
       if (st.footStyle === 'boot') capsule(sd.ankle, lerp3(sd.ankle, sd.knee, 0.45), 0.062, 0.072, 'foot', side, role, gk); // the shaft of a boot up the shin
     }
-    capsule(sd.shoulder, sd.elbow, 0.05, 0.038, 'arm', side, role, gk);
-    capsule(sd.elbow, sd.wrist, 0.036, 0.028, 'forearm', side, role, gk);
+    capsule(sd.shoulder, sd.elbow, 0.05, 0.038, 'arm', side, role, gk * (pr.upperArmGirth ?? 1));
+    capsule(sd.elbow, sd.wrist, 0.036, 0.028, 'forearm', side, role, gk * (pr.foreArmGirth ?? 1));
     if (robot) for (const [q, r, pt] of [[sd.hip, 0.07, 'leg'], [sd.knee, 0.06, 'leg'], [sd.elbow, 0.045, 'forearm'], [sd.shoulder, 0.055, 'arm']]) { const Q = S(q); shapes.push({ pts: circlePts(Q, r * gk * sc, 14), depth: Q.d + 0.0004, part: pt, side, role }); } // ball joints
     if (alien) { // a second, lower pair of arms from the middle of the ribs, swinging against the first pair
       const other = pz.sides[side === 'R' ? 'L' : 'R']; const mz = (v) => [v[0], v[1], -v[2]]; const sh2 = add(sd.shoulder, mul(sub(pz.j1, pz.j3), 0.45));
@@ -562,7 +562,8 @@ function paintShape(ctx, sh, cam, st, ghost) {
     ctx.restore(); return;
   }
   if (st.style === 'mannequin') {
-    ctx.fillStyle = ghost ? hexA(ghost, 0.1) : sh.fill ?? (far ? hexA(st.farTint, st.farOpacity * 0.55) : hexA(st.fillColor, st.fillOpacity));
+    const solid = Math.max(0, Math.min(1, (st.fillOpacity - 0.55) / 0.45)); // raising Fill opacity past its usual level makes the far limbs solid too, not only the near ones
+    ctx.fillStyle = ghost ? hexA(ghost, 0.1) : sh.fill ?? (far ? hexA(mixHex(st.farTint, mixHex(st.fillColor, st.farTint, 0.4), solid), st.farOpacity * 0.55 + (1 - st.farOpacity * 0.55) * solid) : hexA(st.fillColor, st.fillOpacity));
     ctx.fill();
   }
   ctx.strokeStyle = ghost || (far && !sh.fill ? st.farTint : st.lineColor);

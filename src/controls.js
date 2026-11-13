@@ -90,6 +90,19 @@ const RAW_CONTROLS = [
   n('r', 'leg', 'Body', 'Proportions', 'Leg length', '×', 0.7, 1.4, 0.01, 'Scale of both legs. The steps stay the same length, so longer legs stand taller and straighter over them, and shorter legs bend and work harder. Lengthen the step to match if you want the same walk on longer legs.'),
   n('r', 'thighShare', 'Body', 'Proportions', 'Upper leg share', '×', 0.75, 1.25, 0.01, 'How much of the leg is thigh and how much is shin. The leg stays the same total length, so the walk does not change.'),
   n('r', 'footSize', 'Body', 'Proportions', 'Foot size', '×', 0.6, 2, 0.01, 'Scale of the drawn foot. Large for a clown shoe, small for a dancer.'),
+  n('r', 'shoulderSlope', 'Body', 'Proportions', 'Shoulder slope', '×', 0, 3, 0.01, 'How far the shoulders sit below the base of the neck. 0 is square and high, 3 is sloping.'),
+  n('r', 'headWidth', 'Body', 'Proportions', 'Head width', '×', 0.6, 1.7, 0.01, 'How wide the head is, side to side, apart from its height and length.'),
+  n('r', 'footLength', 'Body', 'Proportions', 'Foot length', '×', 0.6, 1.7, 0.01, 'How long the foot is, apart from its height and width.'),
+  n('r', 'armLeft', 'Body', 'Left and right proportions', 'Left arm length', '×', 0.6, 1.6, 0.01, 'Scale of the left arm only, on top of the arm length. Unlike the right arm, for a lopsided figure.'),
+  n('r', 'handLeft', 'Body', 'Left and right proportions', 'Left hand size', '×', 0.5, 2.5, 0.01, 'Scale of the left hand only.'),
+  n('r', 'hipGirth', 'Body', 'Thickness by part proportions', 'Hip thickness', '×', 0.6, 1.8, 0.01, 'Thickness of the hips, on top of body thickness.'),
+  n('r', 'waistGirth', 'Body', 'Thickness by part proportions', 'Waist thickness', '×', 0.5, 1.8, 0.01, 'Thickness of the waist.'),
+  n('r', 'chestGirth', 'Body', 'Thickness by part proportions', 'Chest thickness', '×', 0.6, 1.8, 0.01, 'Thickness of the chest and ribs.'),
+  n('r', 'neckGirth', 'Body', 'Thickness by part proportions', 'Neck thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the neck.'),
+  n('r', 'upperArmGirth', 'Body', 'Thickness by part proportions', 'Upper arm thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the upper arms, on top of limb thickness.'),
+  n('r', 'foreArmGirth', 'Body', 'Thickness by part proportions', 'Forearm thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the forearms.'),
+  n('r', 'thighGirth', 'Body', 'Thickness by part proportions', 'Thigh thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the thighs.'),
+  n('r', 'shinGirth', 'Body', 'Thickness by part proportions', 'Shin thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the shins and calves.'),
   n('r', 'limbGirth', 'Body', 'Proportions', 'Limb thickness', '×', 0.5, 2.2, 0.01, 'Thickness of the arms and legs in the drawing.'),
   n('r', 'torsoGirth', 'Body', 'Proportions', 'Body thickness', '×', 0.6, 1.8, 0.01, 'Thickness of the hips, waist, chest and neck in the drawing.'),
   // Dog (shown when the figure is the dog). Units are shoulder heights.
@@ -527,6 +540,16 @@ export const PRESETS_ALIEN = {
   Skitter: { stepLength: 0.9, bob: 0.05, armSwing: 28, elbowSwing: 30, lean: 8, duty: 0.52, torsoSway: 1.5, footLift: 0.24, cycleFrames: 14 },
 };
 export const ALIEN_PROPORTIONS = Object.freeze({ head: 1.6, neck: 1.4, torso: 1.05, arm: 1.25, upperArm: 1, foreArm: 1.1, leg: 1.1, limbGirth: 0.7, torsoGirth: 0.8, handSize: 1.3 });
+/** Body shapes: ready sets of proportions, over the figure's own starting ones. */
+export const BODY_SHAPES = {
+  Child: { head: 1.45, neck: 0.8, torso: 0.8, leg: 0.72, arm: 0.78, handSize: 1.15, footSize: 1.1, limbGirth: 1.1 },
+  Giant: { leg: 1.35, arm: 1.3, torso: 1.2, head: 0.85, limbGirth: 1.25, torsoGirth: 1.25, footSize: 1.25 },
+  Stocky: { leg: 0.85, torso: 0.92, shoulderWidth: 1.2, neck: 0.7, limbGirth: 1.4, torsoGirth: 1.4, hipWidth: 1.2, thighGirth: 1.15 },
+  Heroic: { shoulderWidth: 1.4, torso: 1.1, waist: 0.8, chest: 1.3, leg: 1.12, head: 0.88, limbGirth: 1.15, chestGirth: 1.2, waistGirth: 0.85, shoulderSlope: 0.5 },
+  Lanky: { leg: 1.3, arm: 1.3, torso: 0.92, neck: 1.4, limbGirth: 0.7, torsoGirth: 0.75, handSize: 1.25, footSize: 1.2 },
+  'Big head': { head: 1.9, neck: 0.55, torso: 0.85, leg: 0.8, handSize: 1.4, footSize: 1.4, shoulderWidth: 0.85 },
+  Lopsided: { armLeft: 1.3, handLeft: 1.6, shoulderSlope: 2.2, headWidth: 1.2 },
+};
 /** The proportions a figure starts with. */
 export const propsFor = (fig) => (fig === 'hose' ? { ...HOSE_PROPORTIONS } : fig === 'robot' ? { ...ROBOT_PROPORTIONS } : fig === 'alien' ? { ...ALIEN_PROPORTIONS } : {});
 export const HOSE_PROPORTIONS = Object.freeze({ head: 1.5, neck: 0.35, torso: 0.8, waist: 0.9, shoulderWidth: 0.8, arm: 1.15, handSize: 1.3, footSize: 1.35, limbGirth: 1 });

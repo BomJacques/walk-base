@@ -121,15 +121,15 @@ export function pose3(params, motion, u, extra = null) {
     const k = (id) => c(`${id}.${side}`);
     const sw = BODY.shoulderWidth * sc('shoulderWidth');
     const held = Math.max(0, s * load); const other = Math.max(0, -s * load); // how much of the load is in this hand, and in the other one
-    const shoulder = add(j3, add(apply(R3, [k('girdle.x'), -BODY.shoulderDrop, s * sw]), [0, k('girdle.y') - 0.035 * held + 0.015 * other, 0]));
+    const shoulder = add(j3, add(apply(R3, [k('girdle.x'), -BODY.shoulderDrop * sc('shoulderSlope'), s * sw]), [0, k('girdle.y') - 0.035 * held + 0.015 * other, 0]));
     const armScale = (side === 'L' ? Math.max(0, 1 + (p.asymArm || 0)) : 1) * (1 - 0.9 * held); // the far arm can swing more or less; an arm with a load hardly swings
     const Ru = mm(R3, mm(Rpitch(-(k('arm.pitch') * armScale + (p.armCarry || 0) * RD * (1 - held))), Rroll(-s * (k('arm.roll') + 12 * RD * other - 3 * RD * held))));
-    const aL = sc('arm');
+    const aL = sc('arm') * (side === 'L' ? sc('armLeft') : 1); // the left arm can be longer or shorter than the right
     const elbow = add(shoulder, apply(Ru, [0, -BODY.upperArm * aL * sc('upperArm'), 0]));
     const Rf = mm(Ru, Rpitch(-k('elbow.flex') * (1 - 0.85 * held))); // the loaded arm hangs straight
     const wrist = add(elbow, apply(Rf, [0, -BODY.foreArm * aL * sc('foreArm'), 0]));
     const Rw = mm(Rf, Rpitch(-k('wrist.flex')));
-    const hand = add(wrist, apply(Rw, [0, -BODY.hand * aL * sc('handSize'), 0]));
+    const hand = add(wrist, apply(Rw, [0, -BODY.hand * aL * sc('handSize') * (side === 'L' ? sc('handLeft') : 1), 0]));
     const wristF = prev ? add(wrist, mul(sub(prev.sides[side].wrist, wrist), 0.35 * fol)) : wrist; // the wrist and the hand drag behind the arm
     let handF = hand; // the hand keeps its length from the wrist and only its direction trails, so it stays on the end of the arm
     if (prev) { const lagged = add(hand, mul(sub(prev.sides[side].hand, hand), 0.6 * fol)); const dir = sub(lagged, wristF); const l = len(dir); handF = l > 1e-9 ? add(wristF, mul(dir, len(sub(hand, wrist)) / l)) : hand; }
@@ -171,10 +171,10 @@ const SHOE = [ // in order round the outline: a squared heel, a high collar at t
   [0.305, -0.04, 0.044], [0.305, -0.065, 0.044], [0.295, -0.075, 0.044], [0.2, -0.075, 0.05], [0.12, -0.067, 0.042], [0.0, -0.067, 0.034], [-0.02, -0.075, 0.032],
 ];
 /** Both faces of the shoe as ordered outlines (the near side and the far side), world space. Seen from the side either one is the shoe; seen from above the two spread to its width. */
-export function footShape(pz, side, k = 1) {
+export function footShape(pz, side, k = 1, len = 1) {
   const sd = pz.sides[side];
   // k scales the shoe about the ankle and the sole, so a bigger foot still stands on the ground
-  const face = (sg) => SHOE.map(([x, y, hw]) => footPt(sd, x * k, -0.075 + (y + 0.075) * k, sg * hw * k));
+  const face = (sg) => SHOE.map(([x, y, hw]) => footPt(sd, x * k * len, -0.075 + (y + 0.075) * k, sg * hw * k));
   return { a: face(1), b: face(-1) };
 }
 /** Named places on the foot (world space), for labels. */

@@ -717,3 +717,10 @@ Rag doll became a mode (on until Stiffen up, through every move, jostled so no f
 - **Mouth and jaw movement:** Roar, Chomp, Hiss, Squawk and Whinny movements for every animal with a head (the jaw channel was already on every one).
 Tests: `tests/legwalk.test.mjs`, `tests/models.test.mjs`, `tests/ui-models.mjs`.
 Not done: the centaur's head is a plain round head (no face shapes), the robot and alien have no colours of their own (use Design), the new animals are not yet in the Physics tab (human and rubber hose only), the proportion sliders and the new movements for the person are still to come (the phase above), and a fly or dragonfly with wings, a spider's web and a snail are not built.
+
+## Done 2026-11-13 (later): proportions and movements for the person
+- **Body shapes**: a row of chips over the proportion sliders (Normal, Child, Giant, Stocky, Heroic, Lanky, Big head, Lopsided), each setting many sliders at once over the figure's own starting shape.
+- **New proportion sliders**: left arm length and left hand size (a lopsided figure), shoulder slope, head width, foot length, and thickness by part (hips, waist, chest, neck, upper arm, forearm, thigh, shin). The physics body reads the same dimensions.
+- **Twelve new movements for the person** (moves4.js): Tiptoe, March, Crouch walk, Spin, Dance, Think, Facepalm, Hands up, Yawn and stretch, Shiver, Dodge, Push. The arm gestures are first-pass poses and may need tuning by eye.
+- **Fixed**: pressing Play while physics has the body in charge made the legs jitter (the walk's frames ran under a body worked out at one frame). Play now hands the figure back to the walk.
+Still to come from the phase: left and right leg lengths, walking backwards and sidestepping, stairs, crawl, roll, trip and fall as physics, pick up and carry, chaining with blending, saving a recorded take as a movement.

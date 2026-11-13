@@ -161,6 +161,13 @@ await q('phys-ragdoll').click(); check('Stiffen up puts the muscles back', await
 await q('phys-reset').click(); await page.waitForTimeout(500);
 check('and it stands again', await until(() => { const b = window.__walkBase.physState().body; return b.y[0] > 1 && b.y[2] > 1.8; }, undefined, 4000));
 
+// ---- Play while the body is in charge: the walk takes over again, so the legs do not fight it
+await page.locator('[data-testid="tab-Physics"]').click(); await q('phys-reset').click(); await page.waitForTimeout(400);
+check('the body is in charge', await ev(() => window.__walkBase.physState().engaged));
+await ev(() => window.__walkBase.play()); await page.waitForTimeout(500);
+check('Play hands the figure back to the walk', await ev(() => !window.__walkBase.physState().engaged && !window.__walkBase.S.physLive));
+await ev(() => window.__walkBase.pause());
+
 // ---- holds are kept with the settings
 await page.locator('[data-testid="tab-Physics"]').click(); await q('phys-add-ladder').click(); await page.waitForTimeout(200);
 check('a ladder is a row of holds', (await ev(() => window.__walkBase.S.phys.holds.length)) >= 6);

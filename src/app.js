@@ -5,7 +5,7 @@ import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from '.
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
 import { STYLE_DEFAULTS, drawScene, pickPart } from './draw.js';
 import { EXPORT_DEFAULTS, exportPngZip, exportKeyFrames, exportMp4, videoSupport, contactSheet, deliver, summary, renderFrame, exportTimeline, manifest } from './export.js';
-import { CONTROLS, TABS, TAB_LABELS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor, HOSE_PROPORTIONS, propsFor } from './controls.js';
+import { CONTROLS, TABS, TAB_LABELS, PRESETS, DEFAULT_OF, presetsFor, presetsForFigure, shownFor, HOSE_PROPORTIONS, propsFor, BODY_SHAPES } from './controls.js';
 import { SPECIES } from './dogdefaults.js';
 import { wordsFor } from './words.js';
 import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
@@ -1234,6 +1234,7 @@ function tick(t) {
 }
 function play() {
   if (S.playing) return;
+  if (physActive() && PH.engaged && !PH.taking) { physIdle(); setMessage('Back to the walk: the timeline plays on. Touch the figure again to take over with physics.'); } // the body is worked out from the pose at one frame; letting the frames run under it makes the legs fight the walk
   if (S.armed) {
     // A take starts here. It needs room: a single cycle is too short to record into, so give it six.
     const n = Math.max(2, Math.round(S.p.cycleFrames));
@@ -1895,6 +1896,14 @@ function collapsible(host) {
   });
 }
 
+/** Ready body shapes: a row of chips over the proportion sliders. Each one sets many sliders at once from the figure's own starting shape; Normal puts them back. */
+function bodyShapeRow() {
+  const apply = (name) => {
+    S.r = { ...propsFor(figKey()), ...(name === 'Normal' ? {} : BODY_SHAPES[name]) };
+    S.ver++; renderPanel(); render(); save(); setMessage(name === 'Normal' ? 'Back to the figure\'s own shape.' : `${name}: the proportions are set. Adjust any slider to fine-tune it.`);
+  };
+  return h('div', { class: 'chips', role: 'group', 'aria-label': 'Body shape' }, ['Normal', ...Object.keys(BODY_SHAPES)].map((n) => h('button', { type: 'button', class: 'pchip', testid: `shape-${n.toLowerCase().replace(/\s+/g, '-')}`, title: n === 'Normal' ? 'The figure\'s own proportions' : `Set the proportions for a ${n.toLowerCase()} figure`, onClick: () => apply(n) }, n)));
+}
 let lastTab = null;
 function renderPanel() {
   if (S.tab !== lastTab) { closeMenus(); lastTab = S.tab; } // a menu opened on one tab must not float over the next
@@ -1913,7 +1922,7 @@ function renderPanel() {
     if (S.tab === 'Speech') host.append(speechSection());
     if (S.tab === 'Gait') { host.append(sceneSection()); host.append(moodSection()); host.append(padSection()); host.append(gaitChartSection()); }
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
-    for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), items.filter((c) => c.group === g).map(row)));
+    for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), g === 'Proportions' && S.p.rig === 'human' ? bodyShapeRow() : null, items.filter((c) => c.group === g).map(row)));
     if (S.tab === 'View') host.append(viewExtras(), arcSection(), refSection());
     if (S.tab === 'Export') host.append(exportSection());
   }

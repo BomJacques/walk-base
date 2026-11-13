@@ -66,6 +66,19 @@ await ev(() => window.__walkBase.setParam('dogLegVariety', 0));
 const feet0 = await ev(() => { const w = window.__walkBase; const n = 120; const out = {}; for (let i = 0; i < n; i++) { w.setFrame(Math.floor((i / n) * w.S.p.cycleFrames)); w.render(); const l = w.S.last.pz.legs; for (const k of Object.keys(l)) (out[k] ||= []).push(l[k].stance ? 1 : 0); } return out; });
 check('with Leg independence at 0 the legs fall into two sets again', new Set(Object.values(feet0).map((a) => a.join(''))).size <= 3, new Set(Object.values(feet0).map((a) => a.join(''))).size);
 
+// body shapes and the new proportion sliders, on the human
+await pick('human'); await ev(() => window.__walkBase.setTab('Gait')); await wait(300);
+check('body shapes are offered over the proportion sliders', (await page.locator('[data-testid="shape-child"]').count()) === 1 && (await page.locator('[data-testid="shape-lopsided"]').count()) === 1 && (await page.locator('[data-testid="shape-normal"]').count()) === 1);
+await page.locator('[data-testid="shape-child"]').click(); await wait(250);
+check('Child sets a big head and short legs', (await ev(() => window.__walkBase.S.r.head > 1.3 && window.__walkBase.S.r.leg < 0.8)));
+await page.locator('[data-testid="shape-lopsided"]').click(); await wait(250);
+check('Lopsided makes the left arm longer than the right', (await ev(() => { const w = window.__walkBase; w.setFrame(3); w.render(); const s = w.S.last.pz.sides; const L = (q) => Math.hypot(...[0, 1, 2].map((i) => q.shoulder[i] - q.elbow[i])); return L(s.L) > 1.2 * L(s.R); })));
+await page.locator('[data-testid="shape-normal"]').click(); await wait(250);
+check('Normal puts the proportions back', (await ev(() => Object.keys(window.__walkBase.S.r).length)) === 0);
+await ev(() => { const w = window.__walkBase; w.S.lanes = {}; w.S.perfLen = 0; w.S.ver++; w.setTab('Auto'); }); await wait(300);
+const mv = []; for (const id of ['tiptoe', 'march', 'crouchwalk', 'spin', 'dance', 'think', 'facepalm', 'handsup', 'yawn', 'shiver', 'dodge', 'push']) mv.push([id, await page.locator(`.pchip[data-testid="clip-${id}"]`).count()]);
+check('the person has twelve new movements', mv.every(([, n]) => n === 1), mv);
+
 check('no page errors', errors.length === 0, errors.slice(0, 3));
 await browser.close();
 process.exit(fails ? 1 : 0);
