@@ -11,7 +11,7 @@ import { SPECIES } from './dogdefaults.js';
 import { wordsFor } from './words.js';
 import { solveFix, writeFix, fixPoints, clearFix } from './fix.js';
 import { dogPlants, pawGait, legsOf } from './dog3.js';
-import { PARTS, CHANNEL_BY_ID, partChannels, partLabel, makeEvaluator, sampleFinal, isEdited, allowedFrequencies } from './motion.js';
+import { PARTS, CHANNEL_BY_ID, partChannels, partLabel, byHeadToToe, makeEvaluator, sampleFinal, isEdited, allowedFrequencies } from './motion.js';
 import { CurveEditor, mirrorPoints } from './curves.js';
 import { cleanPhys, STRIP_LIMITS } from './stripdefs.js';
 import { arcPoints, arcPoint, arcColor, adoptArcs, moveArcPoint, arcSide, symmetrize, otherSideCurve, SYMMETRY, DEFAULT_ARCS } from './arcs.js';
@@ -59,7 +59,7 @@ let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner,
 const HUMANOID = new Set(['human', 'hose', 'robot', 'alien']); // a person on the human rig: the same walk and channels, dressed differently
 const rigOfFig = (f) => (HUMANOID.has(f) ? 'human' : 'dog');
 const S = {
-  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', brush: 'round', smooth: 0.5, pressure: true, shape: 'line', shapeFill: false, prevTool: 'pen', target: { kind: 'fig' }, actorKey: null }, // the Draw tab: what the pen does
+  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', brush: 'round', smooth: 0.5, pressure: true, shape: 'line', shapeFill: false, prevTool: 'pen', target: { kind: 'fig' }, actorKey: null, followZoom: false, zoomedKey: null }, // the Draw tab: what the pen does
   design: {}, // each figure's design: { figure: { part key: its own look and skin } }
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, rot: 0, stageOnly: false,
@@ -2024,7 +2024,7 @@ const designOf = () => (S.design[figKey()] ||= {});
 function partKeys() {
   const seen = new Map();
   for (const sh of S.last?.shapes || []) { if (sh.attach || !sh.part) continue; const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); }
-  return [...seen.values()].sort((a, b) => (a.key < b.key ? -1 : 1));
+  return [...seen.values()].sort(byHeadToToe);
 }
 function patchPart(key, patch, { panel = false } = {}) {
   const d = designOf(); const next = { ...(d[key] || newPart()), ...patch };
@@ -2176,7 +2176,7 @@ function inkMap() {
 const inkSceneHit = () => { const a = inkActor(); return a ? (S.last?.sceneHits || []).find((h2) => h2.id === a.id) || null : null; };
 /** The shapes the pen can land on, as the stage last drew them. */
 const inkShapes = () => (inkItem() ? [] : inkActor() ? inkSceneHit()?.shapes || [] : S.last?.shapes || []).filter((s) => !s.attach && s.part);
-function inkPartKeys() { const seen = new Map(); for (const sh of inkShapes()) { const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); } return [...seen.values()].sort((a, b) => (a.key < b.key ? -1 : 1)); }
+function inkPartKeys() { const seen = new Map(); for (const sh of inkShapes()) { const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); } return [...seen.values()].sort(byHeadToToe); }
 /** The UV frame of a part (or of the attachment), as the stage last drew it. */
 /** Which piece of a part (the thigh or the shin of a leg) a point of the picture is on, as the stage last drew them. */
 function inkSegIndex(key, q) { const fs = (inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; return !q || !fs || fs.length < 2 ? 0 : segmentAt(fs.map((f) => f.pts), q.x, q.y); }
@@ -2453,7 +2453,12 @@ function drawSection() {
     h('p', { class: 'hint' }, prop ? 'Draw on the scenery: what you draw stays on its front face (on the picture, for a drawing sheet) and moves with it. Set its size and place in the Scene section.' : item ? 'Draw on the attachment: what you draw stays on it and moves with it, and bends with it over a joint.' : 'Draw a part on its own, or the whole figure at once: a line that crosses from the head to the neck is split between them. What you draw sticks to its part and moves with it (a rubber hose limb bends it). Two fingers pan and zoom, and twisting them turns the page (Reset the view turns it back).'),
     item ? null : seg('Draw', [['part', 'One part'], ['whole', 'Whole figure']], D.mode, (v) => { D.mode = v; redraw(); }, 'draw-mode'),
     !item && partMode ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Choose the part to draw on' }, list.map((e) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(e.key === sel), testid: `draw-part-${e.key}`, onClick: () => { if (actor) { D.actorKey = e.key; redraw(); } else selectPart({ part: e.part, side: e.side }, { openTab: false }); } }, `${wd(partLabel(e.part, e.side))}${d[e.key]?.ink ? (d[e.key].ink.replace ? ' ●' : ' •') : ''}`))) : null,
-    !item && partMode && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Tap a part on the little figure, or in the list, or hold a finger on it on the stage.') : null));
+    !item && partMode && !sel ? h('p', { class: 'hint', testid: 'draw-choose' }, 'Tap a part on the little figure, or in the list, or hold a finger on it on the stage.') : null,
+    !item && partMode ? h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-sel', disabled: !sel, title: 'Zoom the stage in on the chosen part, to draw it large', onClick: () => zoomToPart(sel) }, 'Zoom to this part'),
+      h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-out', title: 'The whole figure again', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; D.zoomedKey = null; render(); } }, 'Whole figure view')) : null,
+    !item && partMode ? check('Zoom in on a part when I pick it', D.followZoom, (v) => { D.followZoom = v; D.zoomedKey = null; if (v && sel) { D.zoomedKey = sel; zoomToPart(sel); } else if (!v) { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); } }, 'draw-follow-zoom') : null));
+  if (D.followZoom && sel && !item && partMode && sel !== D.zoomedKey) { D.zoomedKey = sel; setTimeout(() => zoomToPart(sel), 30); } // each part you pick comes up large
   host.append(h('section', { class: 'group', testid: 'draw-pen' }, h('h3', null, 'Pen'),
     seg('Tool', [['pen', 'Pen'], ['shape', 'Shapes'], ['bucket', 'Bucket fill'], ['fill', 'Filled shape'], ['eraser', 'Eraser'], ['move', 'Move'], ['dropper', 'Pick colour'], ['pick', 'Pick part']], D.tool, (v) => { if (v !== D.tool) D.prevTool = D.tool; D.tool = v; redraw(); }, 'draw-tool'),
     D.tool === 'shape' ? seg('Shape', [['line', 'Line'], ['oval', 'Oval'], ['box', 'Box']], D.shape, (v) => { D.shape = v; renderPanel(); }, 'draw-shape') : null,

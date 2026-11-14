@@ -216,6 +216,11 @@ export const PARTS = [
   { id: 'leg', label: 'Leg and knee', group: 'Legs', sided: true },
   { id: 'foot', label: 'Foot', group: 'Legs', sided: true },
 ];
+/** The parts of the body in order from the head to the toes (the people and the animals; an animal's tail comes last). The lists of parts to pick from follow this. */
+export const HEAD_TO_TOE = ['head', 'dog.head', 'dog.jaw', 'dog.ear', 'neck', 'dog.neck', 'girdle', 'dog.fshoulder', 'spine.upper', 'dog.spine3', 'arm', 'forearm', 'hand', 'dog.fleg', 'dog.fpaw',
+  'spine.mid', 'dog.spine2', 'spine.lower', 'dog.spine1', 'pelvis', 'dog.pelvis', 'leg', 'foot', 'dog.hleg', 'dog.hpaw', 'dog.tail1', 'dog.tail2', 'dog.tail3'];
+/** A sort for lists of { part, side, key }: head to toe, the right side before the left. */
+export const byHeadToToe = (a, b) => { const r = (x) => { const i = HEAD_TO_TOE.indexOf(x.part); return i < 0 ? 99 : i; }; return r(a) - r(b) || (a.side === 'L') - (b.side === 'L') || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0); };
 export const partChannels = (part, side) => CHANNELS.filter((c) => c.part === part && (!c.sided || c.side === side));
 export const partLabel = (part, side) => `${PARTS.find((p) => p.id === part)?.label ?? part}${side ? ` (${side === 'R' ? 'right' : 'left'})` : ''}`;
 
