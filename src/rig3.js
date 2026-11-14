@@ -107,7 +107,8 @@ export function pose3(params, motion, u, extra = null) {
   const j3 = add(j2, apply(R3, [0, TORSO.upper * tl * sc('chest'), 0]));
 
   // The head's vertical wobble is steadied toward level by headBob.
-  const steady = -(P[1] - hContact - gY - meanDev) * clamp(p.headBob, 0, 1);
+  const offY = motion?.['pelvis.y']?.offset || 0; // a pose put on the hips (a sit, a crouch) is not a bob: the head follows it down instead of staying up
+  const steady = -(P[1] - offY - hContact - gY - meanDev) * clamp(p.headBob, 0, 1);
   const neckBase = add(j3, [0, steady, 0]);
   const Rn = mm(R3, seg(c('neck.yaw'), c('neck.pitch'), c('neck.roll')));
   const neckTop = add(neckBase, apply(Rn, [0, BODY.neck * sc('neck'), 0]));

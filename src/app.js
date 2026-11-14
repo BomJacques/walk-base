@@ -1,5 +1,6 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
 import { DEFAULTS, cycleFrames, cycleTravel, foot, sideGait, gaitSummary, supportStats } from './rig.js';
+import { cleanIdle, idleLayer, applyLayer, IDLE_STYLES, FIDGETS, STANCES } from './idle.js';
 import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, unmuted, paramsAt, motionAt, integrate, Recorder, laneValue, replaceSpan, thinPoints } from './automation.js';
 import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
 import { LaneEditor, copySpan, pasteSpan, shiftLane, loopSpan, mirrorTarget } from './lanes.js';
@@ -70,7 +71,7 @@ const S = {
   // The scene: other figures with walks of their own, and scenery. sceneSel is the one being edited.
   scene: { actors: [], props: [] }, sceneSel: null,
   // Physics: the settings of the body simulation, and the values it is writing to the figure right now (physLive, never saved).
-  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, limbs: 0.3, balance: 0.8, friction: 0.6, bounce: 0.1, ragdoll: false, keep: 'stay', holds: [] }, physLive: null,
+  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, limbs: 0.3, balance: 0.8, friction: 0.6, bounce: 0.1, ragdoll: false, keep: 'stay', holds: [] }, physLive: null, idle: cleanIdle(null),
   // The file: its name, the state when it was last saved (to tell what has changed since), and the clipboard for Copy and Paste.
   fileName: 'walk-settings', savedState: null, everSaved: false, clipboard: null,
 };
@@ -118,7 +119,7 @@ const hist = new History({ gap: 250 });
 let restoring = false;
 const snapState = () => JSON.stringify({
   p: S.p, s: Object.fromEntries(Object.entries(S.s).filter(([k]) => !/^cam|^autoOrbit/.test(k))), x: S.x, r: S.r, motion: S.motion, lanes: S.lanes,
-  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, design: S.design, phys: { ...S.phys, on: false },
+  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle,
 });
 function refreshHistory() {
   refreshSaveState();
@@ -156,7 +157,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -207,6 +208,7 @@ function adopt(raw) {
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
+  S.idle = cleanIdle(raw.idle);
   Object.assign(S.phys, cleanPhysState(raw.phys), { on: S.phys.on }); PH.dirty = true; // in place, so the panel's sliders keep pointing at it
   adoptSampler(raw.sampler);
   if (raw.preset) S.preset = raw.preset;
@@ -1500,6 +1502,87 @@ function physicsSection() {
   return host;
 }
 
+// ---------- idle: breathing, weight shifts, looking about, fidgets, sitting ----------
+const idleOk = () => S.p.rig === 'human' && S.source !== 'sampled';
+const idleClip = (id) => clipsForFigure(figKey()).find((c) => c.id === id) || null;
+/** Puts the lanes back as they were before the idle was built. */
+function clearIdleLanes() {
+  const sp = S.idle.span; const base = S.idle.base;
+  if (sp && base) { S.lanes = jclone(base.lanes); S.perfLen = base.perfLen; }
+  S.idle.span = null; S.idle.base = null;
+}
+/**
+ * Builds the idle from the playhead: a stop if it is walking, a sit if it is to be seated, then the idle layer (breathing, weight shifts, looking about, the arms held as chosen) added over the lanes,
+ * with the chosen fidgets dropped in at random moments, and a stand up at the end if asked. Building again starts from the lanes as they were before.
+ */
+function buildIdle() {
+  if (!idleOk()) return;
+  const again = S.idle.span ? S.idle.span[0] : null; // building again keeps to the same place; Clear idle first to build somewhere else
+  if (S.idle.span) clearIdleLanes();
+  const s = S.idle; const fps = Math.max(1, S.p.fps); const start0 = again ?? Math.max(0, S.frame); let cursor = start0;
+  const base = { lanes: jclone(S.lanes), perfLen: S.perfLen }; let lanes = S.lanes;
+  const put = (clip, at) => { lanes = applyClip(lanes, clip, S.p, at, clip.frames, 1); return at + clip.frames; };
+  const walking = laneValue(lanes[CADENCE], cursor, 1) > 0.15 && S.p.stepLength > 0.05;
+  if (s.stopFirst && walking) { const c = idleClip('stop'); if (c) cursor = put(c, cursor); }
+  const seated = s.pose === 'sitting';
+  if (seated) { const c = idleClip('sit'); if (c) cursor = put(c, cursor); }
+  const N = Math.max(fps, Math.min(MAX_FRAMES - cursor - 200, Math.round(s.seconds * fps)));
+  const fids = s.fidgets.filter((id) => idleClip(id) && (!seated || ['nod', 'shake', 'look'].includes(id))); // a seated figure only moves its head: the other fidgets are made standing up
+  const { layer, fidgets } = idleLayer({ ...s, fidgets: fids }, fps, N, (id) => idleClip(id)?.frames ?? 48);
+  for (const q of fidgets) lanes = applyClip(lanes, idleClip(q.id), S.p, cursor + q.start, q.frames, 1);
+  lanes = applyLayer(lanes, layer, cursor, rangeOfTarget);
+  let end = cursor + N;
+  if (seated && s.standAtEnd) { const c = idleClip('standup'); if (c) end = put(c, end); }
+  S.lanes = lanes; S.idle.base = base; S.idle.span = [start0, end];
+  S.perfLen = Math.min(MAX_FRAMES, Math.max(S.perfLen, end + Math.max(2, Math.round(S.p.cycleFrames)) * 2));
+  S.ver++; markCustom(); S.frame = Math.min(start0, S.perfLen - 1); buildStrip(); renderPanel(); render(); save();
+  setMessage(`Idle built from frame ${start0 + 1} to ${end + 1}: ${fidgets.length} fidget${fidgets.length === 1 ? '' : 's'}. Play it, or build again for a different one.`);
+}
+function clearIdle() {
+  if (!S.idle.span) return;
+  clearIdleLanes(); S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage('The idle is taken off. The timeline is as it was before it was built.');
+}
+function idleSection() {
+  const host = h('div', { class: 'idle' }); const id = S.idle;
+  if (!idleOk()) { host.append(h('section', { class: 'group' }, h('h3', null, 'Idle'), h('p', { class: 'hint' }, 'Idle works on the person (the human, the rubber hose person, the robot and the alien). Choose one in the Figure menu.'))); return host; }
+  const touched = () => { id.style = 'Custom'; save(); };
+  const slider = (label, key, lo, hi, step, tid, help, unit = '') => {
+    const val = h('span', { class: 'mini-v' }, String(+id[key].toFixed(2)) + unit);
+    return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: id[key], testid: tid, 'aria-label': label, onInput: (e) => { id[key] = Number(e.target.value); val.textContent = String(+id[key].toFixed(2)) + unit; touched(); } }), val);
+  };
+  const seg = (items, cur, on, tp) => h('div', { class: 'seg', role: 'group' }, items.map(([v, label]) => h('button', { type: 'button', class: 'segbtn', 'aria-pressed': String(cur === v), testid: `${tp}-${v}`, onClick: () => on(v) }, label)));
+  const span = id.span;
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Idle'),
+    h('p', { class: 'hint' }, 'What a person does when nothing is happening: breathing, shifting weight, looking about, fidgeting, standing or sitting. It is laid over the timeline from the playhead, on top of whatever is there, so it can follow a walk to a stop, a sit and a stand up. Pick a style, adjust, then Build idle.'),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Idle style' }, Object.keys(IDLE_STYLES).map((n) => h('button', { type: 'button', class: 'pchip', testid: `idle-style-${n.toLowerCase()}`, 'aria-pressed': String(id.style === n), onClick: () => { Object.assign(S.idle, IDLE_STYLES[n], { style: n }); save(); renderPanel(); } }, n))),
+    h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn primary', testid: 'idle-build', title: 'Lay the idle over the timeline from the playhead', onClick: buildIdle }, span ? 'Build it again' : 'Build idle'),
+      h('button', { type: 'button', class: 'btn', testid: 'idle-reseed', title: 'A different run of looks, shifts and fidgets from the same settings', onClick: () => { id.seed = 1 + Math.floor(Math.random() * 99999); save(); if (span) buildIdle(); else renderPanel(); } }, 'Shuffle'),
+      h('button', { type: 'button', class: 'btn', testid: 'idle-clear', disabled: !span, title: 'Take the idle off the timeline', onClick: clearIdle }, 'Clear idle')),
+    h('p', { class: 'hint', testid: 'idle-status' }, span ? `Built over frames ${span[0] + 1} to ${span[1] + 1}.` : `It will start at frame ${S.frame + 1}.`)));
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Where'),
+    h('div', { class: 'btnrow' }, seg([['standing', 'Standing'], ['sitting', 'Sitting']], id.pose, (v) => { id.pose = v; touched(); renderPanel(); }, 'idle-pose')),
+    slider('Length', 'seconds', 2, 120, 1, 'idle-seconds', 'How long the idle lasts.', ' s'),
+    h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: id.stopFirst, testid: 'idle-stop', onChange: (e) => { id.stopFirst = e.target.checked; save(); } }), h('span', null, 'Walk to a stop first, if it is walking')),
+    id.pose === 'sitting' ? h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: id.standAtEnd, testid: 'idle-standup', onChange: (e) => { id.standAtEnd = e.target.checked; save(); } }), h('span', null, 'Stand up at the end')) : null,
+    id.pose === 'sitting' ? h('p', { class: 'hint' }, 'A seated figure breathes, shifts and looks about; of the fidgets it does the head ones (nod, shake, look).') : null));
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Breathing, weight and looking'),
+    slider('Breathing', 'breathing', 0, 1, 0.01, 'idle-breathing', 'How far the chest and shoulders move with each breath.'),
+    slider('Breaths a minute', 'breathRate', 4, 40, 1, 'idle-breath-rate', 'Slow when calm or tired, quick when nervous.'),
+    slider('Weight shifting', 'shift', 0, 1, 0.01, 'idle-shift', 'How far the hips slide over one foot and the body leans to balance.'),
+    slider('Shift every', 'shiftEvery', 1, 40, 0.5, 'idle-shift-every', 'About how often the weight moves to the other foot, in seconds.', ' s'),
+    slider('Looking around', 'look', 0, 1, 0.01, 'idle-look', 'How much the head turns to look about.'),
+    slider('Look every', 'lookEvery', 0.5, 20, 0.5, 'idle-look-every', 'About how often it looks somewhere new, in seconds.', ' s'),
+    slider('How far it looks', 'lookRange', 0.1, 1.4, 0.05, 'idle-look-range', 'The widest turn of the head, in radians.')));
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Fidgets'),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Fidgets' }, FIDGETS.map(([k, label]) => h('button', { type: 'button', class: 'pchip', testid: `idle-fidget-${k}`, 'aria-pressed': String(id.fidgets.includes(k)), onClick: () => { id.fidgets = id.fidgets.includes(k) ? id.fidgets.filter((x) => x !== k) : [...id.fidgets, k]; touched(); renderPanel(); } }, label))),
+    slider('Fidgets a minute', 'fidgetRate', 0, 12, 0.5, 'idle-fidget-rate', 'How many of the chosen fidgets happen in a minute, at random moments.'),
+    h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: id.tap, testid: 'idle-tap', onChange: (e) => { id.tap = e.target.checked; touched(); } }), h('span', null, 'Tap a foot now and then'))));
+  host.append(h('section', { class: 'group' }, h('h3', null, 'How the arms are held'),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Arms' }, Object.keys(STANCES).map((n) => h('button', { type: 'button', class: 'pchip', testid: `idle-stance-${n.toLowerCase().replace(/\s+/g, '-')}`, 'aria-pressed': String(id.stance === n), onClick: () => { id.stance = n; touched(); renderPanel(); } }, n)))));
+  return host;
+}
+
 // ---------- panel ----------
 /** A row's label is a button: tapping it shows or hides the help text under the row. */
 function labBtn(name, unit) {
@@ -1885,7 +1968,7 @@ function collapsible(host) {
     else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and legs, left and right feet, onion skin, colours, names, target app); a choice you make is remembered.
-    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^eyebrows$|^mouth$|^moebius style$|^pictures$|^pivot around the figure$|^onion skin$|^colours$|^names$|^target app$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
+    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^eyebrows$|^mouth$|^moebius style$|^pictures$|^pivot around the figure$|^onion skin$|^colours$|^names$|^target app$|^where$|^breathing, weight and looking$|^fidgets$|^how the arms are held$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
     const body = h('div', { class: 'group-body' });
     while (hd.nextSibling) body.append(hd.nextSibling);
     sec.append(body); body.hidden = folded;
@@ -1923,6 +2006,7 @@ function renderPanel() {
     if (S.tab === 'Gait') { host.append(sceneSection()); host.append(moodSection()); host.append(padSection()); host.append(gaitChartSection()); }
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
     for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), g === 'Proportions' && S.p.rig === 'human' ? bodyShapeRow() : null, items.filter((c) => c.group === g).map(row)));
+    if (S.tab === 'Gait' && idleOk()) { const ih = idleSection(); ih.querySelectorAll('section').forEach((s) => { s.dataset.area = 'Idle'; }); host.append(ih); } // the idle controls are movement controls: they sit under the walk and the body, on the Body tab
     if (S.tab === 'View') host.append(viewExtras(), arcSection(), refSection());
     if (S.tab === 'Export') host.append(exportSection());
   }
@@ -2762,7 +2846,7 @@ function saveAs() {
   S.fileName = name; saveSettings();
 }
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, images: usedImages() }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle, images: usedImages() }, null, 1)], { type: 'application/json' });
   deliver(blob, `${S.fileName}.json`).then(() => { S.savedState = snapState(); S.everSaved = true; refreshSaveState(); setMessage(`Saved ${S.fileName}.json.`); });
 }
 async function loadSettings(e) {

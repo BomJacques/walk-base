@@ -724,3 +724,14 @@ Not done: the centaur's head is a plain round head (no face shapes), the robot a
 - **Twelve new movements for the person** (moves4.js): Tiptoe, March, Crouch walk, Spin, Dance, Think, Facepalm, Hands up, Yawn and stretch, Shiver, Dodge, Push. The arm gestures are first-pass poses and may need tuning by eye.
 - **Fixed**: pressing Play while physics has the body in charge made the legs jitter (the walk's frames ran under a body worked out at one frame). Play now hands the figure back to the walk.
 Still to come from the phase: left and right leg lengths, walking backwards and sidestepping, stairs, crawl, roll, trip and fall as physics, pick up and carry, chaining with blending, saving a recorded take as a movement.
+
+## Done 2026-11-14: the idle phase
+An **Idle** section on the Body tab (under the walk and the body, since they are movement controls) for the person (human, rubber hose, robot, alien). What a person does when nothing is happening, built as a layer over the timeline from the playhead (`src/idle.js`):
+- **Styles** that set many controls at once: Relaxed, Alert, Bored, Nervous, Tired, Confident.
+- **Breathing** (depth and breaths a minute), **weight shifting** (hips over one foot, body leaning to balance, how often), **looking around** (amount, how often, how far; head, neck and a little spine), a faint sway, and an optional **foot tap**.
+- **Fidgets** dropped in at random moments from the person's own movements: scratch head, shrug, stretch, yawn, think, nod, shake, a big look round, clap, shiver, at a chosen number a minute.
+- **How the arms are held** while standing about: down, clasped, on hips, crossed, behind the back. The stance steps aside while a fidget has the arms.
+- **Standing or sitting**: sitting lays a Walk to stop (if walking), a Sit, the idle on the seat (breathing, shifting, looking, head fidgets) and optionally a Stand up at the end.
+- The idle is ADDED to whatever the lanes hold, sample by sample, so it sits on a stop, a sit or a hand-made pose. It eases in and out, comes from a seed (Shuffle for another), builds again from the same place without stacking, and Clear idle puts the lanes back as they were. Settings and the undo snapshot are saved with the project.
+- Also fixed: a seated or crouched figure's head floated above its neck, because Head steadiness held the head up against the deliberate lowering of the hips; it now only works against the walk's own bob.
+Not done: sitting on a chair or object in the scene (it sits in the air at seat height), more seated fidgets (the arm ones are made standing), idle for the animals (breathing, ear flicks, tail swish, sniffing, lying down), the arm stances are approximate (the rig has no arm yaw, so hands on hips are forearm-forward), looping an idle seamlessly, and eyes (there are none to glance with).
