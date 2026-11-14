@@ -1,7 +1,8 @@
 // Sitting down, with controls: how high the seat is (a chair, a stool, a low seat, the floor, or the top of a box in the scene), how the body is held (upright, relaxed, slouched, leaning forward
 // or back), where the feet go and what the hands do. From these it works out the pose for the figure's own leg lengths, so the thighs and shins meet the seat whatever the figure's proportions, and
 // makes the movement that gets there (a lean forward first, then the hips going back and down). Pure logic, no DOM.
-import { poseBuild, BASE_ARMS } from './moves.js';
+import { poseBuild, BASE_ARMS, at } from './moves.js';
+import { targetOfParam as P, CADENCE } from './automation.js';
 import { CHAIR_STYLES } from './scene.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -60,6 +61,14 @@ export function sitPose(settings, stand, seat = null) {
   return out;
 }
 
+const WALK_PARAMS = ['stepLength', 'footLift', 'bob', 'armSwing', 'elbowSwing', 'sway', 'pelvisYaw', 'shoulderCounter', 'torsoSway', 'heelStrike', 'toeOff', 'swingToe'];
+/** The walk winds down to nothing as the sit begins (the steps shorten and the cadence stops), so a figure that was walking sits instead of walking on the seat. It stays stopped, as Walk to stop does. */
+function stopWalking(b, D) {
+  const out = { [CADENCE]: at(D, [[0, 1], [0.15, 0.6], [0.3, 0]]) };
+  for (const n of WALK_PARAMS) out[P(n)] = at(D, [[0, b[n] ?? 0], [0.3, 0]]);
+  return out;
+}
+
 /** The movement of sitting down for these settings and this figure: a lean forward, the hips back and down, the body settling into the pose. It stays seated; Stand up undoes it. */
 export function sitClip(settings, stand, seat = null) {
   const s = cleanSit(settings); const pose = sitPose(s, stand, seat);
@@ -68,6 +77,6 @@ export function sitClip(settings, stand, seat = null) {
   return {
     id: 'sit', label: 'Sit down', frames: s.frames, ends: 'stays seated',
     help: 'From standing: leans forward, the hips go back and down onto the seat you chose, the feet and hands as set in the Sitting section of the Body tab. Stand up to rise.',
-    build: poseBuild([[0.3, approach], [0.7, settle], [0.85, pose]], { kill: BASE_ARMS, stay: true }),
+    build: (b, D, k = 1) => ({ ...poseBuild([[0.3, approach], [0.7, settle], [0.85, pose]], { kill: BASE_ARMS, stay: true })(b, D, k), ...stopWalking(b, D) }),
   };
 }
