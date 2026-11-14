@@ -1,5 +1,7 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
 import { DEFAULTS, cycleFrames, cycleTravel, foot, sideGait, gaitSummary, supportStats } from './rig.js';
+import { cleanSit, SEATS, POSTURES, FEET, HANDS, sitClip, seatHeightOf } from './sitting.js';
+import { CHAIR_STYLES } from './scene.js';
 import { cleanIdle, idleLayer, applyLayer, IDLE_STYLES, FIDGETS, STANCES } from './idle.js';
 import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, unmuted, paramsAt, motionAt, integrate, Recorder, laneValue, replaceSpan, thinPoints } from './automation.js';
 import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
@@ -41,7 +43,7 @@ import { turned, snapTurn, spin, holdPoint } from './viewrot.js';
 import { PROP, setProp, loadProp, FALLOFFS } from './proportional.js';
 import { canBend, attachTargets, targetKey, newItem, cloneItem, mirroredItem, itemFrame, toLocal, nearestEdgeT, edgePoint, anchorLocal, hitItem, pickHandle, imageInfo, registerImage, imageUrls, KINDS, freshId } from './attach.js';
 import { menuButton, closeMenus, menuOwner, openMenuAt } from './menu.js';
-import { bodyFromRig, bodyChannels, neutralPose, liveOf, PHYS_CHANNELS } from './physpose.js';
+import { bodyFromRig, bodyChannels, neutralPose, liveOf, PHYS_CHANNELS, standingParams, bodyDims } from './physpose.js';
 import { stepBody as bodyStep, PT as BPT, pointsOf as bodyPoints, dragStart as bodyDragStart, dragMove as bodyDragMove, dragEnd as bodyDragEnd, release as bodyRelease, shove as bodyShove, jostle as bodyJostle } from './body.js';
 
 const KEY = 'walkbase.v2';
@@ -71,7 +73,7 @@ const S = {
   // The scene: other figures with walks of their own, and scenery. sceneSel is the one being edited.
   scene: { actors: [], props: [] }, sceneSel: null,
   // Physics: the settings of the body simulation, and the values it is writing to the figure right now (physLive, never saved).
-  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, limbs: 0.3, balance: 0.8, friction: 0.6, bounce: 0.1, ragdoll: false, keep: 'stay', holds: [] }, physLive: null, idle: cleanIdle(null),
+  phys: { on: false, gravity: 1, drag: 0.15, strength: 0.8, limbs: 0.3, balance: 0.8, friction: 0.6, bounce: 0.1, ragdoll: false, keep: 'stay', holds: [] }, physLive: null, idle: cleanIdle(null), sit: cleanSit(null),
   // The file: its name, the state when it was last saved (to tell what has changed since), and the clipboard for Copy and Paste.
   fileName: 'walk-settings', savedState: null, everSaved: false, clipboard: null,
 };
@@ -119,7 +121,7 @@ const hist = new History({ gap: 250 });
 let restoring = false;
 const snapState = () => JSON.stringify({
   p: S.p, s: Object.fromEntries(Object.entries(S.s).filter(([k]) => !/^cam|^autoOrbit/.test(k))), x: S.x, r: S.r, motion: S.motion, lanes: S.lanes,
-  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle,
+  perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle, sit: S.sit,
 });
 function refreshHistory() {
   refreshSaveState();
@@ -157,7 +159,7 @@ function save() {
   if (!restoring) { hist.record(snapState()); refreshHistory(); }
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
+    try { localStorage.setItem(KEY, JSON.stringify({ p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, bank: S.bank, perfs: S.perfs, attach: S.attach, preset: S.preset, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle, sit: S.sit, sampler: samplerSettings() })); } catch { setMessage('Settings could not be saved in this browser. Use Save settings to keep a copy.'); }
   }, 250);
 }
 const clampTo = (c, v) => {
@@ -208,7 +210,7 @@ function adopt(raw) {
   S.scene = cleanScene(raw.scene, FIGS, DEFAULTS); if (!S.scene.actors.some((a) => a.id === S.sceneSel) && !S.scene.props.some((q) => q.id === S.sceneSel)) S.sceneSel = null;
   S.speech = cleanSpeech(raw.speech); S.mouthPreview = null; if (S.speech) { S.speechDraft = S.speech.text; S.speechStart = S.speech.start; S.speechSpeed = S.speech.speed; }
   S.lanes = cleanLanes(raw.lanes); S.perfLen = Number.isFinite(Number(raw.perfLen)) ? Math.min(MAX_FRAMES, Math.max(0, Math.round(Number(raw.perfLen)))) : 0; S.ver++;
-  S.idle = cleanIdle(raw.idle);
+  S.idle = cleanIdle(raw.idle); S.sit = cleanSit(raw.sit);
   Object.assign(S.phys, cleanPhysState(raw.phys), { on: S.phys.on }); PH.dirty = true; // in place, so the panel's sliders keep pointing at it
   adoptSampler(raw.sampler);
   if (raw.preset) S.preset = raw.preset;
@@ -1504,7 +1506,26 @@ function physicsSection() {
 
 // ---------- idle: breathing, weight shifts, looking about, fidgets, sitting ----------
 const idleOk = () => S.p.rig === 'human' && S.source !== 'sampled';
-const idleClip = (id) => clipsForFigure(figKey()).find((c) => c.id === id) || null;
+/** The figure's standing hip height and bone lengths, for working out a seated pose that fits it. */
+function standFor() { const pp = physParams(); const d = bodyDims(pp, {}); return { hip: neutralPose(standingParams(pp), {}, 0).pelvis[1], l1: d.l1, l2: d.l2 }; }
+/** The chair prop for the Sitting settings: made if it is not there, and brought up to date with the settings. */
+function ensureChair() {
+  const c = S.sit.chair; let q = S.scene.props.find((p) => p.id === c.id);
+  const fields = { style: c.style, back: c.back, arms: c.arms, w: c.w, d: c.d, h: S.sit.seatHeight, color: c.color, cushion: c.cushion, cushionOn: c.cushionOn };
+  if (!q) { q = newProp('chair', { x: 0, z: 0, ...fields, name: 'Chair' }); S.scene.props.push(q); c.id = q.id; } else Object.assign(q, fields);
+  return q;
+}
+/** Sets the chair under the figure as it sits: the seat under the hips, facing the way it faces. */
+function placeChair(q, start, frames) {
+  const keep = S.frame; S.frame = Math.min(MAX_FRAMES - 1, start + Math.round(frames * 0.9)); paint(); const z = S.last?.pz; S.frame = keep; // paint is at once; render waits for the next frame
+  if (z) { q.x = z.pelvisX + z.pelvis[0] + q.w / 2 - 0.12; q.z = z.pelvis[2]; q.y = 0; q.rot = 0; q.tilt = 0; }
+  S.ver++; render(); save();
+}
+/** After a change to the chair settings, the chair in the scene follows. */
+function syncChair() { if (S.sit.seat === 'Chair' && S.scene.props.some((p) => p.id === S.sit.chair.id)) { ensureChair(); S.ver++; render(); } save(); }
+const boxTop = (id) => { const q = (S.scene?.props || []).find((x) => x.id === id); return q ? (q.y || 0) + q.h : null; };
+const sitClipNow = () => sitClip(S.sit, standFor(), seatHeightOf(S.sit, boxTop));
+const idleClip = (id) => (id === 'sit' && idleOk() ? sitClipNow() : clipsForFigure(figKey()).find((c) => c.id === id) || null);
 /** Puts the lanes back as they were before the idle was built. */
 function clearIdleLanes() {
   const sp = S.idle.span; const base = S.idle.base;
@@ -1541,6 +1562,44 @@ function buildIdle() {
 function clearIdle() {
   if (!S.idle.span) return;
   clearIdleLanes(); S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage('The idle is taken off. The timeline is as it was before it was built.');
+}
+/** The Sitting section of the Body tab: where to sit and how, then Sit down and Stand up at the playhead. */
+/** The chair's own settings: its style, its back and arms, its size and its colours. Changing one changes the chair in the scene at once. */
+function chairControls() {
+  const st = S.sit; const c = st.chair; const host = h('div', { class: 'chairset' });
+  const num = (label, key, lo, hi, step, tid, help) => { const val = h('span', { class: 'mini-v' }, String(+c[key].toFixed(2))); return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: c[key], testid: tid, 'aria-label': label, onInput: (e) => { c[key] = Number(e.target.value); val.textContent = String(+c[key].toFixed(2)); syncChair(); } }), val); };
+  const colour = (label, key, tid) => h('label', { class: 'mini', title: label }, h('span', { class: 'mini-l' }, label), h('input', { type: 'color', value: c[key], testid: tid, 'aria-label': label, onInput: (e) => { c[key] = e.target.value; syncChair(); } }), h('span', { class: 'mini-v' }, ''));
+  const check = (label, key, tid) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: c[key], testid: tid, onChange: (e) => { c[key] = e.target.checked; syncChair(); renderPanel(); } }), h('span', null, label));
+  host.append(h('div', { class: 'chips', role: 'group', 'aria-label': 'Chair style' }, Object.keys(CHAIR_STYLES).map((n) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(c.style === n), testid: `sit-chair-style-${n.toLowerCase()}`, onClick: () => { const d = CHAIR_STYLES[n]; Object.assign(c, { style: n, back: d.back, arms: d.arms, w: d.w, d: d.d }); st.seatHeight = d.h; syncChair(); renderPanel(); } }, n))),
+    num('Back height', 'back', 0, 1.2, 0.01, 'sit-chair-back', 'How tall the back is above the seat. 0 is no back.'),
+    num('Seat depth', 'w', 0.2, 1.2, 0.01, 'sit-chair-depth', 'The seat from front to back.'),
+    num('Seat width', 'd', 0.2, 1.8, 0.01, 'sit-chair-width', 'The seat from side to side (a bench is wide).'),
+    check('Arm rests', 'arms', 'sit-chair-arms'), check('Seat cushion', 'cushionOn', 'sit-chair-cushion-on'),
+    colour('Frame colour', 'color', 'sit-chair-color'), colour('Cushion colour', 'cushion', 'sit-chair-cushion'),
+    h('p', { class: 'hint' }, 'The chair is put in the scene under the figure when it sits down, and is a scenery item like any other: it can be moved, resized and recoloured in the Scene section too. Choose Invisible chair to sit with none drawn.'));
+  return host;
+}
+function sittingSection() {
+  const host = h('div', { class: 'sitting' }); const st = S.sit; const boxes = (S.scene?.props || []).filter((q) => (q.kind === 'box' || q.kind === 'cylinder' || q.kind === 'chair') && q.id !== st.chair.id);
+  const redo = () => { save(); renderPanel(); };
+  const chip = (label, on, fn, tid) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(on), testid: tid, onClick: fn }, label);
+  const slider = (label, key, lo, hi, step, tid, help, fmt = (v) => String(+v.toFixed(2))) => { const val = h('span', { class: 'mini-v' }, fmt(st[key])); return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: st[key], testid: tid, 'aria-label': label, onInput: (e) => { st[key] = Number(e.target.value); if (key === 'seatHeight' && st.seat.startsWith('prop:')) st.seat = 'Custom'; val.textContent = fmt(st[key]); if (key === 'seatHeight') syncChair(); else save(); } }), val); };
+  const shown = seatHeightOf(st, boxTop);
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Sitting'),
+    h('p', { class: 'hint' }, 'Choose where to sit and how, then Sit down: the figure leans forward and settles onto the seat, its legs and hips worked out from its own proportions. Stand up to rise. The Sit down movement in the Auto tab and the idle (sitting) use these settings.'),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Where to sit' }, [...Object.keys(SEATS).map((n) => chip(n, st.seat === n, () => { st.seat = n; if (n === 'Floor') st.seatHeight = SEATS.Floor; else if (st.seatHeight < 0.1) st.seatHeight = SEATS[n]; redo(); }, `sit-seat-${n.toLowerCase().replace(/\s+/g, '-')}`)), ...boxes.map((q) => chip(`On ${q.name || q.kind}`, st.seat === `prop:${q.id}`, () => { st.seat = `prop:${q.id}`; redo(); }, `sit-seat-prop-${q.id}`))]),
+    slider('Seat height', 'seatHeight', 0, 1.2, 0.01, 'sit-height', 'How high the seat is, in leg lengths (a chair seat is a little under half a leg length). The chair follows it.'),
+    st.seat === 'Chair' ? chairControls() : null,
+    st.seat === 'Invisible chair' ? h('p', { class: 'hint' }, 'No chair is drawn: the figure sits on nothing at the seat height above, as if miming it. Add a box or a chair in the scene to sit on a real one.') : null,
+    st.seat.startsWith('prop:') ? h('p', { class: 'hint' }, `The seat is the top of the box in the scene (${shown.toFixed(2)} leg lengths up). Put the figure over it first.`) : null,
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Posture' }, Object.keys(POSTURES).map((n) => chip(n, st.posture === n, () => { st.posture = n; redo(); }, `sit-posture-${n.toLowerCase().replace(/\s+/g, '-')}`))),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Feet' }, Object.keys(FEET).map((n) => chip(n === 'Flat' ? 'Feet flat' : n, st.feet === n, () => { st.feet = n; redo(); }, `sit-feet-${n.toLowerCase().replace(/\s+/g, '-')}`))),
+    h('div', { class: 'chips', role: 'group', 'aria-label': 'Hands' }, Object.keys(HANDS).map((n) => chip(n, st.hands === n, () => { st.hands = n; redo(); }, `sit-hands-${n.toLowerCase().replace(/\s+/g, '-')}`))),
+    slider('How long it takes', 'frames', 24, 200, 1, 'sit-frames', 'Frames to sit down.', (v) => `${Math.round(v)} frames`),
+    h('div', { class: 'btnrow' },
+      h('button', { type: 'button', class: 'btn primary', testid: 'sit-down', title: 'Add the sit at the playhead', onClick: () => { const c = sitClipNow(); const start = S.frame; const q = st.seat === 'Chair' ? ensureChair() : null; addClip(c, start, c.frames, 1); if (q) placeChair(q, start, c.frames); } }, 'Sit down'),
+      h('button', { type: 'button', class: 'btn', testid: 'sit-standup', title: 'Add a stand up at the playhead', onClick: () => { const c = clipsForFigure(figKey()).find((x) => x.id === 'standup'); if (c) addClip(c, S.frame, c.frames, 1); } }, 'Stand up'))));
+  return host;
 }
 function idleSection() {
   const host = h('div', { class: 'idle' }); const id = S.idle;
@@ -1819,7 +1878,7 @@ function autoSection() {
     h('div', { class: 'btnrow' }, seg([['touch', 'Touch'], ['latch', 'Latch']], S.recMode, (m) => { S.recMode = m; rec.setMode(S.armed ? m : 'off'); renderPanel(); }, 'rec-mode'),
       h('button', { type: 'button', class: 'btn primary', testid: 'rec-arm', 'aria-pressed': String(S.armed), onClick: () => { setArmed(!S.armed); } }, S.armed ? 'Armed: press Play' : 'Arm recording'))));
 
-  const clips = clipsForFigure(figKey());
+  const clips = clipsForFigure(figKey()).map((c) => (c.id === 'sit' && idleOk() ? sitClipNow() : c)); // Sit down follows the Sitting section of the Body tab
   const clip = clips.find((c) => c.id === S.clip) || clips[0];
   const D = S.clipLen ?? clip.frames;
   host.append(h('section', { class: 'group' }, h('h3', null, 'Movements'),
@@ -1968,7 +2027,7 @@ function collapsible(host) {
     else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and legs, left and right feet, onion skin, colours, names, target app); a choice you make is remembered.
-    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^eyebrows$|^mouth$|^moebius style$|^pictures$|^pivot around the figure$|^onion skin$|^colours$|^names$|^target app$|^where$|^breathing, weight and looking$|^fidgets$|^how the arms are held$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
+    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^eyebrows$|^mouth$|^moebius style$|^pictures$|^pivot around the figure$|^onion skin$|^colours$|^names$|^target app$|^sitting$|^where$|^breathing, weight and looking$|^fidgets$|^how the arms are held$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
     const body = h('div', { class: 'group-body' });
     while (hd.nextSibling) body.append(hd.nextSibling);
     sec.append(body); body.hidden = folded;
@@ -2006,6 +2065,7 @@ function renderPanel() {
     if (S.tab === 'Gait') { host.append(sceneSection()); host.append(moodSection()); host.append(padSection()); host.append(gaitChartSection()); }
     const items = CONTROLS.filter((c) => c.tab === S.tab && shownFor(c, S.p.rig) && !wordsFor(figKey()).hides(c));
     for (const g of [...new Set(items.map((c) => c.group))]) host.append(h('section', { class: 'group', 'data-area': items.find((c) => c.group === g).area }, h('h3', null, wd(g)), g === 'Proportions' && S.p.rig === 'human' ? bodyShapeRow() : null, items.filter((c) => c.group === g).map(row)));
+    if (S.tab === 'Gait' && idleOk()) { const sh = sittingSection(); sh.querySelectorAll('section').forEach((s) => { s.dataset.area = 'Idle'; }); host.append(sh); }
     if (S.tab === 'Gait' && idleOk()) { const ih = idleSection(); ih.querySelectorAll('section').forEach((s) => { s.dataset.area = 'Idle'; }); host.append(ih); } // the idle controls are movement controls: they sit under the walk and the body, on the Body tab
     if (S.tab === 'View') host.append(viewExtras(), arcSection(), refSection());
     if (S.tab === 'Export') host.append(exportSection());
@@ -2851,7 +2911,7 @@ function saveAs() {
   S.fileName = name; saveSettings();
 }
 function saveSettings() {
-  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle, images: usedImages() }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ format: 'walk-base-settings', version: 2, name: S.fileName, preset: S.preset, p: S.p, s: S.s, x: S.x, r: S.r, motion: S.motion, lanes: S.lanes, perfLen: S.perfLen, attach: S.attach, speech: S.speech, scene: S.scene, mood: MOOD, pads: BANKS, design: S.design, phys: { ...S.phys, on: false }, idle: S.idle, sit: S.sit, images: usedImages() }, null, 1)], { type: 'application/json' });
   deliver(blob, `${S.fileName}.json`).then(() => { S.savedState = snapState(); S.everSaved = true; refreshSaveState(); setMessage(`Saved ${S.fileName}.json.`); });
 }
 async function loadSettings(e) {

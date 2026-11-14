@@ -108,7 +108,7 @@ await q('phys-reset').click(); await q('phys-env-earth').click(); await page.wai
 await q('phys-reset').click(); await page.waitForTimeout(200);
 await ev(() => { const w = window.__walkBase; w.S.scene.props.push({ id: 'pbox', name: 'Box', kind: 'box', x: 0, y: 0, z: 0, w: 1.4, d: 0.6, h: 0.5, rot: 0, visible: true, locked: false, color: '#b08968', tilt: 0 }); w.S.ver++; });
 await ev(() => { const { body } = window.__walkBase.physState(); for (let i = 0; i < 12; i++) { body.y[i] += 1.2; body.oy[i] += 1.2; } });
-await page.waitForTimeout(1500);
+await ev(() => window.__walkBase.physAdvance(70)); // stepped, not timed: a loaded machine runs the frame loop slowly
 {
   const w1 = await where(); check('the figure falls onto a box and stands on top of it', Math.abs(w1.y[9] - 0.575) < 0.05 && w1.y[0] > 1.5, [w1.y[9], w1.y[0]]);
   await ev(() => { window.__walkBase.S.scene.props = []; window.__walkBase.S.ver++; });

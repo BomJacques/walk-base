@@ -739,3 +739,13 @@ Not done: sitting on a chair or object in the scene (it sits in the air at seat 
 ## Done 2026-11-14: Draw tab, head to toe and zoom
 - The lists of parts to pick from (Draw tab, Design tab) run from the head to the toes (head, neck, shoulders, chest, arms, hands, back, hips, legs, feet; an animal's jaw, ears, neck, front legs, back, hips, hind legs, then tail), the right side before the left. `HEAD_TO_TOE` and `byHeadToToe` in motion.js.
 - Zoom on the chosen part: **Zoom to this part** and **Whole figure view** buttons sit with the part list, and a switch **Zoom in on a part when I pick it** brings each part up large as it is picked (off by default, so a drawing in progress is not moved).
+
+## Done 2026-11-14: sitting down, in the Body tab
+A **Sitting** section on the Body tab (under the walk and body controls, folded until opened), for the person (`src/sitting.js`):
+- **Where**: Stool, Chair, Low seat, Floor, a seat height of your own, or the top of a box in the scene.
+- **How**: posture (Upright, Relaxed, Slouched, Leaning forward, Leaning back), feet (flat, tucked back, out in front, crossed) and hands (on thighs, on knees, in lap, arms folded, behind the head).
+- The pose is worked out from the figure's own thigh and shin lengths and standing hip height, so the hips land on the seat and the feet stay on the ground, for long-legged and short-legged figures alike (the floor sits with the legs out in front).
+- **Sit down** and **Stand up** buttons add the movement at the playhead. The Sit down movement in the Auto tab and the idle's sitting follow the same settings, which are saved with the project.
+Not done: the figure does not move to a seat (put it over the box first), no chair is drawn, cross-legged and kneeling floor sits, sitting on a sloped seat, and the animals.
+
+**Chairs (added to sitting, 2026-11-14):** the Sitting section now has **Chair** (a chair is drawn in the scene under the figure when it sits, and made to your taste), **Invisible chair** (the pose only, sitting on nothing) and **Floor**. A drawn chair is a scenery item (`kind: 'chair'`, also in Add scenery) with a style (Kitchen, Stool, Armchair, Bench, Office), seat height, back height, seat depth and width, arm rests, a cushion on or off, and frame and cushion colours; changing a setting changes the chair at once, and sitting again reuses the same chair. The figure can also sit on any box, cylinder or chair in the scene. Not done: the chair is not turned to the figure's heading, and no sofa or table.
