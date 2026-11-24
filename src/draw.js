@@ -794,6 +794,7 @@ function drawFigureShapes(ctx, pz, cam0, st, opts = {}) {
   const hose = !pz.legs && pz.params?.model === 'hose';
   const built = pz.legs ? buildDogShapes(pz, cam, st) : hose ? buildHoseShapes(pz, cam, st) : buildShapes(pz, cam, st);
   const { face } = built; let shapes = built.shapes;
+  if (opts.only) shapes = shapes.filter((sh) => !sh.attach && sh.part && partKey(sh.part, sh.side) === opts.only); // a part drawn on its own: nothing else is painted
   if (st.style === 'clay' && !ghost) shapes = shapes.map((sh) => (sh.pts.length < 4 ? sh : { ...sh, pts: clayOutline(sh.pts, `${sh.part}${sh.side}`, cam.k, 1) })); // rounded, lumpy edges that stay with the shape
   if (opts.design && !ghost) { // each part's own colour, line and skin
     shapes = shapes.map((sh) => { const dz = sh.attach ? null : opts.design[partKey(sh.part, sh.side)]; if (!dz) return sh; return { ...sh, dz, ...(dz.fill ? { fill: dz.fill } : {}), ...(dz.line ? { lineColor: dz.line } : {}), lwK: dz.lineW, hidden: dz.visible === false }; });
@@ -1069,7 +1070,7 @@ export function drawScene(ctx, params, st, w, h, frame, opts = {}) {
       const cx = pz.legs ? pz.pelvisX + (pz.pelvis[0] + pz.j3[0]) / 2 : pz.pelvisX + 0.05; const rx = pz.legs ? Math.abs(pz.j3[0] - pz.pelvis[0]) / 2 + 0.22 : 0.27; const rz = pz.legs ? 0.13 : 0.15;
       paintGroundShadow(ctx, camF.p, st, cam.k, [cx, gy, 0], rx, rz, groundStrength(lift));
     }
-    const drawMain = (c) => drawFigureShapes(c, pz, camF, st, { parts: opts.parts, attach: attachNow, mouth: mouthId, skinFrame: perf ? t0 : frame, design: params.design, wantFrames: opts.wantFrames });
+    const drawMain = (c) => drawFigureShapes(c, pz, camF, st, { parts: opts.parts, attach: attachNow, mouth: mouthId, skinFrame: perf ? t0 : frame, design: params.design, wantFrames: opts.wantFrames, only: opts.only });
     const fig = hasDrop(st) && !opts.parts ? castShadow(ctx, stageDrop(st), cam.k, drawMain) : drawMain(ctx);
     shapes = fig.shapes; placedAttach = fig.placed || []; figFrames = fig.frames || null;
     for (const it of sceneItems) if (it.d >= dMain) it.paint();

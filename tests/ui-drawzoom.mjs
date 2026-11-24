@@ -23,11 +23,11 @@ const order = () => page.locator('[data-testid="draw-main"] [data-testid^="draw-
 const rank = (keys, list) => keys.map((k) => list.findIndex((p) => k === p || k.startsWith(`${p}.`)));
 
 for (const [fig, expected] of [['human', ['head', 'neck', 'girdle', 'spine.upper', 'arm', 'forearm', 'hand', 'spine.mid', 'spine.lower', 'pelvis', 'leg', 'foot']], ['dog', ['dog.head', 'dog.jaw', 'dog.ear', 'dog.neck', 'dog.fshoulder', 'dog.spine3', 'dog.fleg', 'dog.fpaw', 'dog.spine2', 'dog.spine1', 'dog.pelvis', 'dog.hleg', 'dog.hpaw', 'dog.tail1', 'dog.tail2', 'dog.tail3']]]) {
-  await ev((f) => { const w = window.__walkBase; w.pause(); w.setFigure(f); w.S.draw.mode = 'part'; w.S.draw.target = { kind: 'fig' }; w.S.sel = null; w.setTab('Draw'); w.render(); }, fig); await wait(400);
+  await ev((f) => { const w = window.__walkBase; w.pause(); w.setFigure(f); w.S.draw.mode = 'part'; w.S.draw.solo = false; w.S.draw.target = { kind: 'fig' }; w.S.sel = null; w.setTab('Draw'); w.render(); }, fig); await wait(400);
   const keys = await order(); const r = rank(keys, expected);
   check(`${fig}: the parts are listed from the head to the toes`, keys.length >= 8 && r.every((v, i) => v >= 0 && (i === 0 || v >= r[i - 1])), keys);
 }
-await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.sel = null; w.setTab('Draw'); w.render(); }); await wait(300);
+await ev(() => { const w = window.__walkBase; w.setFigure('human'); w.S.draw.solo = false; w.S.sel = null; w.setTab('Draw'); w.render(); }); await wait(300);
 const R = await order(); check('the right side comes before the left', R.indexOf('arm.R') >= 0 && R.indexOf('arm.R') < R.indexOf('arm.L') && R.indexOf('leg.R') < R.indexOf('leg.L'), R);
 
 // zoom to the chosen part

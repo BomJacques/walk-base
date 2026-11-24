@@ -17,7 +17,7 @@ const context = await browser.newContext({ viewport: { width: 1280, height: 820 
 const page = await context.newPage();
 await page.addInitScript(() => { if (!localStorage.getItem('walkbase.layout')) localStorage.setItem('walkbase.layout', JSON.stringify({ resume: true, expandAll: true })); });
 page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-await page.goto(url); await page.waitForFunction(() => window.__walkBase);
+await page.goto(url); await page.waitForFunction(() => window.__walkBase); await page.evaluate(() => { window.__walkBase.S.draw.solo = false; }); // these tests draw on the whole posed stage; the part-on-its-own screen has its own test (ui-solo)
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => page.waitForTimeout(ms);
 const q = (id) => page.locator(`[data-testid="${id}"]:visible`).first();
@@ -78,7 +78,7 @@ check('Ctrl+D on a scene figure duplicates it', (await ev(() => window.__walkBas
 await page.keyboard.press('Delete'); await wait(200);
 check('and Delete removes the selected one only', (await ev(() => window.__walkBase.S.scene.actors.length)) === 1);
 const before = await ev(() => window.__walkBase.S.scene.actors.length); await wait(600);
-await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(250);
+await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(250); await page.evaluate(() => { window.__walkBase.S.draw.solo = false; });
 await ev(() => { const w = window.__walkBase; w.S.sceneSel = null; w.selectAttach(null); w.selectPart(null, { openTab: false }); });
 await page.keyboard.press('Control+v'); await wait(200);
 const nAfter = await ev(() => ({ n: window.__walkBase.S.scene.actors.length, clip: localStorage.getItem('walkbase.clip')?.slice(0, 40) })); check('the clipboard survives a reload, and pastes into the restored scene', nAfter.n === before + 1 && Boolean(nAfter.clip), { before, ...nAfter });
@@ -804,7 +804,7 @@ check('dragging the grip moves the bar over the stage', vb1.x > vb0.x + 200 && v
 await q('viewbar-grip').click(); await wait(200);
 const vb2 = await vbox();
 check('folding it away leaves one small button where it was, and hides the tools', vb2.width < 120 && (await page.locator('[data-testid="tool-orbit"]:visible').count()) === 0 && Math.abs(vb2.x - vb1.x) < 3);
-await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(500);
+await page.reload(); await page.waitForFunction(() => window.__walkBase); await wait(500); await page.evaluate(() => { window.__walkBase.S.draw.solo = false; });
 const vb3 = await vbox();
 check('the place and the folded state are remembered', vb3.width < 120 && Math.abs(vb3.x - vb2.x) < 3 && Math.abs(vb3.y - vb2.y) < 3, [vb2, vb3]);
 await q('viewbar-grip').click(); await wait(200);

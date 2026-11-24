@@ -61,7 +61,7 @@ let MOOD = newMood(); // the mood pad: where its dot is, what is in each corner,
 const HUMANOID = new Set(['human', 'hose', 'robot', 'alien']); // a person on the human rig: the same walk and channels, dressed differently
 const rigOfFig = (f) => (HUMANOID.has(f) ? 'human' : 'dog');
 const S = {
-  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', brush: 'round', smooth: 0.5, pressure: true, shape: 'line', shapeFill: false, prevTool: 'pen', target: { kind: 'fig' }, actorKey: null, followZoom: false, zoomedKey: null }, // the Draw tab: what the pen does
+  draw: { mode: 'part', tool: 'pen', color: '#1b1b1f', size: 6, opacity: 1, guides: true, scope: 'all', brush: 'round', smooth: 0.5, pressure: true, shape: 'line', shapeFill: false, prevTool: 'pen', target: { kind: 'fig' }, actorKey: null, followZoom: false, zoomedKey: null, solo: true, soloKey: null }, // the Draw tab: what the pen does
   design: {}, // each figure's design: { figure: { part key: its own look and skin } }
   p: clone(DEFAULTS), s: clone(STYLE_DEFAULTS), x: clone(EXPORT_DEFAULTS), r: {}, motion: {},
   preset: 'Normal', frame: 0, playing: false, rate: 1, tab: 'Gait', zoom: 1, panX: 0, panY: 0, rot: 0, stageOnly: false,
@@ -1005,6 +1005,7 @@ function render() {
 }
 function paint() {
   if (!stage) return;
+  if (S.draw.soloKey && !soloKey()) soloLeave(); // left the Draw tab, or the part, or the switch: the whole figure again
   const r = wrapEl.getBoundingClientRect();
   const d = dpr();
   const cw = Math.max(1, Math.round(r.width * d));
@@ -1020,10 +1021,11 @@ function paint() {
   const zw = fw * S.zoom; const zh = fh * S.zoom;
   const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
   if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
-  const info = drawScene(frameCanvas.getContext('2d'), P(), stageStyle(), fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
+  const solo = soloKey(); const sp = solo ? soloParams() : null;
+  const info = sp ? drawScene(frameCanvas.getContext('2d'), sp.params, sp.st, fcw, fch, 0, { selection: null, only: solo, wantFrames: true }) : drawScene(frameCanvas.getContext('2d'), P(), stageStyle(), fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
   stage.style.cursor = S.tab === 'Draw' ? 'crosshair' : physActive() ? 'grab' : '';
   if (S.tab === 'Draw' && S.draw.guides) paintDrawGuides(frameCanvas.getContext('2d'), info, fcw);
-  if (physActive()) paintPhysics(frameCanvas.getContext('2d'), info);
+  if (physActive() && !sp) paintPhysics(frameCanvas.getContext('2d'), info);
   const x0 = (cw - zw) / 2 + S.panX * d; const y0 = (ch - zh) / 2 + S.panY * d;
   ctx.imageSmoothingQuality = 'high';
   const ccx = x0 + zw / 2; const ccy = y0 + zh / 2; ctx.save(); if (S.rot) { ctx.translate(ccx, ccy); ctx.rotate(S.rot); ctx.translate(-ccx, -ccy); } // the page can be turned with two fingers
@@ -1032,6 +1034,7 @@ function paint() {
   ctx.restore();
   paintFaceInset(ctx, cw, ch);
   S.last = info; S.map = { x0, y0, zw, zh, fcw, fch, d, left: r.left, top: r.top, rot: S.rot, ccx, ccy };
+  soloBar(solo);
   if (S.tab === 'Draw') { const sig = `${inkTid()}:${inkPartKeys().length}`; if (sig !== lastInkSig) { lastInkSig = sig; renderPanel(); } } // the list of parts to draw on is known once the stage has drawn them
   updateHud(info);
 }
@@ -2198,12 +2201,26 @@ const TPOSE = { armOut: 85, armSwing: 0, elbowBase: 0, elbowSwing: 0, shoulderCo
 let pickerCv = null; let pickerInfo = null;
 const parseKey = (k) => { const m = /^(.*)\.(R|L)$/.exec(k || ''); return k ? (m ? { part: m[1], side: m[2] } : { part: k, side: null }) : null; };
 /** Draws the little figure (with what has been drawn on it) and shades the part being drawn on. */
-function paintPicker() {
-  const cv = pickerCv; if (!cv || !cv.isConnected || inkItem()) return; const actor = inkActor(); const fig = actor ? actor.fig : figKey(); const people = HUMANOID.has(fig);
-  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
+/** The figure (or the scene figure being drawn on) in the plain pose, for the little picture and for a part drawn on its own. */
+function plainFigure(actor, fig, people) {
   const base = actor ? { ...actor.p, proportions: actor.r } : { ...P() };
   const params = { ...base, motion: people ? {} : { 'dog.jaw.open': { amount: 1, offset: 0.4, phase: 0, freq: 1 } }, attach: [], scene: null, speech: null, perf: null, sampled: null, design: actor ? actor.design || null : S.design[figKey()] || null, ...(people ? TPOSE : {}) };
   const st = { ...S.s, style: 'mannequin', shadowMode: 'off', camYaw: people ? -90 : 0, camPitch: fig === 'snake' ? 72 : 0, showArcs: false, onionBefore: 0, onionAfter: 0, lineBoil: 0, lineOffset: 0, showScene: false };
+  return { params, st };
+}
+function soloParams() { const actor = inkActor(); const fig = actor ? actor.fig : figKey(); return plainFigure(actor, fig, HUMANOID.has(fig)); }
+/** The bar over the stage while a part is drawn on its own: which part, and the way back to the whole figure. */
+let soloEl = null;
+function soloBar(key) {
+  if (!soloEl) { soloEl = h('div', { class: 'solobar', testid: 'draw-solo-bar' }, h('span', { class: 'solo-name', testid: 'draw-solo-name' }), h('button', { type: 'button', class: 'btn', testid: 'draw-solo-done', onClick: () => { S.draw.solo = false; soloLeave(); renderPanel(); render(); } }, 'Back to the whole figure')); wrapEl.append(soloEl); }
+  soloEl.hidden = !key; if (key) { const p = parseKey(key); soloEl.querySelector('.solo-name').textContent = `Drawing the ${wd(partLabel(p.part, p.side))} on its own`; }
+}
+/** Leaving the part on its own: the view is the whole figure again. */
+function soloLeave() { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; S.draw.soloKey = null; S.draw.zoomedKey = null; }
+function paintPicker() {
+  const cv = pickerCv; if (!cv || !cv.isConnected || inkItem()) return; const actor = inkActor(); const fig = actor ? actor.fig : figKey(); const people = HUMANOID.has(fig);
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#ffffff'; g.fillRect(0, 0, cv.width, cv.height);
+  const { params, st } = plainFigure(actor, fig, people);
   const sel = S.draw.mode === 'part' ? (actor ? parseKey(S.draw.actorKey) : S.sel) : null;
   try { pickerInfo = drawScene(g, params, st, cv.width, cv.height, 0, { selection: sel }); } catch { pickerInfo = null; }
 }
@@ -2233,16 +2250,26 @@ function inkMap() {
   const a = inkActor(); if (a) return (a.design ||= {});
   return designOf();
 }
+/** A part drawn on its own (the breakout): the stage shows just that part, large, in a plain pose, and the pen works on it there. Its frames then come from the stage itself, even for another figure of the scene. */
+const soloKey = () => { if (S.tab !== 'Draw' || !S.draw.solo || S.draw.mode !== 'part' || inkItem()) return null; return inkSelKey(); };
+const inkScene = () => Boolean(inkActor()) && !soloKey();
 const inkSceneHit = () => { const a = inkActor(); return a ? (S.last?.sceneHits || []).find((h2) => h2.id === a.id) || null : null; };
 /** The shapes the pen can land on, as the stage last drew them. */
-const inkShapes = () => (inkItem() ? [] : inkActor() ? inkSceneHit()?.shapes || [] : S.last?.shapes || []).filter((s) => !s.attach && s.part);
-function inkPartKeys() { const seen = new Map(); for (const sh of inkShapes()) { const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); } return [...seen.values()].sort(byHeadToToe); }
+const inkShapes = () => (inkItem() ? [] : inkScene() ? inkSceneHit()?.shapes || [] : S.last?.shapes || []).filter((s) => !s.attach && s.part);
+const soloKeysCache = new Map();
+/** The parts of the whole figure, for the list, while one part is shown alone (the stage then holds only that one): found from the figure in its plain pose, once. */
+function allPartShapes() {
+  const id = `${inkTid()}|${S.p.model || ''}|${S.p.rig || ''}`; let l = soloKeysCache.get(id);
+  if (!l) { const { params, st } = soloParams(); try { const cv = document.createElement('canvas'); cv.width = cv.height = 320; l = drawScene(cv.getContext('2d'), params, st, 320, 320, 0, { wantFrames: true }).shapes.filter((s) => !s.attach && s.part).map((s) => ({ part: s.part, side: s.side, pts: [] })); } catch { l = []; } soloKeysCache.set(id, l); }
+  return l;
+}
+function inkPartKeys() { const seen = new Map(); for (const sh of soloKey() ? allPartShapes() : inkShapes()) { const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); } return [...seen.values()].sort(byHeadToToe); }
 /** The UV frame of a part (or of the attachment), as the stage last drew it. */
 /** Which piece of a part (the thigh or the shin of a leg) a point of the picture is on, as the stage last drew them. */
-function inkSegIndex(key, q) { const fs = (inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; return !q || !fs || fs.length < 2 ? 0 : segmentAt(fs.map((f) => f.pts), q.x, q.y); }
+function inkSegIndex(key, q) { const fs = (inkScene() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; return !q || !fs || fs.length < 2 ? 0 : segmentAt(fs.map((f) => f.pts), q.x, q.y); }
 function inkFrame(key, q = null, seg = null) {
   const it = inkItem(); if (it) { const pr = inkProp(); if (pr) { const sh = (S.last?.sceneHits || []).find((h2) => h2.id === pr.id)?.sheet; return sh ? sheetFrame(sh) : null; } const p = (S.last?.attach || []).find((q) => q.it.id === it.id); return p ? itemUVFrame(it, p.f, S.last.cam) : null; }
-  const fs = (inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; if (!fs?.length) return null; const i = seg ?? (q ? inkSegIndex(key, q) : 0); return (fs[Math.min(i, fs.length - 1)] || fs[0]).fr;
+  const fs = (inkScene() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; if (!fs?.length) return null; const i = seg ?? (q ? inkSegIndex(key, q) : 0); return (fs[Math.min(i, fs.length - 1)] || fs[0]).fr;
 }
 /** The key of the part under a point of the picture, or null. */
 /** The part whose outline is nearest the point: where a line that starts in empty space belongs. */
@@ -2323,7 +2350,7 @@ function inkBucket(q) {
   if (!q) return;
   const key = inkWhole() ? inkPartAt(q) : inkSelKey(); if (!key) { setMessage(inkWhole() ? 'Tap on a part of the figure to fill it.' : 'Choose a part first.'); return; }
   const seg = inkSegIndex(key, q); const fr = inkFrame(key, null, seg); if (!fr) return; const D = S.draw; // the piece of the part that was tapped
-  const polys = inkItem() ? [[[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v))] : ((inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key] || []).filter((_, i) => i === seg).map((f) => f.pts);
+  const polys = inkItem() ? [[[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v))] : ((inkScene() ? inkSceneHit()?.frames : S.last?.frames)?.[key] || []).filter((_, i) => i === seg).map((f) => f.pts);
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; for (const p of polys) for (const [x, y] of p) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   if (!(x1 > x0 && y1 > y0)) return;
   // the lines drawn so far on this frame are the walls; the picture takes in all of them, so a shape drawn outside the part's own outline can be filled too
@@ -2465,7 +2492,7 @@ function inkBlank() {
 /** Zooms and pans the stage so a part fills it, to draw on it large. */
 function zoomToPart(key) {
   const m = S.map; if (!m || !key) return; S.rot = 0; let pts = [];
-  if (inkItem()) { const fr = inkFrame('item'); if (fr) pts = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v)); } else { const fs = (inkActor() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; for (const f of fs || []) pts.push(...f.pts); }
+  if (inkItem()) { const fr = inkFrame('item'); if (fr) pts = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v)); } else { const fs = (inkScene() ? inkSceneHit()?.frames : S.last?.frames)?.[key]; for (const f of fs || []) pts.push(...f.pts); }
   if (!pts.length) return;
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity; for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   const cw = stage.width; const ch = stage.height; const bw = Math.max(8, ((x1 - x0) / m.fcw) * m.zw); const bh = Math.max(8, ((y1 - y0) / m.fch) * m.zh);
@@ -2478,7 +2505,7 @@ function inkClear(keys) {
 }
 /** The outlines of the parts, faint, over the picture, so the sections show while drawing. The part being drawn on is shaded. */
 function paintDrawGuides(g, info, fcw) {
-  const actor = inkActor(); const item = inkItem(); const selKey = !inkWhole() ? inkSelKey() : null; g.save(); g.lineJoin = 'round'; g.setLineDash([Math.max(3, fcw / 300), Math.max(3, fcw / 300)]);
+  const actor = inkScene() ? inkActor() : null; const item = inkItem(); const selKey = !inkWhole() ? inkSelKey() : null; g.save(); g.lineJoin = 'round'; g.setLineDash([Math.max(3, fcw / 300), Math.max(3, fcw / 300)]);
   const trace = (pts, on) => { g.beginPath(); pts.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); if (on) { g.fillStyle = 'rgba(0,140,255,0.10)'; g.fill(); } g.strokeStyle = on ? 'rgba(0,120,230,0.85)' : 'rgba(0,120,230,0.35)'; g.lineWidth = Math.max(1, fcw / (on ? 600 : 900)); g.stroke(); };
   if (item) { const pr = inkProp(); const fr = pr ? (() => { const sh = (info.sceneHits || []).find((h2) => h2.id === pr.id)?.sheet; return sh ? sheetFrame(sh) : null; })() : (() => { const p = (info.attach || []).find((q) => q.it.id === item.id); return p ? itemUVFrame(item, p.f, info.cam) : null; })(); if (fr) trace([[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => fromUV(fr, u, v)), true); }
   else for (const sh of (actor ? (info.sceneHits || []).find((h2) => h2.id === actor.id)?.shapes : info.shapes) || []) { if (sh.attach || !sh.part || sh.hidden || sh.pts.length < 3) continue; trace(sh.pts, selKey && partKey(sh.part, sh.side) === selKey); }
@@ -2517,8 +2544,11 @@ function drawSection() {
     !item && partMode ? h('div', { class: 'btnrow' },
       h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-sel', disabled: !sel, title: 'Zoom the stage in on the chosen part, to draw it large', onClick: () => zoomToPart(sel) }, 'Zoom to this part'),
       h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-out', title: 'The whole figure again', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; D.zoomedKey = null; render(); } }, 'Whole figure view')) : null,
+    !item && partMode ? check('Draw each part on its own (the part alone, large)', D.solo, (v) => { D.solo = v; if (!v) soloLeave(); renderPanel(); render(); }, 'draw-solo') : null,
     !item && partMode ? check('Zoom in on a part when I pick it', D.followZoom, (v) => { D.followZoom = v; D.zoomedKey = null; if (v && sel) { D.zoomedKey = sel; zoomToPart(sel); } else if (!v) { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); } }, 'draw-follow-zoom') : null));
-  if (D.followZoom && sel && !item && partMode && sel !== D.zoomedKey) { D.zoomedKey = sel; setTimeout(() => zoomToPart(sel), 30); } // each part you pick comes up large
+  if (soloKey() && soloKey() !== D.soloKey) { D.soloKey = soloKey(); D.zoomedKey = null; S.rot = 0; render(); setTimeout(() => { if (soloKey()) { paint(); zoomToPart(soloKey()); } }, 30); } // each part you pick opens on its own, filling the stage
+  else if (!soloKey() && D.soloKey) { soloLeave(); render(); }
+  if (D.followZoom && sel && !item && partMode && !soloKey() && sel !== D.zoomedKey) { D.zoomedKey = sel; setTimeout(() => zoomToPart(sel), 30); } // each part you pick comes up large
   host.append(h('section', { class: 'group', testid: 'draw-pen' }, h('h3', null, 'Pen'),
     seg('Tool', [['pen', 'Pen'], ['shape', 'Shapes'], ['bucket', 'Bucket fill'], ['fill', 'Filled shape'], ['eraser', 'Eraser'], ['move', 'Move'], ['dropper', 'Pick colour'], ['pick', 'Pick part']], D.tool, (v) => { if (v !== D.tool) D.prevTool = D.tool; D.tool = v; redraw(); }, 'draw-tool'),
     D.tool === 'shape' ? seg('Shape', [['line', 'Line'], ['oval', 'Oval'], ['box', 'Box']], D.shape, (v) => { D.shape = v; renderPanel(); }, 'draw-shape') : null,

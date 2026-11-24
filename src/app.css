@@ -484,3 +484,6 @@ select, select option, select optgroup { background-color: var(--panel-2); color
 .viewbar.min > :not(.vgrip):not(.vmin) { display: none; }
 .viewbar .vmin { min-width: var(--target, 44px); padding: 0 4px; }
 .brushprev { display: block; width: 100%; max-width: 280px; aspect-ratio: 480 / 90; margin: 4px 0; border: 1px solid var(--line); border-radius: var(--r); background: #fff; }
+.solobar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 12px; border-radius: 8px; background: rgba(20, 20, 24, .78); color: #f2f2f5; font-size: 13px; max-width: calc(100% - 16px); z-index: 3; }
+.solobar[hidden] { display: none; }
+.solobar .btn { padding: 4px 10px; }
