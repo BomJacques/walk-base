@@ -3,12 +3,11 @@
 // makes the movement that gets there (a lean forward first, then the hips going back and down). Pure logic, no DOM.
 import { poseBuild, BASE_ARMS, at } from './moves.js';
 import { targetOfParam as P, CADENCE } from './automation.js';
-import { CHAIR_STYLES } from './scene.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-/** The seats: a chair that is drawn (and can be made to your own taste), an invisible chair (the pose only, as if miming), or the floor. Heights are in leg lengths; a chair seat is a little under half a leg length up. */
-export const SEATS = { Chair: 0.38, 'Invisible chair': 0.38, Floor: 0.03 };
+/** The seats: a chair that is not drawn (the pose only, as if miming it), or the floor. Heights are in leg lengths; a chair seat is a little under half a leg length up. A box in the scene can be a seat too. */
+export const SEATS = { 'Invisible chair': 0.38, Floor: 0.03 };
 /** How the body is held: offsets of the spine and head. */
 export const POSTURES = {
   Upright: { 'spine1.pitch': 0.03, 'spine2.pitch': 0.03, 'spine3.pitch': 0.02, 'neck.pitch': 0, 'head.pitch': 0 },
@@ -28,20 +27,15 @@ export const HANDS = {
   'Hands behind head': { 'arm.pitch.R': 2.2, 'arm.pitch.L': 2.2, 'elbow.flex.R': 2.5, 'elbow.flex.L': 2.5, 'arm.roll.R': 0.6, 'arm.roll.L': 0.6 },
 };
 
-/** The chair that is drawn when the seat is Chair: its style, size, back, arms, colours, and which prop in the scene it is once it has been put there. */
-export const CHAIR_DEFAULTS = Object.freeze({ style: 'Kitchen', back: CHAIR_STYLES.Kitchen.back, arms: false, w: CHAIR_STYLES.Kitchen.w, d: CHAIR_STYLES.Kitchen.d, color: '#a98467', cushion: '#b9503f', cushionOn: true, id: null });
-export const SIT_DEFAULTS = Object.freeze({ seat: 'Chair', seatHeight: SEATS.Chair, posture: 'Upright', feet: 'Flat', hands: 'On thighs', frames: 64, chair: CHAIR_DEFAULTS });
-const LEGACY = { Stool: 0.5, 'Low seat': 0.26 }; // seats of earlier versions: invisible seats of those heights
-const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : d);
+export const SIT_DEFAULTS = Object.freeze({ seat: 'Invisible chair', seatHeight: SEATS['Invisible chair'], posture: 'Upright', feet: 'Flat', hands: 'On thighs', frames: 64 });
+const LEGACY = { Stool: 0.5, 'Low seat': 0.26, Chair: null }; // seats of earlier versions: invisible seats (of those heights; a drawn chair is gone, so it keeps its own seat height)
 
 /** Clean settings from anything: known names, numbers in range. `seat` may also be 'prop:<id>' (the top of a box in the scene) or 'Custom'. */
 export function cleanSit(raw) {
   const r = raw && typeof raw === 'object' ? raw : {}; const D = SIT_DEFAULTS;
   const n = (v, lo, hi, d) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? clamp(Number(v), lo, hi) : d);
-  const legacy = LEGACY[r.seat] != null; const seat = legacy ? 'Invisible chair' : SEATS[r.seat] != null || r.seat === 'Custom' || (typeof r.seat === 'string' && /^prop:[\w-]{1,40}$/.test(r.seat)) ? r.seat : D.seat;
-  const c = r.chair && typeof r.chair === 'object' ? r.chair : {}; const C = CHAIR_DEFAULTS; const style = CHAIR_STYLES[c.style] ? c.style : C.style;
-  const chair = { style, back: n(c.back, 0, 1.6, CHAIR_STYLES[style].back), arms: c.arms === undefined ? CHAIR_STYLES[style].arms : c.arms === true, w: n(c.w, 0.2, 1.5, CHAIR_STYLES[style].w), d: n(c.d, 0.2, 2, CHAIR_STYLES[style].d), color: hex(c.color, C.color), cushion: hex(c.cushion, C.cushion), cushionOn: c.cushionOn !== false, id: typeof c.id === 'string' && /^[\w-]{1,40}$/.test(c.id) ? c.id : null };
-  return { seat, seatHeight: n(legacy ? LEGACY[r.seat] : r.seatHeight, 0, 1.2, SEATS[seat] ?? D.seatHeight), posture: POSTURES[r.posture] ? r.posture : D.posture, feet: FEET[r.feet] ? r.feet : D.feet, hands: HANDS[r.hands] ? r.hands : D.hands, frames: Math.round(n(r.frames, 24, 200, D.frames)), chair };
+  const legacy = typeof r.seat === 'string' && r.seat in LEGACY; const seat = legacy ? 'Invisible chair' : SEATS[r.seat] != null || r.seat === 'Custom' || (typeof r.seat === 'string' && /^prop:[\w-]{1,40}$/.test(r.seat)) ? r.seat : D.seat;
+  return { seat, seatHeight: n(legacy && LEGACY[r.seat] != null ? LEGACY[r.seat] : r.seatHeight, 0, 1.2, SEATS[seat] ?? D.seatHeight), posture: POSTURES[r.posture] ? r.posture : D.posture, feet: FEET[r.feet] ? r.feet : D.feet, hands: HANDS[r.hands] ? r.hands : D.hands, frames: Math.round(n(r.frames, 24, 200, D.frames)) };
 }
 
 /** The seat height (leg lengths above the ground) for the settings; a box in the scene gives the height of its top. */

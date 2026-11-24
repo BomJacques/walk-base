@@ -33,6 +33,11 @@ const box = await ev(() => { const w = window.__walkBase; const m = w.S.map; con
 await page.mouse.move(box.x - box.w * 0.2, box.y); await page.mouse.down(); await page.mouse.move(box.x, box.y - box.w * 0.1, { steps: 6 }); await page.mouse.move(box.x + box.w * 0.2, box.y, { steps: 6 }); await page.mouse.up(); await wait(300);
 const ink = await ev(() => { const w = window.__walkBase; const d = w.S.design[w.S.figure || 'human'] || Object.values(w.S.design)[0] || {}; const all = Object.entries(Object.fromEntries(Object.values(w.S.design).flatMap((o) => Object.entries(o)))); return all.map(([k, p]) => [k, p.ink ? p.ink.strokes.length : 0]).filter(([, n]) => n); });
 check('the line drawn there is on the head, and only the head', ink.length === 1 && ink[0][0] === 'head' && ink[0][1] >= 1, ink);
+// a picture imported onto the part
+await q('draw-picture-file').setInputFiles(path.join(root, 'icons/icon-180.png')); await wait(700);
+check('Import a picture puts a skin on the head (and offers to replace or remove it)', (await ev(() => JSON.stringify(Object.values(window.__walkBase.S.design).map((d) => d.head?.skin?.img ? 1 : 0)))).includes('1') && (await q('draw-picture-remove').count()) === 1);
+await q('draw-picture-remove').click(); await wait(300);
+check('Remove the picture takes the skin off', !(await ev(() => JSON.stringify(window.__walkBase.S.design).includes('"skin":{'))));
 // another part
 await q('draw-part-neck').click().catch(() => {}); await wait(400);
 s = await st();

@@ -1,7 +1,6 @@
 // Walk Base: an adjustable 3D walk to trace over. Original figure, runs entirely on this device.
 import { DEFAULTS, cycleFrames, cycleTravel, foot, sideGait, gaitSummary, supportStats } from './rig.js';
 import { cleanSit, SEATS, POSTURES, FEET, HANDS, sitClip, seatHeightOf } from './sitting.js';
-import { CHAIR_STYLES } from './scene.js';
 import { cleanIdle, idleLayer, applyLayer, IDLE_STYLES, FIDGETS, STANCES } from './idle.js';
 import { CADENCE, targetOfParam, targetOfChannel, parseTarget, hasLanes, unmuted, paramsAt, motionAt, integrate, Recorder, laneValue, replaceSpan, thinPoints } from './automation.js';
 import { clipsFor, clipsForFigure, applyClip, CLIP_GROUPS, groupOfClip } from './clips.js';
@@ -1511,21 +1510,6 @@ function physicsSection() {
 const idleOk = () => S.p.rig === 'human' && S.source !== 'sampled';
 /** The figure's standing hip height and bone lengths, for working out a seated pose that fits it. */
 function standFor() { const pp = physParams(); const d = bodyDims(pp, {}); return { hip: neutralPose(standingParams(pp), {}, 0).pelvis[1], l1: d.l1, l2: d.l2 }; }
-/** The chair prop for the Sitting settings: made if it is not there, and brought up to date with the settings. */
-function ensureChair() {
-  const c = S.sit.chair; let q = S.scene.props.find((p) => p.id === c.id);
-  const fields = { style: c.style, back: c.back, arms: c.arms, w: c.w, d: c.d, h: S.sit.seatHeight, color: c.color, cushion: c.cushion, cushionOn: c.cushionOn };
-  if (!q) { q = newProp('chair', { x: 0, z: 0, ...fields, name: 'Chair' }); S.scene.props.push(q); c.id = q.id; } else Object.assign(q, fields);
-  return q;
-}
-/** Sets the chair under the figure as it sits: the seat under the hips, facing the way it faces. */
-function placeChair(q, start, frames) {
-  const keep = S.frame; S.frame = Math.min(MAX_FRAMES - 1, start + Math.round(frames * 0.9)); paint(); const z = S.last?.pz; S.frame = keep; // paint is at once; render waits for the next frame
-  if (z) { q.x = z.pelvisX + z.pelvis[0] + q.w / 2 - 0.12; q.z = z.pelvis[2]; q.y = 0; q.rot = 0; q.tilt = 0; }
-  S.ver++; render(); save();
-}
-/** After a change to the chair settings, the chair in the scene follows. */
-function syncChair() { if (S.sit.seat === 'Chair' && S.scene.props.some((p) => p.id === S.sit.chair.id)) { ensureChair(); S.ver++; render(); } save(); }
 const boxTop = (id) => { const q = (S.scene?.props || []).find((x) => x.id === id); return q ? (q.y || 0) + q.h : null; };
 const sitClipNow = () => sitClip(S.sit, standFor(), seatHeightOf(S.sit, boxTop));
 const idleClip = (id) => (id === 'sit' && idleOk() ? sitClipNow() : clipsForFigure(figKey()).find((c) => c.id === id) || null);
@@ -1567,40 +1551,24 @@ function clearIdle() {
   clearIdleLanes(); S.ver++; buildStrip(); renderPanel(); render(); save(); setMessage('The idle is taken off. The timeline is as it was before it was built.');
 }
 /** The Sitting section of the Body tab: where to sit and how, then Sit down and Stand up at the playhead. */
-/** The chair's own settings: its style, its back and arms, its size and its colours. Changing one changes the chair in the scene at once. */
-function chairControls() {
-  const st = S.sit; const c = st.chair; const host = h('div', { class: 'chairset' });
-  const num = (label, key, lo, hi, step, tid, help) => { const val = h('span', { class: 'mini-v' }, String(+c[key].toFixed(2))); return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: c[key], testid: tid, 'aria-label': label, onInput: (e) => { c[key] = Number(e.target.value); val.textContent = String(+c[key].toFixed(2)); syncChair(); } }), val); };
-  const colour = (label, key, tid) => h('label', { class: 'mini', title: label }, h('span', { class: 'mini-l' }, label), h('input', { type: 'color', value: c[key], testid: tid, 'aria-label': label, onInput: (e) => { c[key] = e.target.value; syncChair(); } }), h('span', { class: 'mini-v' }, ''));
-  const check = (label, key, tid) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: c[key], testid: tid, onChange: (e) => { c[key] = e.target.checked; syncChair(); renderPanel(); } }), h('span', null, label));
-  host.append(h('div', { class: 'chips', role: 'group', 'aria-label': 'Chair style' }, Object.keys(CHAIR_STYLES).map((n) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(c.style === n), testid: `sit-chair-style-${n.toLowerCase()}`, onClick: () => { const d = CHAIR_STYLES[n]; Object.assign(c, { style: n, back: d.back, arms: d.arms, w: d.w, d: d.d }); st.seatHeight = d.h; syncChair(); renderPanel(); } }, n))),
-    num('Back height', 'back', 0, 1.2, 0.01, 'sit-chair-back', 'How tall the back is above the seat. 0 is no back.'),
-    num('Seat depth', 'w', 0.2, 1.2, 0.01, 'sit-chair-depth', 'The seat from front to back.'),
-    num('Seat width', 'd', 0.2, 1.8, 0.01, 'sit-chair-width', 'The seat from side to side (a bench is wide).'),
-    check('Arm rests', 'arms', 'sit-chair-arms'), check('Seat cushion', 'cushionOn', 'sit-chair-cushion-on'),
-    colour('Frame colour', 'color', 'sit-chair-color'), colour('Cushion colour', 'cushion', 'sit-chair-cushion'),
-    h('p', { class: 'hint' }, 'The chair is put in the scene under the figure when it sits down, and is a scenery item like any other: it can be moved, resized and recoloured in the Scene section too. Choose Invisible chair to sit with none drawn.'));
-  return host;
-}
 function sittingSection() {
-  const host = h('div', { class: 'sitting' }); const st = S.sit; const boxes = (S.scene?.props || []).filter((q) => (q.kind === 'box' || q.kind === 'cylinder' || q.kind === 'chair') && q.id !== st.chair.id);
+  const host = h('div', { class: 'sitting' }); const st = S.sit; const boxes = (S.scene?.props || []).filter((q) => q.kind === 'box' || q.kind === 'cylinder');
   const redo = () => { save(); renderPanel(); };
   const chip = (label, on, fn, tid) => h('button', { type: 'button', class: 'pchip', 'aria-pressed': String(on), testid: tid, onClick: fn }, label);
-  const slider = (label, key, lo, hi, step, tid, help, fmt = (v) => String(+v.toFixed(2))) => { const val = h('span', { class: 'mini-v' }, fmt(st[key])); return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: st[key], testid: tid, 'aria-label': label, onInput: (e) => { st[key] = Number(e.target.value); if (key === 'seatHeight' && st.seat.startsWith('prop:')) st.seat = 'Custom'; val.textContent = fmt(st[key]); if (key === 'seatHeight') syncChair(); else save(); } }), val); };
+  const slider = (label, key, lo, hi, step, tid, help, fmt = (v) => String(+v.toFixed(2))) => { const val = h('span', { class: 'mini-v' }, fmt(st[key])); return h('label', { class: 'mini', title: help }, h('span', { class: 'mini-l' }, label), h('input', { type: 'range', class: 'rng', min: lo, max: hi, step, value: st[key], testid: tid, 'aria-label': label, onInput: (e) => { st[key] = Number(e.target.value); if (key === 'seatHeight' && st.seat.startsWith('prop:')) st.seat = 'Custom'; val.textContent = fmt(st[key]); save(); } }), val); };
   const shown = seatHeightOf(st, boxTop);
   host.append(h('section', { class: 'group' }, h('h3', null, 'Sitting'),
     h('p', { class: 'hint' }, 'Choose where to sit and how, then Sit down: the figure leans forward and settles onto the seat, its legs and hips worked out from its own proportions. Stand up to rise. The Sit down movement in the Auto tab and the idle (sitting) use these settings.'),
     h('div', { class: 'chips', role: 'group', 'aria-label': 'Where to sit' }, [...Object.keys(SEATS).map((n) => chip(n, st.seat === n, () => { st.seat = n; if (n === 'Floor') st.seatHeight = SEATS.Floor; else if (st.seatHeight < 0.1) st.seatHeight = SEATS[n]; redo(); }, `sit-seat-${n.toLowerCase().replace(/\s+/g, '-')}`)), ...boxes.map((q) => chip(`On ${q.name || q.kind}`, st.seat === `prop:${q.id}`, () => { st.seat = `prop:${q.id}`; redo(); }, `sit-seat-prop-${q.id}`))]),
-    slider('Seat height', 'seatHeight', 0, 1.2, 0.01, 'sit-height', 'How high the seat is, in leg lengths (a chair seat is a little under half a leg length). The chair follows it.'),
-    st.seat === 'Chair' ? chairControls() : null,
-    st.seat === 'Invisible chair' ? h('p', { class: 'hint' }, 'No chair is drawn: the figure sits on nothing at the seat height above, as if miming it. Add a box or a chair in the scene to sit on a real one.') : null,
+    slider('Seat height', 'seatHeight', 0, 1.2, 0.01, 'sit-height', 'How high the seat is, in leg lengths (a chair seat is a little under half a leg length).'),
+    st.seat === 'Invisible chair' ? h('p', { class: 'hint' }, 'No chair is drawn: the figure sits on nothing at the seat height above, as if miming it. Add a box in the scene to sit on a real one.') : null,
     st.seat.startsWith('prop:') ? h('p', { class: 'hint' }, `The seat is the top of the box in the scene (${shown.toFixed(2)} leg lengths up). Put the figure over it first.`) : null,
     h('div', { class: 'chips', role: 'group', 'aria-label': 'Posture' }, Object.keys(POSTURES).map((n) => chip(n, st.posture === n, () => { st.posture = n; redo(); }, `sit-posture-${n.toLowerCase().replace(/\s+/g, '-')}`))),
     h('div', { class: 'chips', role: 'group', 'aria-label': 'Feet' }, Object.keys(FEET).map((n) => chip(n === 'Flat' ? 'Feet flat' : n, st.feet === n, () => { st.feet = n; redo(); }, `sit-feet-${n.toLowerCase().replace(/\s+/g, '-')}`))),
     h('div', { class: 'chips', role: 'group', 'aria-label': 'Hands' }, Object.keys(HANDS).map((n) => chip(n, st.hands === n, () => { st.hands = n; redo(); }, `sit-hands-${n.toLowerCase().replace(/\s+/g, '-')}`))),
     slider('How long it takes', 'frames', 24, 200, 1, 'sit-frames', 'Frames to sit down.', (v) => `${Math.round(v)} frames`),
     h('div', { class: 'btnrow' },
-      h('button', { type: 'button', class: 'btn primary', testid: 'sit-down', title: 'Add the sit at the playhead', onClick: () => { const c = sitClipNow(); const start = S.frame; const q = st.seat === 'Chair' ? ensureChair() : null; addClip(c, start, c.frames, 1); if (q) placeChair(q, start, c.frames); } }, 'Sit down'),
+      h('button', { type: 'button', class: 'btn primary', testid: 'sit-down', title: 'Add the sit at the playhead', onClick: () => { const c = sitClipNow(); addClip(c, S.frame, c.frames, 1); } }, 'Sit down'),
       h('button', { type: 'button', class: 'btn', testid: 'sit-standup', title: 'Add a stand up at the playhead', onClick: () => { const c = clipsForFigure(figKey()).find((x) => x.id === 'standup'); if (c) addClip(c, S.frame, c.frames, 1); } }, 'Stand up'))));
   return host;
 }
@@ -2549,6 +2517,13 @@ function drawSection() {
   if (soloKey() && soloKey() !== D.soloKey) { D.soloKey = soloKey(); D.zoomedKey = null; S.rot = 0; render(); setTimeout(() => { if (soloKey()) { paint(); zoomToPart(soloKey()); } }, 30); } // each part you pick opens on its own, filling the stage
   else if (!soloKey() && D.soloKey) { soloLeave(); render(); }
   if (D.followZoom && sel && !item && partMode && !soloKey() && sel !== D.zoomedKey) { D.zoomedKey = sel; setTimeout(() => zoomToPart(sel), 30); } // each part you pick comes up large
+  if (!item && !actor && partMode) { // a picture onto the chosen part: its skin (also in the Design tab, where it can be slid, scaled and turned)
+    const skin = sel ? designOf()[sel]?.skin : null; const picIn = h('input', { type: 'file', accept: PICTURE_VIDEO_ACCEPT, class: 'sr', tabindex: '-1', 'aria-label': 'Choose a picture for this part', testid: 'draw-picture-file', onChange: (e) => { pickSkinPicture(e.target.files?.[0]).then(() => { renderPanel(); render(); }); e.target.value = ''; } });
+    host.append(h('section', { class: 'group', testid: 'draw-picture' }, h('h3', null, 'Picture on this part'), picIn,
+      h('p', { class: 'hint' }, 'Import a picture (or a video, as a sprite sheet) onto the chosen part. It is laid over the part and moves with it, and you can draw on top. Slide, scale and turn it in the Design tab (Skin).'),
+      h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', testid: 'draw-picture-add', disabled: !sel, onClick: () => picIn.click() }, skin ? 'Replace the picture…' : 'Import a picture…'),
+        skin ? h('button', { type: 'button', class: 'btn', testid: 'draw-picture-remove', onClick: () => { patchPart(sel, { skin: null }, { panel: true }); render(); } }, 'Remove the picture') : null)));
+  }
   host.append(h('section', { class: 'group', testid: 'draw-pen' }, h('h3', null, 'Pen'),
     seg('Tool', [['pen', 'Pen'], ['shape', 'Shapes'], ['bucket', 'Bucket fill'], ['fill', 'Filled shape'], ['eraser', 'Eraser'], ['move', 'Move'], ['dropper', 'Pick colour'], ['pick', 'Pick part']], D.tool, (v) => { if (v !== D.tool) D.prevTool = D.tool; D.tool = v; redraw(); }, 'draw-tool'),
     D.tool === 'shape' ? seg('Shape', [['line', 'Line'], ['oval', 'Oval'], ['box', 'Box']], D.shape, (v) => { D.shape = v; renderPanel(); }, 'draw-shape') : null,

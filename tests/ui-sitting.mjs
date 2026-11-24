@@ -26,7 +26,7 @@ const B = 48;
 const sitFrames = () => ev(() => window.__walkBase.S.sit.frames);
 
 await fresh();
-check('the Body tab has a Sitting section with seats, postures, feet, hands and Sit down / Stand up', (await q('sit-seat-chair').count()) === 1 && (await q('sit-seat-invisible-chair').count()) === 1 && (await q('sit-seat-floor').count()) === 1 && (await q('sit-posture-slouched').count()) === 1 && (await q('sit-feet-tucked-back').count()) === 1 && (await q('sit-hands-in-lap').count()) === 1 && (await q('sit-down').count()) === 1 && (await q('sit-standup').count()) === 1);
+check('the Body tab has a Sitting section with seats, postures, feet, hands and Sit down / Stand up', (await q('sit-seat-invisible-chair').count()) === 1 && (await q('sit-seat-floor').count()) === 1 && (await q('sit-posture-slouched').count()) === 1 && (await q('sit-feet-tucked-back').count()) === 1 && (await q('sit-hands-in-lap').count()) === 1 && (await q('sit-down').count()) === 1 && (await q('sit-standup').count()) === 1);
 const stand = await at(B - 1);
 const results = {};
 const heightOf = { chair: 0.38, stool: 0.5, 'low-seat': 0.26, floor: null };
@@ -55,35 +55,12 @@ await ev(() => window.__walkBase.setTab('Gait')); await wait(300);
 check('a box in the scene is offered as a seat', prop && (await q(`sit-seat-prop-${prop.id}`).count()) === 1, prop);
 if (prop) { await q(`sit-seat-prop-${prop.id}`).click(); await wait(200); await q('sit-down').click(); await wait(300); const zb = await at(B + (await sitFrames()) + 10); check('sitting on it puts the hips at the top of the box', Math.abs(zb.hip - (prop.top + 0.07)) < 0.05, [zb.hip, prop.top]); }
 
-// a drawn chair: Chair puts one in the scene under the figure, and it can be made to taste; Invisible chair draws none
-await fresh(); await q('sit-seat-chair').click(); await wait(200);
-check('Chair shows the chair settings: styles, back, depth, width, arms, cushion and colours', (await q('sit-chair-style-armchair').count()) === 1 && (await q('sit-chair-back').count()) === 1 && (await q('sit-chair-arms').count()) === 1 && (await q('sit-chair-color').count()) === 1 && (await q('sit-chair-cushion').count()) === 1);
-const props0 = await ev(() => window.__walkBase.S.scene.props.filter((p) => p.kind === 'chair').length);
-await q('sit-down').click(); await wait(400);
-const ch = await ev(() => { const w = window.__walkBase; const q = w.S.scene.props.find((p) => p.kind === 'chair'); return q ? { id: q.id, x: q.x, z: q.z, h: q.h, n: w.S.scene.props.filter((p) => p.kind === 'chair').length, sit: w.S.sit.chair.id } : null; });
-check('Sit down puts one chair in the scene, and remembers it', props0 === 0 && ch && ch.n === 1 && ch.sit === ch.id, [props0, ch]);
-const zc = await at(B + (await sitFrames()) + 10);
-const under = await ev(() => { const w = window.__walkBase; const z = w.S.last.pz; const q = w.S.scene.props.find((p) => p.kind === 'chair'); return { dx: (z.pelvisX + z.pelvis[0]) - q.x, dz: z.pelvis[2] - q.z, seat: q.h }; });
-check('the chair is under the hips: the seat is at the hips, and the hips are over the seat', Math.abs(under.dz) < 0.05 && Math.abs(under.dx) < 0.3 && Math.abs(zc.hip - (under.seat + 0.07)) < 0.03, [under, zc.hip]);
-if (shots) { await page.screenshot({ path: path.join(shots, "wb-sit-drawn-chair-" + name + ".png"), clip: { x: 150, y: 150, width: 520, height: 400 } }); }
-// customise: an armchair, taller back, a different colour; the chair in the scene follows, and the seat height moves the hips
-await q('sit-chair-style-armchair').click(); await wait(250);
-await ev(() => { const w = window.__walkBase; const c = w.S.sit.chair; c.back = 0.8; c.color = '#223344'; c.cushion = '#cc3366'; });
-await page.locator('[data-testid=sit-height]').evaluate((el) => { el.value = '0.46'; el.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(300);
-const cu = await ev(() => { const q = window.__walkBase.S.scene.props.find((p) => p.kind === 'chair'); return { style: q.style, arms: q.arms, h: q.h, n: window.__walkBase.S.scene.props.filter((p) => p.kind === 'chair').length }; });
-check('choosing a style changes the chair in the scene at once (an armchair has arms), and the seat height moves it', cu.style === 'Armchair' && cu.arms === true && Math.abs(cu.h - 0.46) < 1e-6 && cu.n === 1, cu);
-await q('sit-chair-arms').uncheck(); await wait(200);
-check('Arm rests can be switched off', await ev(() => window.__walkBase.S.scene.props.find((p) => p.kind === 'chair').arms === false));
-await q('sit-down').click(); await wait(400);
-const cu2 = await ev(() => { const w = window.__walkBase; const q = w.S.scene.props.find((p) => p.kind === 'chair'); return { n: w.S.scene.props.filter((p) => p.kind === 'chair').length, color: q.color, back: q.back }; });
-check('sitting again reuses the same chair with the new look, and does not add another', cu2.n === 1 && cu2.color === '#a98467' || (cu2.n === 1), cu2);
-// an invisible chair draws none
-await ev(() => { const w = window.__walkBase; w.S.scene.props = []; w.S.sit.chair.id = null; w.S.lanes = {}; w.S.perfLen = 0; w.S.frame = 0; w.S.ver++; }); await fresh(); await q('sit-seat-invisible-chair').click(); await wait(200);
-check('Invisible chair offers no chair settings', (await q('sit-chair-style-kitchen').count()) === 0);
-await q('sit-down').click(); await wait(400);
-check('and draws no chair: it sits on nothing', (await ev(() => window.__walkBase.S.scene.props.filter((p) => p.kind === 'chair').length)) === 0);
+// there is no drawn chair: the seats are the invisible chair, the floor and boxes in the scene
+await fresh();
+check('the Sitting section offers no drawn chair, and nothing is added to the scene by sitting', (await q('sit-seat-chair').count()) === 0 && (await q('sit-chair-style-kitchen').count()) === 0);
+const nProps = await ev(() => window.__walkBase.S.scene.props.length); await q('sit-seat-invisible-chair').click(); await q('sit-down').click(); await wait(400);
+check('Sit down adds no scenery', (await ev(() => window.__walkBase.S.scene.props.length)) === nProps);
 const zv = await at(B + (await sitFrames()) + 10); check('the hips still come down to the seat height', zv.hip < stand.hip - 0.3 && zv.reached, zv);
-const saved = await ev(() => JSON.parse(window.__walkBase.snapState()).sit.chair); check('the chair settings are saved with the project', saved && saved.style && saved.color, saved);
 
 // the Auto tab's Sit down and the idle follow the settings; they are saved
 await fresh(); await q('sit-seat-invisible-chair').click(); await ev(() => { window.__walkBase.setTab('Auto'); }); await wait(300);

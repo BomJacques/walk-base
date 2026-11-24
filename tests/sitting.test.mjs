@@ -27,7 +27,7 @@ test('the hips land on the seat, for every seat and for a long-legged or short-l
 });
 
 test('on a chair the thighs run about level and the shins about upright', () => {
-  const z = seatedPose({ seat: 'Chair' }); const s = z.sides.R; const thigh = Math.atan2(s.knee[1] - s.hip[1], s.knee[0] - s.hip[0]); const shin = Math.atan2(s.knee[1] - s.ankle[1], s.knee[0] - s.ankle[0]);
+  const z = seatedPose({ seat: 'Invisible chair' }); const s = z.sides.R; const thigh = Math.atan2(s.knee[1] - s.hip[1], s.knee[0] - s.hip[0]); const shin = Math.atan2(s.knee[1] - s.ankle[1], s.knee[0] - s.ankle[0]);
   assert.ok(Math.abs(thigh) < 0.5, `thigh ${thigh}`); assert.ok(Math.abs(shin - Math.PI / 2) < 0.7, `shin ${shin}`);
 });
 
@@ -45,10 +45,8 @@ test('the sit movement ends in the pose, finite all the way, and stays', () => {
   assert.ok(y.at(-1).t < 50 || true); assert.ok(lanes['c:arm.pitch.R:amount'], 'the walk\'s arm swing is put aside');
 });
 
-test('the chair settings are cleaned, and each style starts with its own back, arms and size', async () => {
-  const { CHAIR_STYLES } = await import('../src/scene.js');
-  const c = cleanSit({ chair: { style: 'Throne', back: 99, w: -1, color: 'red', id: '../x' } }).chair;
-  assert.equal(c.style, 'Kitchen'); assert.equal(c.back, 1.6); assert.equal(c.w, 0.2); assert.equal(c.color, '#a98467'); assert.equal(c.id, null);
-  const a = cleanSit({ chair: { style: 'Armchair' } }).chair; assert.equal(a.arms, true); assert.equal(a.back, CHAIR_STYLES.Armchair.back); assert.equal(a.d, CHAIR_STYLES.Armchair.d);
-  assert.equal(cleanSit({ chair: { style: 'Armchair', arms: false } }).chair.arms, false);
+test('a project saved with the drawn chair seat loads as the invisible chair at its seat height, with no chair settings', () => {
+  const c = cleanSit({ seat: 'Chair', seatHeight: 0.45, chair: { style: 'Armchair' } });
+  assert.equal(c.seat, 'Invisible chair'); assert.equal(c.seatHeight, 0.45); assert.equal('chair' in c, false);
+  assert.equal(cleanSit({}).seat, 'Invisible chair');
 });
