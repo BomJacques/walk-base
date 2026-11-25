@@ -266,6 +266,8 @@ PNG frames in a ZIP, as one file per timeline frame or one per drawing plus a ti
 
 **Sitting.** The Sitting section of the Body tab sits the person on an invisible chair (the pose only, no chair drawn), on the floor, or on any box in the scene, with a posture, feet and hands of your choice. Sit down while walking stops the walk first.
 
+**Find a control.** The box above each tab's controls filters them as you type (sections that match open themselves); Esc clears it. Reset buttons are faint until a control has been changed.
+
 **Pictures on parts.** In the Draw tab, **Picture on this part** imports a picture (or a video, as a sprite sheet) onto the chosen part as its skin; the Design tab has the same, with slide, scale and turn. A part can also be drawn on its own, large, on a screen of its own.
 
 **Idle.** The Idle section of the Body tab (for the person) lays breathing, weight shifting, looking around, fidgets (scratch, shrug, yawn, stretch, think, nod, foot tap and more) and a way of holding the arms over the timeline from the playhead, standing or sitting, in a style (Relaxed, Alert, Bored, Nervous, Tired, Confident). It is added over whatever is already there, so it follows a stop, a sit and a stand up; Shuffle gives another run, and Clear idle takes it off.

@@ -5,7 +5,6 @@ import { DEFAULTS, BODY } from './rig.js';
 import { pose3, TORSO } from './rig3.js';
 import { PT, ELBOW, HAND, KNEE, ANKLE, createBody, anglesOf, anglesNow, bodyFromAngles } from './body.js';
 
-const len2 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const len3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const SIDES = ['R', 'L'];
 

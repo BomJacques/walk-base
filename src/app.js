@@ -997,6 +997,14 @@ function refSection() {
 let stage; let frameCanvas; let hud; let wrapEl; let editor = null; let laneEd = null;
 const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 let pending = false;
+/** True while two fingers are moving the page: paint then only moves and scales the picture it already has. */
+let gestLive = false;
+/** How far the page may be moved from the middle (css px): enough that a fifth of the stage always still shows the page, so it cannot be lost off the screen. */
+function panLimit(zoom) {
+  const r = wrapEl.getBoundingClientRect(); const aspect = S.x.width / S.x.height; let fw = r.width * 0.96; let fh = fw / aspect; if (fh > r.height * 0.96) { fh = r.height * 0.96; fw = fh * aspect; }
+  return { x: Math.max(0, (r.width + fw * zoom) / 2 - r.width * 0.2), y: Math.max(0, (r.height + fh * zoom) / 2 - r.height * 0.2) };
+}
+function clampPan(T) { if (!wrapEl) return T; const L = panLimit(T.zoom ?? S.zoom); T.panX = Math.max(-L.x, Math.min(L.x, T.panX)); T.panY = Math.max(-L.y, Math.min(L.y, T.panY)); return T; }
 function render() {
   if (pending) return;
   pending = true;
@@ -1017,14 +1025,16 @@ function paint() {
   const aspect = S.x.width / S.x.height;
   let fw = cw * 0.96; let fh = fw / aspect;
   if (fh > ch * 0.96) { fh = ch * 0.96; fw = fh * aspect; }
+  clampPan(S); // the page cannot be moved right off the stage
   const zw = fw * S.zoom; const zh = fh * S.zoom;
-  const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
-  if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
-  const solo = soloKey(); const sp = solo ? soloParams() : null;
-  const info = sp ? drawScene(frameCanvas.getContext('2d'), sp.params, sp.st, fcw, fch, S.frame, { selection: null, only: solo, wantFrames: true }) : drawScene(frameCanvas.getContext('2d'), P(), stageStyle(), fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
+  const reuse = gestLive && !S.playing && S.last && frameCanvas.width > 1 && S.map; // two fingers moving the page: the picture it already has is moved and scaled, not drawn again
+  const fcw = reuse ? frameCanvas.width : Math.min(3200, Math.max(200, Math.round(zw))); const fch = reuse ? frameCanvas.height : Math.round(fcw / aspect);
+  if (!reuse && (frameCanvas.width !== fcw || frameCanvas.height !== fch)) { frameCanvas.width = fcw; frameCanvas.height = fch; }
+  const solo = soloKey(); const sp = !reuse && solo ? soloParams() : null;
+  const info = reuse ? S.last : sp ? drawScene(frameCanvas.getContext('2d'), sp.params, sp.st, fcw, fch, S.frame, { selection: null, only: solo, wantFrames: true }) : drawScene(frameCanvas.getContext('2d'), P(), stageStyle(), fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
   stage.style.cursor = S.tab === 'Draw' ? 'crosshair' : physActive() ? 'grab' : '';
-  if (S.tab === 'Draw' && S.draw.guides) paintDrawGuides(frameCanvas.getContext('2d'), info, fcw);
-  if (physActive() && !sp) paintPhysics(frameCanvas.getContext('2d'), info);
+  if (!reuse && S.tab === 'Draw' && S.draw.guides) paintDrawGuides(frameCanvas.getContext('2d'), info, fcw);
+  if (!reuse && physActive() && !sp) paintPhysics(frameCanvas.getContext('2d'), info);
   const x0 = (cw - zw) / 2 + S.panX * d; const y0 = (ch - zh) / 2 + S.panY * d;
   ctx.imageSmoothingQuality = 'high';
   const ccx = x0 + zw / 2; const ccy = y0 + zh / 2; ctx.save(); if (S.rot) { ctx.translate(ccx, ccy); ctx.rotate(S.rot); ctx.translate(-ccx, -ccy); } // the page can be turned with two fingers
@@ -1034,6 +1044,7 @@ function paint() {
   paintFaceInset(ctx, cw, ch);
   S.last = info; S.map = { x0, y0, zw, zh, fcw, fch, d, left: r.left, top: r.top, rot: S.rot, ccx, ccy };
   soloBar(solo);
+  if (reuse) { updateHud(info); return; }
   if (S.tab === 'Draw') { const sig = `${inkTid()}:${inkPartKeys().length}`; if (sig !== lastInkSig) { lastInkSig = sig; renderPanel(); } } // the list of parts to draw on is known once the stage has drawn them
   updateHud(info);
 }
@@ -1654,7 +1665,7 @@ function scrubLabel(b) {
 }
 function row(c) {
   const val = S[c.scope][c.id] ?? DEFAULT_OF(c);
-  const reset = h('button', { type: 'button', class: 'btn tiny', 'aria-label': `Reset ${c.label}`, title: 'Reset', testid: `reset-${c.id}`, onClick: () => { if (c.scope === 'r') delete S.r[c.id]; else setParam(c, DEFAULT_OF(c)); renderPanel(); render(); save(); } }, icon('reset'), h('span', { class: 'sr' }, 'Reset'));
+  const reset = h('button', { type: 'button', class: `btn tiny${String(val) === String(DEFAULT_OF(c)) ? ' is-default' : ''}`, 'aria-label': `Reset ${c.label}`, title: 'Reset', testid: `reset-${c.id}`, onClick: () => { if (c.scope === 'r') delete S.r[c.id]; else setParam(c, DEFAULT_OF(c)); renderPanel(); render(); save(); } }, icon('reset'), h('span', { class: 'sr' }, 'Reset'));
   const label = labBtn(wd(c.label), c.unit);
   let control;
   if (c.type === 'number') {
@@ -1676,7 +1687,14 @@ function row(c) {
   } else {
     control = h('input', { type: 'color', class: 'color', value: val, 'aria-label': c.label, testid: `clr-${c.id}`, onInput: (e) => setParam(c, e.target.value) });
   }
-  return h('div', { class: `row row-${c.type}` }, label, control, reset, h('p', { class: 'help' }, wd(c.help)));
+  return h('div', { class: `row row-${c.type}`, 'data-def': String(DEFAULT_OF(c)) }, label, control, reset, h('p', { class: 'help' }, wd(c.help)));
+}
+/** A row's Reset button is faint while the control is at its starting value; it follows the control as it is moved. */
+function syncResetDim(e) {
+  const rw = e.target?.closest?.('.row[data-def]'); const btn = rw?.querySelector(':scope > .btn.tiny'); if (!btn) return;
+  const el = rw.querySelector('input.rng, input.num, input[type=checkbox], input.color'); if (!el) return;
+  const cur = el.type === 'checkbox' ? String(el.checked) : el.value; const def = rw.dataset.def;
+  btn.classList.toggle('is-default', (Number.isFinite(Number(cur)) && Number.isFinite(Number(def)) && cur !== '' ? Number(cur) === Number(def) : cur === def));
 }
 
 const fmtUnit = (c, v) => `${c.to(v).toFixed(c.unit === '°' ? 1 : 3)}${c.unit === '°' ? '°' : ''}`;
@@ -1836,11 +1854,10 @@ function autoSection() {
   const numField = (label, value, min, max, on, tid) => h('label', { class: 'field' }, h('span', null, label), h('input', { type: 'number', class: 'num', inputmode: 'numeric', min, max, value, testid: tid, onChange: (e) => on(Number(e.target.value)) }));
 
   host.append(perfNamesSection());
-  host.append(h('section', { class: 'group' }, h('h3', null, 'Length'),
-    h('p', { class: 'hint' }, `The performance is ${T} frames (${(T / S.p.fps).toFixed(1)} s). One walk cycle is ${n} frames. Make it longer to give movements room.`),
+  host.append(h('section', { class: 'group' }, h('h3', null, 'Performance length'),
+    h('p', { class: 'hint' }, `The performance is ${T} frames (${(T / S.p.fps).toFixed(1)} s). One walk cycle is ${n} frames. Make it longer to give movements room (the Length button beside Loop sets it in cycles or seconds).`),
     h('div', { class: 'btnrow' },
-      numField('Frames', S.perfLen > 0 ? S.perfLen : n, n, MAX_FRAMES, (v) => { S.perfLen = Math.min(MAX_FRAMES, Math.max(n, Math.round(v) || n)); if (S.perfLen === n && !hasLanes(S.lanes)) S.perfLen = 0; S.ver++; buildStrip(); renderPanel(); render(); save(); }, 'perf-len'),
-      menuButton({ label: 'Set length', testid: 'perf-menu', items: lengthItems }))));
+      numField('Frames', S.perfLen > 0 ? S.perfLen : n, n, MAX_FRAMES, (v) => { S.perfLen = Math.min(MAX_FRAMES, Math.max(n, Math.round(v) || n)); if (S.perfLen === n && !hasLanes(S.lanes)) S.perfLen = 0; S.ver++; buildStrip(); renderPanel(); render(); save(); }, 'perf-len'))));
 
   host.append(h('section', { class: 'group' }, h('h3', null, 'Record by hand'),
     h('p', { class: 'hint' }, 'Press Rec, then Play, and move any gait slider or a part\'s Amount or Offset while it plays. Your moves are written as automation, like recording a synth knob. Touch: it records while you hold and glides back when you let go. Latch: it records from your first touch and holds the last value until you stop.'),
@@ -1998,7 +2015,7 @@ function collapsible(host) {
     else sec.dataset.hue = String(hueIx++ % 6);
     const title = hd.textContent; const key = `${S.tab}:${title}`;
     // The rarely used groups start folded (proportions, hips and legs, left and right feet, onion skin, colours, names, target app); a choice you make is remembered.
-    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^direction$|^feet$|^eyebrows$|^mouth$|^moebius style$|^pictures$|^pivot around the figure$|^onion skin$|^colours$|^names$|^target app$|^sitting$|^where$|^breathing, weight and looking$|^fidgets$|^how the arms are held$/i.test(title) || ['Auto:Saved performances', 'Auto:Length', 'Auto:Record by hand'].includes(key)));
+    const folded = LAYOUT.collapsed?.[key] ?? (!LAYOUT.expandAll && (/proportions$|^hips and legs$|^variety$|^ground$|^terrain$|^pads$|^direction$|^feet$|^eyebrows$|^mouth$|^moebius style$|^pictures$|^pivot around the figure$|^onion skin$|^colours$|^names$|^target app$|^sitting$|^where$|^breathing, weight and looking$|^fidgets$|^how the arms are held$/i.test(title) || ['Auto:Saved performances', 'Auto:Performance length', 'Auto:Record by hand'].includes(key)));
     const body = h('div', { class: 'group-body' });
     while (hd.nextSibling) body.append(hd.nextSibling);
     sec.append(body); body.hidden = folded;
@@ -2018,8 +2035,24 @@ function bodyShapeRow() {
   return h('div', { class: 'chips', role: 'group', 'aria-label': 'Body shape' }, ['Normal', ...Object.keys(BODY_SHAPES)].map((n) => h('button', { type: 'button', class: 'pchip', testid: `shape-${n.toLowerCase().replace(/\s+/g, '-')}`, title: n === 'Normal' ? 'The figure\'s own proportions' : `Set the proportions for a ${n.toLowerCase()} figure`, onClick: () => apply(n) }, n)));
 }
 let lastTab = null;
+/** "Find a control": the panel shows only the sections and rows that mention what was typed (every matching section opens), and the rest again when it is cleared. */
+let panelFilter = '';
+function applyPanelFilter() {
+  const host = document.getElementById('panel-body'); if (!host) return;
+  host.querySelectorAll('.pf-hide').forEach((e) => e.classList.remove('pf-hide'));
+  host.querySelectorAll('.group-body[data-pf-open]').forEach((b) => { b.hidden = true; delete b.dataset.pfOpen; });
+  const q = panelFilter.trim().toLowerCase(); const cnt = document.querySelector('[data-testid="panel-search-count"]'); if (!q) { if (cnt) cnt.textContent = ''; return; }
+  let n = 0;
+  host.querySelectorAll('section.group').forEach((sec) => {
+    const body = sec.querySelector(':scope > .group-body'); const title = (sec.querySelector(':scope > h3')?.textContent || '').toLowerCase(); const titleHit = title.includes(q); let any = titleHit; if (titleHit) n++;
+    for (const k of body ? [...body.children] : []) { if (titleHit || k.textContent.toLowerCase().includes(q)) { if (!titleHit) { any = true; n++; } } else k.classList.add('pf-hide'); }
+    if (!any) sec.classList.add('pf-hide'); else if (body?.hidden) { body.hidden = false; body.dataset.pfOpen = '1'; }
+  });
+  for (const c of [...host.children]) if (!c.matches('section.group') && !c.querySelector('section.group') && !c.textContent.toLowerCase().includes(q)) c.classList.add('pf-hide');
+  if (cnt) cnt.textContent = n ? `${n} found` : 'Nothing found';
+}
 function renderPanel() {
-  if (S.tab !== lastTab) { closeMenus(); lastTab = S.tab; } // a menu opened on one tab must not float over the next
+  if (S.tab !== lastTab) { closeMenus(); lastTab = S.tab; panelFilter = ''; const si = document.querySelector('[data-testid="panel-search"]'); if (si) si.value = ''; } // a menu opened on one tab must not float over the next
   const host = document.getElementById('panel-body');
   watchPanelWidth();
   const top = host.scrollTop;
@@ -2042,6 +2075,7 @@ function renderPanel() {
     if (S.tab === 'Export') host.append(exportSection());
   }
   collapsible(host);
+  applyPanelFilter();
   host.scrollTop = top;
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
   document.querySelector('.tab[aria-selected="true"]')?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
@@ -2561,7 +2595,7 @@ function drawSection() {
     h('p', { class: 'hint' }, `${total} stroke${total === 1 ? '' : 's'} here; ${drawn.filter((p) => p.ink.replace).length} of ${drawn.length} drawn parts committed.`)));
   host.append(h('section', { class: 'group', testid: 'draw-show' }, h('h3', null, 'View'),
     check('Hide guide lines', !D.guides, (v) => { D.guides = !v; render(); renderPanel(); }, 'draw-hide-guides'),
-    h('div', { class: 'btnrow' }, partMode ? h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-part', disabled: !sel, onClick: () => zoomToPart(sel) }, 'Zoom to this part') : null, h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-reset', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); } }, 'Reset the view'))));
+    h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn', testid: 'draw-zoom-reset', onClick: () => { S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); } }, 'Reset the view'))));
   return host;
 }
 
@@ -2650,27 +2684,6 @@ async function importCharacterFile(e) {
   try { await importCharacterObject(JSON.parse(await f.text())); } catch (err) { setMessage(`Could not read it: ${err.message}`); }
 }
 
-// ---------- the gait chart: which feet are down when ----------
-function drawGaitChart(cv, rows) {
-  const cs = getComputedStyle(document.documentElement); const tok = (n, d) => cs.getPropertyValue(n).trim() || d;
-  const acc = tok('--accent', '#2b67e8'); const line = tok('--line', '#d7d7dd'); const ink = tok('--ink-2', '#5b5c66'); const soft = tok('--accent-soft', '#e2eaff');
-  const W = 560; const rowH = 28; const H = rows.length * rowH + 24; const dpr = 2;
-  cv.width = W * dpr; cv.height = H * dpr;
-  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
-  const x0 = 100; const wBar = W - x0 - 10;
-  ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = ink; ctx.textAlign = 'center';
-  for (const [u, l] of [[0, '0'], [0.25, '¼'], [0.5, '½'], [0.75, '¾'], [1, '1']]) { ctx.fillText(l, x0 + u * wBar, 8); ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(x0 + u * wBar, 15); ctx.lineTo(x0 + u * wBar, H - 4); ctx.stroke(); }
-  rows.forEach((r, i) => {
-    const y = 20 + i * rowH;
-    ctx.fillStyle = ink; ctx.textAlign = 'left'; ctx.fillText(r.name, 4, y + 9);
-    ctx.fillStyle = soft; ctx.fillRect(x0, y, wBar, 18);
-    const span = (a, b) => { ctx.fillStyle = acc; ctx.fillRect(x0 + a * wBar, y, (b - a) * wBar, 18); };
-    const s = ((r.start % 1) + 1) % 1; const e = s + r.duty;
-    if (e <= 1) span(s, e); else { span(s, 1); span(0, e - 1); }
-    ctx.fillStyle = tok('--ink', '#1c1c20'); ctx.beginPath(); ctx.moveTo(x0 + s * wBar - 4, y - 3); ctx.lineTo(x0 + s * wBar + 4, y - 3); ctx.lineTo(x0 + s * wBar, y + 3); ctx.closePath(); ctx.fill(); // the contact
-  });
-}
 /** The walk in one line: how long both feet are down, the pace and the stride (the chart that used to sit here took the top of the panel). */
 function gaitFactsText() {
   const dog = S.p.rig === 'dog';
@@ -3074,7 +3087,7 @@ function openHelp() {
     root.append(h('div', { class: 'help-box', style: `left:${r.left - 3}px;top:${r.top - 3}px;width:${r.width + 6}px;height:${r.height + 6}px` }, h('span', { class: 'help-badge' }, String(i + 1))));
     list.push(h('li', null, h('span', { class: 'help-badge' }, String(i + 1)), h('div', null, h('strong', null, title), h('p', null, text))));
   });
-  const keys = [['Space', 'play or pause'], ['Left and right arrows', 'one frame'], ['Ctrl+Z, Shift+Ctrl+Z', 'undo, redo'], ['Ctrl+C, Ctrl+V, Ctrl+D', 'copy, paste, duplicate'], ['Delete', 'delete the selection'], ['Ctrl+S', 'save'], ['Esc', 'deselect, or close this'], ['F1 or ?', 'this guide']];
+  const keys = [['Space', 'play or pause'], ['Left and right arrows', 'one frame'], ['Ctrl+Z, Shift+Ctrl+Z', 'undo, redo'], ['Ctrl+C, Ctrl+V, Ctrl+D', 'copy, paste, duplicate'], ['Delete', 'delete the selection'], ['Ctrl+S', 'save'], ['Esc', 'deselect, close this, or clear the control search'], ['F1 or ?', 'this guide']];
   root.append(h('div', { class: 'help-card', testid: 'help-card' }, h('h2', null, 'A quick guide'), h('ol', null, list),
     h('div', { class: 'help-keys' }, h('h3', null, 'Keys'), h('dl', null, keys.flatMap(([k, d]) => [h('dt', null, k), h('dd', null, d)])),
       h('h3', null, 'How to'), h('div', { class: 'help-how', testid: 'help-how' }, HELP_HOW.map(([t, d]) => h('p', null, h('strong', null, `${t}. `), d)))),
@@ -3217,7 +3230,9 @@ function build() {
   wrapEl = h('section', { class: 'stage-wrap' }, stage, hud, viewbar, back);
   frameCanvas = document.createElement('canvas');
   const tabs = h('nav', { class: 'tabs', role: 'tablist' }, TABS.map((t) => h('button', { type: 'button', class: 'tab', role: 'tab', 'data-tab': t, testid: `tab-${t}`, onClick: () => { S.tab = t; renderPanel(); } }, TAB_LABELS[t] ?? t)));
-  const panel = h('section', { class: 'panel' }, tabs, h('div', { id: 'panel-body', class: 'panel-body' }));
+  const search = h('div', { class: 'panel-search' }, h('input', { type: 'search', class: 'psearch', placeholder: 'Find a control…', 'aria-label': 'Find a control in this tab', testid: 'panel-search', autocomplete: 'off', onInput: (e) => { panelFilter = e.target.value; applyPanelFilter(); }, onKeydown: (e) => { if (e.key === 'Escape' && e.target.value) { e.target.value = ''; panelFilter = ''; applyPanelFilter(); e.stopPropagation(); } } }), h('span', { class: 'psearch-n', testid: 'panel-search-count', 'aria-live': 'polite' }));
+  const panel = h('section', { class: 'panel' }, tabs, search, h('div', { id: 'panel-body', class: 'panel-body' }));
+  panel.addEventListener('input', syncResetDim); panel.addEventListener('change', syncResetDim);
   const popout = h('aside', { id: 'popout', class: 'popout', hidden: true, 'aria-label': 'Curve editor', testid: 'popout' });
   const tl = h('footer', { class: 'timeline' },
     h('div', { class: 'transport', role: 'toolbar', 'aria-label': 'Playback' },
@@ -3459,7 +3474,7 @@ function gestures() {
         T.rot = snapTurn(start.rot + dA - off); const d0 = T.rot - start.rot;
         const [kx, ky] = holdPoint((start.cx - m.left) * m.d, (start.cy - m.top) * m.d, stage.width / 2 + start.panX * m.d, stage.height / 2 + start.panY * m.d, d0); T.panX += kx / m.d; T.panY += ky / m.d;
       }
-      gestAim(T); return;
+      gestLive = true; gestAim(clampPan(T)); return;
     } else if (down) {
       const dx = pts[0].x - down.x; const dy = pts[0].y - down.y;
       if (!down.moved && Math.hypot(dx, dy) < 8) return;
@@ -3467,7 +3482,7 @@ function gestures() {
       if (S.tool === 'orbit') {
         S.s.camYaw = ((down.yaw - dx * 0.45 + 540) % 360) - 180;
         S.s.camPitch = Math.max(-85, Math.min(85, down.pitch + dy * 0.35));
-      } else if (S.tool === 'pan') { S.panX = start.panX + dx; S.panY = start.panY + dy; }
+      } else if (S.tool === 'pan') { S.panX = start.panX + dx; S.panY = start.panY + dy; clampPan(S); }
       // with the Select tool one finger never moves the camera: two fingers pan and zoom
     }
     render();
@@ -3496,7 +3511,7 @@ function gestures() {
     down = null; start = ptrs.size ? snap() : null;
   };
   stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', (e) => { tapG = null; if (e.pointerId === penId) penId = null; if (inkPress && e.pointerId === inkPress.id) { inkPress = null; if (inkGesture) inkEnd(); } if (mid && e.pointerId === mid.id) mid = null; if (PH.drag && e.pointerId === PH.drag.id) physUp(e); ptrs.delete(e.pointerId); down = null; start = null; drag = null; });
-  stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.25, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); render(); }, { passive: false });
+  stage.addEventListener('wheel', (e) => { e.preventDefault(); S.zoom = Math.min(8, Math.max(0.25, S.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); clampPan(S); render(); }, { passive: false });
   stage.addEventListener('dblclick', () => { gestT = null; S.zoom = 1; S.panX = S.panY = 0; S.rot = 0; render(); });
   // The page eases toward where the fingers put it, a little each frame, so the jitter of touch samples (one finger reports, then the other) does not shake it.
   let gestT = null; let gestRaf = 0;
@@ -3507,7 +3522,7 @@ function gestures() {
     if (Math.abs(T.zoom - S.zoom) < 0.002 && Math.abs(T.panX - S.panX) < 0.2 && Math.abs(T.panY - S.panY) < 0.2 && Math.abs(dr * (1 - k)) < 0.001) { gestFlush(); return; }
     render(); gestRaf = requestAnimationFrame(gestStep);
   }
-  function gestFlush() { const T = gestT; gestT = null; if (gestRaf) { cancelAnimationFrame(gestRaf); gestRaf = 0; } if (T) { S.zoom = T.zoom; S.panX = T.panX; S.panY = T.panY; S.rot = T.rot; render(); } }
+  function gestFlush() { const T = gestT; gestT = null; if (gestRaf) { cancelAnimationFrame(gestRaf); gestRaf = 0; } const was = gestLive; gestLive = false; if (T) { S.zoom = T.zoom; S.panX = T.panX; S.panY = T.panY; S.rot = T.rot; clampPan(S); render(); } else if (was) render(); } // the picture is drawn crisply again when the fingers lift
   function snap() {
     gestFlush();
     const pts = [...ptrs.values()];

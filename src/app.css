@@ -487,3 +487,8 @@ select, select option, select optgroup { background-color: var(--panel-2); color
 .solobar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 12px; border-radius: 8px; background: rgba(20, 20, 24, .78); color: #f2f2f5; font-size: 13px; max-width: calc(100% - 16px); z-index: 3; }
 .solobar[hidden] { display: none; }
 .solobar .btn { padding: 4px 10px; }
+.panel-search { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.psearch { min-height: 44px; flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg, #fff); color: inherit; font: inherit; font-size: 14px; }
+.psearch-n { font-size: 12px; color: var(--ink-2, #666); white-space: nowrap; }
+.pf-hide { display: none !important; }
+.row > .btn.tiny.is-default { opacity: .3; }

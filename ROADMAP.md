@@ -760,3 +760,12 @@ Not done: the figure does not move to a seat (put it over the box first), no cha
 - **Picture on this part** in the Draw tab (One part, a part chosen): import a picture or video onto the part's skin, replace or remove it. A per-part picture already existed as the Skin in the Design tab (and pictures can be attached in the Attach tab); this is a shortcut to the same thing, so it works from the part-on-its-own screen.
 
 - Part on its own is for the main figure only (a figure added in the scene is drawn on the stage as before).
+
+## Done 2026-11-25: audit clean-up, find a control, calmer pinch
+- **Removed** (redundant): the unused gait chart function, `sideOf`, `len2`; the second "Zoom to this part" button in the Draw View section; the "Set length" menu in the Auto tab (the Length button beside Loop is the same menu; the Frames box stays).
+- **Find a control**: a search box over the panel on every tab. Typing shows only the sections and rows that mention it (folded sections open for it, an empty section hides), with a count; Esc or a tab change clears it. `applyPanelFilter` in app.js.
+- **Reset** buttons are faint while a control is at its starting value and strengthen as it moves (they still work either way).
+- **Names that clashed**: the Body tab's walking surface is now **Terrain** (its choice is **Surface**), so **Ground** is only the View tab's line; the Auto tab's **Performance length** is no longer a third "Length"; the View tab's scene switch is **Scene display**. **Pads** start folded.
+- **Pinch and two-finger move on the iPad**: while two fingers move the page the stage is not drawn again for each frame (the picture already drawn is moved and scaled, which is what made it jerky, most of all zoomed in); it is drawn crisply again when they lift. The page can no longer be moved right off the stage: at least a fifth of the stage always still shows it (`panLimit`, `clampPan`).
+- Tests: `ui-panelsearch.mjs`, `ui-pinch.mjs`; the sampler test now has a synthetic sheet (`tests/fixtures/sampler-sheet.png`) and skips the top-bar pills in its 44 px audit (they are 34 px by design, the whole pill being the target).
+- Not done from the audit ideas: starter characters picker, idle for the animals, walking backwards / sidestep / stairs (all on this roadmap already), trimming the line styles.

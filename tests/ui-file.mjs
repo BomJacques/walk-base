@@ -130,7 +130,7 @@ check('Reset the walk puts weight and variety back', (await ev(() => window.__wa
 await ev(() => { window.__walkBase.S.p.weight = 0; window.__walkBase.S.p.noiseAmount = 0; window.__walkBase.S.sceneSel = null; window.__walkBase.render(); });
 // ---- a longer performance
 await ev(() => window.__walkBase.setTab('Auto')); await wait(150);
-await q('perf-menu').click(); await wait(100);
+await q('length-menu').click(); await wait(100);
 check('the Set length menu goes up to ten minutes', (await page.locator('[data-testid="perf-s600"]').count()) === 1 && (await page.locator('[data-testid="perf-x64"]').count()) === 1);
 const t0 = Date.now(); await q('perf-s300').click(); await wait(800);
 const longInfo = await ev(() => ({ len: window.__walkBase.S.perfLen, fps: window.__walkBase.S.p.fps, cells: document.querySelectorAll('#strip .cell').length, step: window.__walkBase.S.stripStep }));
@@ -616,7 +616,7 @@ check('Copy to the next frame repeats it there', (await ev(() => window.__walkBa
 await q('draw-undo').click(); await wait(150);
 await q('draw-scope-all').click(); await wait(100); await ev(() => { const k = window.__walkBase.designOf().head.ink; k.strokes = k.strokes.filter((s) => s.f == null); window.__walkBase.render(); }); await wait(100);
 // zoom to a part
-await q('draw-zoom-part').click(); await wait(300);
+await q('draw-zoom-sel').click(); await wait(300);
 check('Zoom to this part fills the stage with it, and Reset the view puts it back', (await ev(() => window.__walkBase.S.zoom)) > 2 && (await q('draw-zoom-reset').click().then(() => wait(200)).then(() => ev(() => window.__walkBase.S.zoom))) === 1);
 
 await q('draw-tool-fill').click(); await q('draw-swatch-d93a3a').click(); await wait(150);

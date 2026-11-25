@@ -68,7 +68,7 @@ for (const [label, viewport] of Object.entries(sizes)) {
   // Auto: the long explanations start folded so the movements are near the top
   await tab('Auto');
   const autoFolded = await ev(() => [...document.querySelectorAll('#panel-body .sec-toggle')].map((b) => [b.textContent.trim(), b.getAttribute('aria-expanded')]));
-  check(`${label}: on Auto, Saved performances, Length and Record by hand start folded`, ['Saved performances', 'Length', 'Record by hand'].every((n) => autoFolded.some(([t, e]) => /^saved performances|^length|^record by hand/i.test(t) && t.toLowerCase().startsWith(n.toLowerCase().slice(0, 6)) && e === 'false')), autoFolded);
+  check(`${label}: on Auto, Saved performances, Performance length and Record by hand start folded`, ['Saved performances', 'Performance length', 'Record by hand'].every((n) => autoFolded.some(([t, e]) => /^saved performances|^performance length|^record by hand/i.test(t) && t.toLowerCase().startsWith(n.toLowerCase().slice(0, 6)) && e === 'false')), autoFolded);
   const mvTop = await ev(() => { const m = [...document.querySelectorAll('#panel-body .sec-toggle')].find((b) => /movements/i.test(b.textContent)); const r = m?.getBoundingClientRect(); return r ? Math.round(r.top - document.getElementById('panel-body').getBoundingClientRect().top) : null; });
   check(`${label}: the Movements section starts ${mvTop}px down the Auto tab (it was about 700px)`, mvTop != null && mvTop < 450, mvTop);
   // slider rows: compact on one line, roomy with the label above a full-width track, two columns when the panel is wide

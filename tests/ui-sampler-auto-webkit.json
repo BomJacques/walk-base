@@ -1,12 +1,12 @@
 {
  "browser": "webkit",
  "mode": "auto",
- "at": "2026-11-08T21:59:50.352Z",
+ "at": "2026-11-25T08:41:29.988Z",
  "results": [
   {
    "label": "the picture loads and the cut window opens by itself",
    "ok": true,
-   "detail": "1800x900, 10 cuts"
+   "detail": "1000x900, 10 cuts"
   },
   {
    "label": "automatic detection finds the 10 drawings and ignores the caption, numerals and specks",
@@ -26,7 +26,7 @@
   {
    "label": "dragging a cut's edge handle resizes it",
    "ok": true,
-   "detail": "60 to 99"
+   "detail": "100 to 136"
   },
   {
    "label": "tapping a cut selects it",
@@ -76,7 +76,7 @@
   {
    "label": "the erase brush removes pixels",
    "ok": true,
-   "detail": "0 to 14441"
+   "detail": "0 to 9247"
   },
   {
    "label": "Undo puts them back exactly",
@@ -106,12 +106,12 @@
   {
    "label": "the wand erases the connected paper around a tap",
    "ok": true,
-   "detail": "8820 to 73140"
+   "detail": "5576 to 42942"
   },
   {
    "label": "Reset slice clears this slice's erasing",
    "ok": true,
-   "detail": "73140 to 0"
+   "detail": "42942 to 0"
   },
   {
    "label": "the undo history kept every edit",
@@ -141,7 +141,7 @@
   {
    "label": "the sampled frames play",
    "ok": true,
-   "detail": "0 to 16"
+   "detail": "0 to 15"
   },
   {
    "label": "every sampled frame shows ink",
@@ -151,7 +151,7 @@
   {
    "label": "with Feet registration every drawing's ink ends on the same line",
    "ok": true,
-   "detail": "284,186"
+   "detail": "284"
   },
   {
    "label": "the 3D walk is still there",

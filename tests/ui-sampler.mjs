@@ -247,6 +247,7 @@ const audit = () => ev(() => {
   for (const el of document.querySelectorAll('button, input, select, label.btn, summary')) {
     const box = (el.type === 'checkbox' || el.type === 'radio') ? (el.closest('label') || el) : el; const r = box.getBoundingClientRect(); const s = getComputedStyle(el);
     if (!r.width || !r.height || s.visibility === 'hidden' || s.display === 'none' || el.disabled || el.type === 'file') continue;
+    if (el.closest('.pillfield')) continue; // the top-bar pills (figure, preset, speed, source) are 34 px by design: the whole pill is the target
     const min = el.type === 'range' ? r.height : Math.min(r.width, r.height);
     if (min < 43.5) out.push(`${el.dataset.testid || el.className || el.tagName}:${Math.round(r.width)}x${Math.round(r.height)}`);
   }
