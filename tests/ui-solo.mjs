@@ -28,6 +28,9 @@ let s = await st();
 check('picking the head opens it alone: only the head is on the stage', s.keys.length === 1 && s.keys[0] === 'head' && s.shapes.every((p) => p === 'head'), s);
 check('it is zoomed in, and the bar names the part', s.zoom > 1.5 && s.bar && /head/i.test(s.name || ''), s);
 if (shots) await page.screenshot({ path: path.join(shots, `wb-solo-head-${name}.png`) });
+// the part is in the figure's own pose and view, so what is drawn there is the same drawing on the walking figure: its frame has the same shape in both
+const shape = () => ev(() => { const w = window.__walkBase; w.paint?.(); const fr = w.S.last.frames['upper-arm'] ? null : null; const out = {}; for (const k of ['head', 'arm.R', 'leg.R']) { const f = w.S.last.frames[k]?.[0]?.fr; if (f) out[k] = f.L / f.W; } return out; });
+const soloShape = await shape();
 // draw on it with the mouse, in the middle of the head
 const box = await ev(() => { const w = window.__walkBase; const m = w.S.map; const sh = w.S.last.shapes.find((s) => s.part === 'head'); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [x, y] of sh.pts) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } const cx = (x0 + x1) / 2; const cy = (y0 + y1) / 2; const sc = m.zw / m.fcw; const r = document.querySelector('canvas').getBoundingClientRect(); return { x: r.left + (m.x0 + cx * sc) / m.d, y: r.top + (m.y0 + cy * sc) / m.d, w: ((x1 - x0) * sc) / m.d }; });
 await page.mouse.move(box.x - box.w * 0.2, box.y); await page.mouse.down(); await page.mouse.move(box.x, box.y - box.w * 0.1, { steps: 6 }); await page.mouse.move(box.x + box.w * 0.2, box.y, { steps: 6 }); await page.mouse.up(); await wait(300);
@@ -45,6 +48,8 @@ check('picking another part opens that one alone', s.keys.length === 1 && s.keys
 // back to the whole figure
 await q('draw-solo-done').click(); await wait(400);
 s = await st();
+const wholeShape = await shape();
+check('the part in its own screen has the same shape as on the figure (so a drawing is not stretched when it goes back)', Object.keys(soloShape).length >= 1 && Object.keys(soloShape).every((k) => !wholeShape[k] || Math.abs(soloShape[k] / wholeShape[k] - 1) < 0.02), [soloShape, wholeShape]);
 check('Back to the whole figure shows everything again at the normal view', s.keys.length > 5 && s.zoom === 1 && !s.bar, s);
 await q('draw-solo').check().catch(() => {}); await wait(300);
 check('the head still has its drawing when the whole figure is shown', (await ev(() => JSON.stringify(window.__walkBase.S.design).includes('strokes'))));

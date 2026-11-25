@@ -1021,7 +1021,7 @@ function paint() {
   const fcw = Math.min(3200, Math.max(200, Math.round(zw))); const fch = Math.round(fcw / aspect);
   if (frameCanvas.width !== fcw || frameCanvas.height !== fch) { frameCanvas.width = fcw; frameCanvas.height = fch; }
   const solo = soloKey(); const sp = solo ? soloParams() : null;
-  const info = sp ? drawScene(frameCanvas.getContext('2d'), sp.params, sp.st, fcw, fch, 0, { selection: null, only: solo, wantFrames: true }) : drawScene(frameCanvas.getContext('2d'), P(), stageStyle(), fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
+  const info = sp ? drawScene(frameCanvas.getContext('2d'), sp.params, sp.st, fcw, fch, S.frame, { selection: null, only: solo, wantFrames: true }) : drawScene(frameCanvas.getContext('2d'), P(), stageStyle(), fcw, fch, S.frame, { selection: S.tab === 'Draw' ? null : S.sel, mouth: S.mouthPreview, under: refPaint, handles: S.attachSel, fix: S.fixMode && S.sel ? true : false, wantFrames: S.tab === 'Design' || S.tab === 'Draw' });
   stage.style.cursor = S.tab === 'Draw' ? 'crosshair' : physActive() ? 'grab' : '';
   if (S.tab === 'Draw' && S.draw.guides) paintDrawGuides(frameCanvas.getContext('2d'), info, fcw);
   if (physActive() && !sp) paintPhysics(frameCanvas.getContext('2d'), info);
@@ -2176,7 +2176,8 @@ function plainFigure(actor, fig, people) {
   const st = { ...S.s, style: 'mannequin', shadowMode: 'off', camYaw: people ? -90 : 0, camPitch: fig === 'snake' ? 72 : 0, showArcs: false, onionBefore: 0, onionAfter: 0, lineBoil: 0, lineOffset: 0, showScene: false };
   return { params, st };
 }
-function soloParams() { const actor = inkActor(); const fig = actor ? actor.fig : figKey(); return plainFigure(actor, fig, HUMANOID.has(fig)); }
+/** The figure as it stands on the stage at this frame, with nothing else (no scenery, shadows, onion skins or attachments), for a part drawn on its own. */
+function soloParams() { return { params: { ...P(), attach: [], scene: null }, st: { ...stageStyle(), showArcs: false, onionBefore: 0, onionAfter: 0, lineBoil: 0, lineOffset: 0, showScene: false, shadowMode: 'off', focus: 'body' } }; }
 /** The bar over the stage while a part is drawn on its own: which part, and the way back to the whole figure. */
 let soloEl = null;
 function soloBar(key) {
@@ -2219,7 +2220,7 @@ function inkMap() {
   return designOf();
 }
 /** A part drawn on its own (the breakout): the stage shows just that part, large, in a plain pose, and the pen works on it there. Its frames then come from the stage itself, even for another figure of the scene. */
-const soloKey = () => { if (S.tab !== 'Draw' || !S.draw.solo || S.draw.mode !== 'part' || inkItem()) return null; return inkSelKey(); };
+const soloKey = () => { if (S.tab !== 'Draw' || !S.draw.solo || S.draw.mode !== 'part' || inkItem() || inkActor()) return null; return inkSelKey(); };
 const inkScene = () => Boolean(inkActor()) && !soloKey();
 const inkSceneHit = () => { const a = inkActor(); return a ? (S.last?.sceneHits || []).find((h2) => h2.id === a.id) || null : null; };
 /** The shapes the pen can land on, as the stage last drew them. */
@@ -2228,7 +2229,7 @@ const soloKeysCache = new Map();
 /** The parts of the whole figure, for the list, while one part is shown alone (the stage then holds only that one): found from the figure in its plain pose, once. */
 function allPartShapes() {
   const id = `${inkTid()}|${S.p.model || ''}|${S.p.rig || ''}`; let l = soloKeysCache.get(id);
-  if (!l) { const { params, st } = soloParams(); try { const cv = document.createElement('canvas'); cv.width = cv.height = 320; l = drawScene(cv.getContext('2d'), params, st, 320, 320, 0, { wantFrames: true }).shapes.filter((s) => !s.attach && s.part).map((s) => ({ part: s.part, side: s.side, pts: [] })); } catch { l = []; } soloKeysCache.set(id, l); }
+  if (!l) { const actor = inkActor(); const fig = actor ? actor.fig : figKey(); const { params, st } = plainFigure(actor, fig, HUMANOID.has(fig)); try { const cv = document.createElement('canvas'); cv.width = cv.height = 320; l = drawScene(cv.getContext('2d'), params, st, 320, 320, 0, { wantFrames: true }).shapes.filter((s) => !s.attach && s.part).map((s) => ({ part: s.part, side: s.side, pts: [] })); } catch { l = []; } soloKeysCache.set(id, l); }
   return l;
 }
 function inkPartKeys() { const seen = new Map(); for (const sh of soloKey() ? allPartShapes() : inkShapes()) { const key = partKey(sh.part, sh.side); if (!seen.has(key)) seen.set(key, { key, part: sh.part, side: sh.side || null }); } return [...seen.values()].sort(byHeadToToe); }
